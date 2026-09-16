@@ -8,9 +8,14 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/cardpath"
 )
 
 func finishTransition(r *os.Root, j transitionJournal, rec transitionRecord, req TransitionRequest, step func(string) error) (TransitionResult, error) {
+	if cardpath.IsDocumentation(filepath.Base(rec.Source)) {
+		return TransitionResult{}, errors.New("legacy transition uses a now-excluded documentation filename; finish recovery with the previous binary before upgrading; preserve the journal and cards")
+	}
 	if step != nil {
 		if err := step("after-journal"); err != nil {
 			return TransitionResult{}, err

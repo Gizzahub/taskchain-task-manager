@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
+	"github.com/Gizzahub/taskchain-task-manager/internal/cardpath"
 )
 
 // The line shape intentionally mirrors CE's domain frontmatterIDLine. It is
@@ -71,14 +72,10 @@ func IsCardPath(file, boardDir string) bool {
 	rel := strings.TrimPrefix(file, board+"/")
 	parts := strings.Split(rel, "/")
 	for _, part := range parts[:len(parts)-1] {
-		if part == ".ce" || part == "evidence" {
+		if cardpath.IsExcludedDirectory(part) {
 			return false
 		}
 	}
 	base := parts[len(parts)-1]
-	switch strings.ToLower(base) {
-	case "readme.md", "index.md", "template.md":
-		return false
-	}
-	return true
+	return !cardpath.IsDocumentation(base)
 }

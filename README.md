@@ -31,7 +31,7 @@ make check
 - `--id`를 생략하면 해당 종류의 현재 카드·소유권/전이 이력·영구 ID 원장 최댓값 다음을 할당합니다.
   새로 생성하거나 명시적으로 예약한 ID는 카드 삭제 후에도 다시 쓰지 않습니다.
   Git 이력은 자동 조회하지 않습니다. 기존 보드와 과거 ID는 [ID 예약·채택](docs/ids.md)을 따릅니다.
-- `list`는 알려진 workflow·종류·archive 디렉터리를 검사하고 경로순 결과를 반환합니다.
+- `list`는 알려진 workflow·종류·archive/_archive 디렉터리를 검사하고 경로순 결과를 반환합니다.
   ID 중복·잘못된 카드·symlink를 발견하면 조용히 건너뛰지 않고 실패합니다.
 - TASK/PLAN/ISSUE/BACKLOG ID를 읽고 `create --kind`로 종류별 카드를 생성합니다.
   숫자 ID의 패딩은 표기 차이이며 원본은 보존합니다. 실행 lifecycle은 TASK만 지원합니다.
@@ -100,6 +100,7 @@ staged write 뒤 rename으로 교체하며 전원 손실이나 잠금을 무시�
 Git branch/worktree 관리·범용 카드 편집·분산 잠금은 아직 지원하지 않습니다.
 
 상태 전이, 멱등 요청, pending journal 복구와 지원 한계는 [상태 전이 사용법](docs/lifecycle.md)을 읽어 주세요.
+보관 영역과 비카드 문서의 구분은 [카드 발견 규칙](docs/discovery.md)을 따릅니다.
 
 ## 개발과 라이선스
 

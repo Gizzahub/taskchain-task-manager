@@ -14,6 +14,7 @@ import (
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
+	"github.com/Gizzahub/taskchain-task-manager/internal/cardpath"
 	"gopkg.in/yaml.v3"
 )
 
@@ -30,7 +31,7 @@ type CreateRequest struct {
 }
 
 var canonicalID = regexp.MustCompile(`^TASK-[1-9][0-9]*$`)
-var knownDirs = []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "archive"}
+var knownDirs = []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "archive", "_archive"}
 
 func Init(dir string) (err error) {
 	if dir == "" {
@@ -381,7 +382,7 @@ func validateRootLayout(r *os.Root) error {
 		if entry.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("symlink task entry rejected: %s", name)
 		}
-		if strings.HasPrefix(name, ".") || strings.EqualFold(name, "README.md") {
+		if strings.HasPrefix(name, ".") || (!entry.IsDir() && cardpath.IsDocumentation(name)) || (entry.IsDir() && cardpath.IsExcludedDirectory(name)) {
 			continue
 		}
 		if entry.IsDir() {
@@ -425,7 +426,7 @@ func scanDirExcept(r *os.Root, dir string, out *[]Entry, ids map[string]string, 
 		if walkErr != nil {
 			return fmt.Errorf("scan %s: %w", path, walkErr)
 		}
-		if path != dir && d.IsDir() && strings.HasPrefix(d.Name(), ".") {
+		if path != dir && d.IsDir() && (strings.HasPrefix(d.Name(), ".") || cardpath.IsExcludedDirectory(d.Name())) {
 			return fs.SkipDir
 		}
 		if path == skip {
@@ -437,7 +438,7 @@ func scanDirExcept(r *os.Root, dir string, out *[]Entry, ids map[string]string, 
 		if d.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("symlink task entry rejected: %s", path)
 		}
-		if strings.HasPrefix(d.Name(), ".") || strings.EqualFold(d.Name(), "README.md") {
+		if strings.HasPrefix(d.Name(), ".") || cardpath.IsDocumentation(d.Name()) {
 			return nil
 		}
 		if filepath.Ext(d.Name()) != ".md" {

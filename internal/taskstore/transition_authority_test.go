@@ -50,7 +50,7 @@ func TestTransitionRechecksDependencies(t *testing.T) {
 }
 
 func TestClaimResumeZoneBoundary(t *testing.T) {
-	for _, zone := range []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "archive", "doing/nested"} {
+	for _, zone := range []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "archive", "_archive", "doing/nested"} {
 		t.Run(zone, func(t *testing.T) {
 			dir, req, _, _ := transitionFixture(t)
 			if _, err := Release(dir, ClaimRequest{ID: req.ID, Owner: req.Owner, Token: req.Token}); err != nil {

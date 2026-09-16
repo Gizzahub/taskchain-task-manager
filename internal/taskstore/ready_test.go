@@ -9,7 +9,7 @@ import (
 )
 
 func TestNonWorkflowCompletionCannotUnblockDependency(t *testing.T) {
-	for _, zone := range []string{"plan", "plan/done", "issue", "archive", "archive/done", "done/nested"} {
+	for _, zone := range []string{"plan", "plan/done", "issue", "archive", "archive/done", "_archive", "_archive/done", "done/nested"} {
 		t.Run(zone, func(t *testing.T) {
 			root := filepath.Join(t.TempDir(), "tasks")
 			if err := Init(root); err != nil {
