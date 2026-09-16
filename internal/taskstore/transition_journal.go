@@ -17,6 +17,19 @@ import (
 )
 
 func loadTransitions(r *os.Root) (transitionJournal, error) {
+	j, err := loadTransitionsForBundle(r)
+	if err != nil {
+		return transitionJournal{}, err
+	}
+	if err := checkBundleGate(r, j); err != nil {
+		return transitionJournal{}, err
+	}
+	return j, nil
+}
+
+// Bundle admission/recovery must validate its own journal under the same
+// session. Ordinary callers must use loadTransitions, including receipt replay.
+func loadTransitionsForBundle(r *os.Root) (transitionJournal, error) {
 	info, err := r.Lstat(transitionsFile)
 	if errors.Is(err, fs.ErrNotExist) {
 		j := transitionJournal{SchemaVersion: 1, Records: []transitionRecord{}}
@@ -110,15 +123,23 @@ func validateTransitionShape(raw []byte) error {
 		return errors.New("transition schemaVersion must be integer")
 	}
 	for key := range root {
-		if key != "schemaVersion" && key != "records" && key != "policyDigest" {
+		if key != "schemaVersion" && key != "records" && key != "policyDigest" && key != "bundleProtocol" {
 			return fmt.Errorf("unknown transition journal field %q", key)
 		}
 	}
-	if version == 1 && len(root) != 2 {
+	extra := 0
+	if raw, ok := root["bundleProtocol"]; ok {
+		var protocol int
+		if err := json.Unmarshal(raw, &protocol); err != nil || protocol != 1 {
+			return errors.New("unsupported bundle protocol")
+		}
+		extra = 1
+	}
+	if version == 1 && len(root) != 2+extra {
 		return errors.New("legacy transition journal cannot contain policyDigest")
 	}
 	if version == 2 {
-		if len(root) != 3 || root["policyDigest"] == nil || string(root["policyDigest"]) == "null" {
+		if len(root) != 3+extra || root["policyDigest"] == nil || string(root["policyDigest"]) == "null" {
 			return errors.New("schema 2 transition journal requires policyDigest")
 		}
 		var digest string

@@ -44,9 +44,10 @@ type transitionRecord struct {
 	Status       string `json:"status"`
 }
 type transitionJournal struct {
-	SchemaVersion int                `json:"schemaVersion"`
-	Records       []transitionRecord `json:"records"`
-	PolicyDigest  string             `json:"policyDigest,omitempty"`
+	SchemaVersion  int                `json:"schemaVersion"`
+	Records        []transitionRecord `json:"records"`
+	PolicyDigest   string             `json:"policyDigest,omitempty"`
+	BundleProtocol int                `json:"bundleProtocol,omitempty"`
 }
 
 func Transition(dir string, req TransitionRequest) (TransitionResult, error) {

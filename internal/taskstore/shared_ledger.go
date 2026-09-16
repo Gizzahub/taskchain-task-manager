@@ -24,12 +24,22 @@ var sharedHex40Or64 = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 var sharedHex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type sharedState struct {
-	SchemaVersion int                 `json:"schemaVersion"`
-	NamespaceID   string              `json:"namespaceId"`
-	BoardPath     string              `json:"boardPath"`
-	Phase         string              `json:"phase"`
-	Reserved      []string            `json:"reserved"`
-	Participants  []sharedParticipant `json:"participants"`
+	SchemaVersion  int                  `json:"schemaVersion"`
+	NamespaceID    string               `json:"namespaceId"`
+	BoardPath      string               `json:"boardPath"`
+	Phase          string               `json:"phase"`
+	Reserved       []string             `json:"reserved"`
+	Participants   []sharedParticipant  `json:"participants"`
+	BundleProtocol int                  `json:"bundleProtocol,omitempty"`
+	PendingBundle  *sharedBundlePending `json:"pendingBundle,omitempty"`
+}
+
+type sharedBundlePending struct {
+	RequestID string   `json:"requestId"`
+	Digest    string   `json:"digest"`
+	BoardID   string   `json:"boardId"`
+	Owner     string   `json:"owner"`
+	IDs       []string `json:"ids"`
 }
 
 type sharedParticipant struct {
@@ -124,6 +134,25 @@ func validateSharedShape(raw []byte) error {
 		return err
 	}
 	allowed := map[string]bool{"schemaVersion": true, "namespaceId": true, "boardPath": true, "phase": true, "reserved": true, "participants": true}
+	var version int
+	if err := json.Unmarshal(root["schemaVersion"], &version); err != nil {
+		return err
+	}
+	if version == 2 {
+		allowed["bundleProtocol"] = true
+		if pending, ok := root["pendingBundle"]; ok {
+			allowed["pendingBundle"] = true
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(pending, &fields); err != nil || len(fields) != 5 {
+				return errors.New("invalid shared bundle shape")
+			}
+			for _, key := range []string{"requestId", "digest", "boardId", "owner", "ids"} {
+				if fields[key] == nil || string(fields[key]) == "null" {
+					return errors.New("shared bundle requires all fields")
+				}
+			}
+		}
+	}
 	if len(root) != len(allowed) {
 		return errors.New("shared state requires all fields exactly once")
 	}
@@ -151,8 +180,14 @@ func validateSharedShape(raw []byte) error {
 }
 
 func validateSharedState(s sharedState) error {
-	if s.SchemaVersion != 1 || !sharedHex32.MatchString(s.NamespaceID) || !validSharedBoardPath(s.BoardPath) || (s.Phase != "initializing" && s.Phase != "active") {
+	if (s.SchemaVersion != 1 && s.SchemaVersion != 2) || !sharedHex32.MatchString(s.NamespaceID) || !validSharedBoardPath(s.BoardPath) || (s.Phase != "initializing" && s.Phase != "active") {
 		return errors.New("invalid shared state header")
+	}
+	if s.SchemaVersion == 1 && (s.BundleProtocol != 0 || s.PendingBundle != nil) {
+		return errors.New("legacy shared state cannot contain bundle protocol")
+	}
+	if s.SchemaVersion == 2 && (s.BundleProtocol != 1 || s.Phase != "active") {
+		return errors.New("invalid shared bundle protocol")
 	}
 	if s.Reserved == nil || s.Participants == nil || len(s.Participants) == 0 || len(s.Participants) > 256 {
 		return errors.New("invalid shared state collections")
@@ -161,6 +196,21 @@ func validateSharedState(s sharedState) error {
 		parsed, err := cardid.Parse(id)
 		if err != nil || parsed.Key() != id || (i > 0 && s.Reserved[i-1] >= id) {
 			return errors.New("reserved IDs must be sorted unique normalized keys")
+		}
+	}
+	if p := s.PendingBundle; p != nil {
+		if !sharedHex32.MatchString(p.RequestID) || !sharedHex64.MatchString(p.Digest) || !sharedHex32.MatchString(p.BoardID) || !validSharedRoot(p.Owner) || len(p.IDs) == 0 || len(p.IDs) > 128 {
+			return errors.New("invalid shared pending bundle")
+		}
+		reserved := map[string]bool{}
+		for _, id := range s.Reserved {
+			reserved[id] = true
+		}
+		for i, id := range p.IDs {
+			parsed, err := cardid.Parse(id)
+			if err != nil || parsed.Prefix != "TASK" || parsed.Key() != id || !reserved[id] || (i > 0 && p.IDs[i-1] >= id) {
+				return errors.New("shared bundle IDs must be sorted unique reserved TASK keys")
+			}
 		}
 	}
 	last := ""

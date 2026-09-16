@@ -40,6 +40,10 @@ SHA-256 digest를 출력합니다. 보드 등록, TASK 존재 확인, 권한 부
 자세한 참조 검증과 재시도 경계는 [Intent/Batch context registry](docs/context-registry.md)를
 참조하세요.
 
+`create-bundle`은 정확한 등록 Intent에 연결된 여러 TASK와 Batch를 하나의 복구 가능한
+요청으로 게시합니다. 명시적 프로토콜 채택·동일 요청 재개와 안전 경계는
+[Task 일괄 생성](docs/task-bundles.md)을 따릅니다. LLM 계획 생성이나 실행 loop는 아닙니다.
+
 ## 생성·목록의 안전 경계
 
 - 기본 `create`는 `todo/TASK-N.md`에 새 카드를 만듭니다. 기존 파일을 덮어쓰지 않습니다.

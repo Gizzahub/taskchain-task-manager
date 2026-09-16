@@ -24,6 +24,12 @@ type sharedSession struct {
 // sharing is enabled. Thus claims, transitions and completed replay also
 // participate in coordination with namespace activation.
 func acquireShared(dir string, allowInitializing bool) (session *sharedSession, release func() error, err error) {
+	return acquireSharedForBundle(dir, allowInitializing, false)
+}
+
+// The bundle writer alone may acquire a pending namespace; it must then
+// match the request, board identity and actual owner path before any mutation.
+func acquireSharedForBundle(dir string, allowInitializing, allowPendingBundle bool) (session *sharedSession, release func() error, err error) {
 	location, err := githistory.LocateBoard(context.Background(), dir)
 	if err != nil {
 		return nil, nil, err
@@ -86,6 +92,9 @@ func acquireShared(dir string, allowInitializing bool) (session *sharedSession, 
 	}
 	if state.Phase != "active" && !allowInitializing {
 		return nil, release, errors.New("shared ID activation is initializing; use enable-shared --resume")
+	}
+	if state.PendingBundle != nil && !allowPendingBundle {
+		return nil, release, errors.New("shared namespace has a pending bundle; recover from its original board")
 	}
 	session.state = &state
 	return session, release, nil
@@ -155,6 +164,15 @@ func (s *sharedSession) verifyBoard(r *os.Root) error {
 	if _, err := policyForBoard(r); err != nil {
 		return err
 	}
+	if err := s.verifyBoardIdentity(r); err != nil {
+		return err
+	}
+	return s.verifyLocalIDBinding(r)
+}
+
+// Identity validation is shared with pending-aware bundle sessions, whose
+// policy validation must not recurse through the ordinary pending gate.
+func (s *sharedSession) verifyBoardIdentity(r *os.Root) error {
 	if s != nil {
 		if err := s.verify(); err != nil {
 			return err
@@ -163,7 +181,7 @@ func (s *sharedSession) verifyBoard(r *os.Root) error {
 			return err
 		}
 	}
-	return s.verifyLocalIDBinding(r)
+	return nil
 }
 
 // Readers and receipt replay must not bypass an existing shared identity.

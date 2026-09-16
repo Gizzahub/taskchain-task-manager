@@ -302,6 +302,12 @@ func listLockedExcept(r *os.Root, skip string) ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
+	return listLockedWithPolicy(r, skip, policy)
+}
+
+// Bundle recovery validates the policy through its own pending-aware session.
+// Ordinary callers must resolve it through listLocked/listLockedExcept.
+func listLockedWithPolicy(r *os.Root, skip string, policy boardpolicy.Policy) ([]Entry, error) {
 	if err := validateOptionalIDs(r); err != nil {
 		return nil, err
 	}

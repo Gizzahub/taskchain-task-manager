@@ -48,6 +48,10 @@ func loadIDs(r *os.Root) (idLedger, error) {
 	if err != nil {
 		return idLedger{}, err
 	}
+	return decodeIDs(raw)
+}
+
+func decodeIDs(raw []byte) (idLedger, error) {
 	if len(raw) > maxIDsBytes || !utf8.Valid(raw) {
 		return idLedger{}, errors.New("invalid ID ledger size or UTF-8")
 	}
@@ -87,6 +91,12 @@ func publishIDs(r *os.Root, ledger idLedger, initial bool) error {
 	if _, err := policyForBoard(r); err != nil {
 		return err
 	}
+	return publishValidatedIDs(r, ledger, initial)
+}
+
+// The bundle writer validates its exact pending operation and bound policy
+// before using this primitive. Ordinary writers use publishIDs.
+func publishValidatedIDs(r *os.Root, ledger idLedger, initial bool) error {
 	raw, err := json.Marshal(ledger)
 	if err != nil {
 		return err
@@ -126,6 +136,10 @@ func observedIDs(r *os.Root, entries []Entry, ledger idLedger, extra []string) (
 	if err != nil {
 		return idLedger{}, err
 	}
+	return observedIDsWithRecords(entries, ledger, extra, claims, transitions)
+}
+
+func observedIDsWithRecords(entries []Entry, ledger idLedger, extra []string, claims claimsLedger, transitions transitionJournal) (idLedger, error) {
 	set := map[string]bool{}
 	for _, id := range ledger.Reserved {
 		set[id] = true
