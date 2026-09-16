@@ -1,0 +1,48 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
+)
+
+func runClaim(args []string, out, errOut io.Writer) int {
+	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
+	flags.SetOutput(errOut)
+	dir := flags.String("dir", "tasks", "task board directory")
+	id := flags.String("id", "", "canonical task ID")
+	owner := flags.String("owner", "", "explicit local owner identity (not authentication)")
+	token := flags.String("token", "", "unique 32 lowercase hex retry identifier")
+	asJSON := flags.Bool("json", false, "write JSON")
+	if err := flags.Parse(args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+	if flags.NArg() != 0 || !*asJSON || *dir == "" || *id == "" || *owner == "" || *token == "" {
+		fmt.Fprintln(errOut, "expected --dir <board> --id TASK-N --owner <owner> --token <32 lowercase hex> --json")
+		return 2
+	}
+	req := taskstore.ClaimRequest{ID: *id, Owner: *owner, Token: *token}
+	var result taskstore.ClaimRecord
+	var err error
+	if args[0] == "claim" {
+		result, err = taskstore.Claim(*dir, req)
+	} else {
+		result, err = taskstore.Release(*dir, req)
+	}
+	if err != nil {
+		fmt.Fprintln(errOut, args[0]+":", err)
+		return 1
+	}
+	if err := json.NewEncoder(out).Encode(result); err != nil {
+		fmt.Fprintln(errOut, "write result (retry the same id, owner and token):", err)
+		return 1
+	}
+	return 0
+}

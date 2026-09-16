@@ -82,7 +82,14 @@ func List(dir string) (entries []Entry, err error) {
 		return nil, err
 	}
 	defer func() { err = errors.Join(err, unlock()) }()
-	return listLocked(r)
+	entries, err = listLocked(r)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := loadClaims(r, entries); err != nil {
+		return nil, err
+	}
+	return entries, nil
 }
 
 func Create(dir string, req CreateRequest) (entry Entry, err error) {
@@ -98,6 +105,9 @@ func Create(dir string, req CreateRequest) (entry Entry, err error) {
 	defer func() { err = errors.Join(err, unlock()) }()
 	entries, err := listLocked(r)
 	if err != nil {
+		return Entry{}, err
+	}
+	if _, err := loadClaims(r, entries); err != nil {
 		return Entry{}, err
 	}
 	if err := validateGraph(entries); err != nil {
@@ -220,35 +230,11 @@ func Ready(dir string) (entries []Entry, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := validateGraph(all); err != nil {
+	ledger, err := loadClaims(r, all)
+	if err != nil {
 		return nil, err
 	}
-	ready := make([]Entry, 0)
-	byID := make(map[string]Entry, len(all))
-	for _, entry := range all {
-		byID[entry.Card.ID] = entry
-	}
-	for _, entry := range all {
-		if filepath.Dir(entry.Path) != "todo" || entry.Card.Status != "pending" {
-			continue
-		}
-		ok := true
-		for _, dep := range entry.Card.DependsOn {
-			depEntry, exists := byID[dep]
-			// Only the top-level done zone is an actionable completion. A card
-			// copied into a kind/archive or nested directory remains readable but
-			// must not satisfy execution dependencies; its basename need not match
-			// the canonical ID because the frontmatter ID is authoritative.
-			if !exists || filepath.Dir(depEntry.Path) != "done" || depEntry.Card.Status != "done" {
-				ok = false
-				break
-			}
-		}
-		if ok {
-			ready = append(ready, entry)
-		}
-	}
-	return ready, nil
+	return readyLocked(all, ledger)
 }
 
 func validateDependencies(deps []string, id string, entries []Entry) error {

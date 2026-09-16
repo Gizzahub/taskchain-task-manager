@@ -2,7 +2,7 @@
 
 개발자와 코딩 에이전트를 위한 파일 기반 태스크 관리 도구입니다.
 현재는 초기 개발 단계이며 카드 codec과 **초기화·생성·목록·조회·의존성 기반 ready·구문 검증**을 제공합니다.
-claim·상태 전이·Intent/Batch·자동 실행은 아직 제공하지 않습니다.
+명시적 claim/release를 지원하며 상태 전이·Intent/Batch·자동 실행은 아직 제공하지 않습니다.
 
 ## 빌드와 실행
 
@@ -32,7 +32,7 @@ make check
 - `list`는 알려진 workflow·종류·archive 디렉터리를 검사하고 경로순 결과를 반환합니다.
   ID 중복·잘못된 카드·symlink를 발견하면 조용히 건너뛰지 않고 실패합니다.
 - 지원 대상은 TASK-N 카드입니다. 기존 도구의 모든 카드 종류·dialect와 호환된다는 뜻은 아닙니다.
-- 목록·생성·ready는 보드의 `.task-manager.lock`을 사용합니다. 다른 프로세스의 잠금이 있으면
+- 목록·생성·ready·claim/release는 보드의 `.task-manager.lock`을 사용합니다. 다른 프로세스의 잠금이 있으면
   즉시 실패하며 자동으로 강제 해제하지 않습니다. 중단 뒤 잠금이 남으면 실행 중인 작업이
   없는지 확인하고 복구를 판단해야 합니다. 잠금이 있다는 이유만으로 삭제하지 마세요.
 - 생성은 같은 filesystem의 임시 파일을 완성한 뒤 hard link로 공개합니다.
@@ -54,6 +54,27 @@ kind 디렉터리(plan/issue 등)·archive·중첩 카드의 상태 표기만으
 별도의 순환이 있어도 일부 정상 후보만 반환하지 않습니다. `list`는 관계 오류를 진단하기
 위해 읽을 수 있지만 카드 자체가 잘못된 형식이면 실패합니다. 상태 변경 CLI는 아직 없으므로
 합성 예제 이외의 기존 도구를 이 기능만으로 대체하지 마세요.
+
+## 실행권 예약
+
+```sh
+# 실제 새 시도에는 새 32자리 lowercase hex token을 만들어 보관하세요.
+./build/taskchain-task-manager claim --dir ./tasks --id TASK-1 --owner developer --token 0123456789abcdef0123456789abcdef --json
+./build/taskchain-task-manager release --dir ./tasks --id TASK-1 --owner developer --token 0123456789abcdef0123456789abcdef --json
+```
+
+claim은 ready 작업을 예약하며 카드의 내용·경로·상태를 변경하지 않습니다. held인 작업은
+ready에서 제외됩니다. release는 예약만 해제하며 작업 완료를 의미하지 않습니다.
+owner는 명시적 로컬 식별자이고 token은 재시도 식별자이지 인증 수단이 아닙니다.
+출력 실패 등으로 결과가 불분명하면 같은 id/owner/token으로 재시도하세요.
+다른 소유자의 해제, token의 다른 작업 재사용, released token 재획득은 거부합니다.
+동일 held claim 또는 동일 release 재시도는 같은 결과입니다. 자동 만료·강제 회수는 없습니다.
+
+보드의 `.task-manager-claims.json`에 예약과 해제 이력을 보존합니다. 삭제·수동 편집하면
+중복 실행 방지와 재시도 기록을 잃습니다. 다른 clone·worktree 사이의 분산 잠금은 아닙니다.
+원장은 1 MiB로 제한하며 신규 claim에는 향후 release 공간도 예약합니다. 자동 이력 삭제는
+없습니다. 손상·미지원 버전·중복 키·symlink는 오류이며 list/create/ready도 이를 무시하지 않습니다.
+staged write 뒤 rename으로 교체하며 전원 손실이나 잠금을 무시하는 편집기는 보장 범위 밖입니다.
 
 ## 출력 계약 (초기, 안정화 전)
 
