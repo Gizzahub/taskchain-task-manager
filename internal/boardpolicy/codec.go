@@ -50,9 +50,10 @@ func Parse(raw []byte) (Policy, error) {
 			return Policy{}, fmt.Errorf("unknown root field %q", root.Content[i].Value)
 		}
 	}
-	if schema == nil || schema.Kind != yaml.ScalarNode || schema.Tag != "!!int" || schema.Value != "1" {
-		return Policy{}, errors.New("schema-version must be 1")
+	if schema == nil || schema.Kind != yaml.ScalarNode || schema.Tag != "!!int" || (schema.Value != "1" && schema.Value != "2") {
+		return Policy{}, errors.New("schema-version must be 1 or 2")
 	}
+	version := schema.Value[0] - '0'
 	if block == nil || block.Kind != yaml.MappingNode {
 		return Policy{}, errors.New("board-policy must be a mapping")
 	}
@@ -60,6 +61,10 @@ func Parse(raw []byte) (Policy, error) {
 		return Policy{}, err
 	}
 	decl := Declaration{}
+	if version == 2 {
+		decl.Relocations = []Transition{}
+		decl.KindStatus = map[string]string{}
+	}
 	for i := 0; i < len(block.Content); i += 2 {
 		key, value := block.Content[i].Value, block.Content[i+1]
 		switch key {
@@ -127,6 +132,32 @@ func Parse(raw []byte) (Policy, error) {
 				}
 				decl.Transitions = append(decl.Transitions, row)
 			}
+		case "relocations":
+			if version != 2 {
+				return Policy{}, errors.New("relocations require schema-version 2")
+			}
+			rows, err := parseRelocations(value)
+			if err != nil {
+				return Policy{}, err
+			}
+			decl.Relocations = rows
+		case "kind-status":
+			if version != 2 {
+				return Policy{}, errors.New("kind-status requires schema-version 2")
+			}
+			if value.Kind != yaml.MappingNode {
+				return Policy{}, errors.New("board-policy.kind-status must be a mapping")
+			}
+			if err := uniqueMapping(value, "board-policy.kind-status"); err != nil {
+				return Policy{}, err
+			}
+			for j := 0; j < len(value.Content); j += 2 {
+				k, v := value.Content[j], value.Content[j+1]
+				if k.Kind != yaml.ScalarNode || k.Tag != "!!str" || v.Kind != yaml.ScalarNode || v.Tag != "!!str" || k.Value == "" || v.Value == "" || !isKindDir(k.Value) || !knownStatus(v.Value) {
+					return Policy{}, errors.New("board-policy.kind-status contains an unsupported kind or status")
+				}
+				decl.KindStatus[k.Value] = v.Value
+			}
 		default:
 			return Policy{}, fmt.Errorf("unknown board-policy field %q", key)
 		}
@@ -139,6 +170,49 @@ func Parse(raw []byte) (Policy, error) {
 		return Policy{}, err
 	}
 	return policy, nil
+}
+
+func parseRelocations(value *yaml.Node) ([]Transition, error) {
+	if value.Kind != yaml.SequenceNode {
+		return nil, errors.New("board-policy.relocations must be a sequence")
+	}
+	rows := []Transition{}
+	for _, item := range value.Content {
+		if item.Kind != yaml.MappingNode {
+			return nil, errors.New("board-policy.relocations entries must be mappings")
+		}
+		if err := uniqueMapping(item, "board-policy.relocations"); err != nil {
+			return nil, err
+		}
+		var row Transition
+		for j := 0; j < len(item.Content); j += 2 {
+			k, v := item.Content[j], item.Content[j+1]
+			switch k.Value {
+			case "from":
+				if v.Kind != yaml.ScalarNode || v.Tag != "!!str" || v.Value == "" {
+					return nil, errors.New("relocation.from must be a nonempty string")
+				}
+				row.From = v.Value
+			case "to":
+				if v.Kind != yaml.SequenceNode || len(v.Content) == 0 {
+					return nil, errors.New("relocation.to must be a nonempty sequence")
+				}
+				for _, target := range v.Content {
+					if target.Kind != yaml.ScalarNode || target.Tag != "!!str" || target.Value == "" {
+						return nil, errors.New("relocation.to entries must be nonempty strings")
+					}
+					row.To = append(row.To, target.Value)
+				}
+			default:
+				return nil, fmt.Errorf("unknown relocation field %q", k.Value)
+			}
+		}
+		if row.From == "" {
+			return nil, errors.New("relocation.from is required")
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
 }
 
 func validateNode(n *yaml.Node, depth int) error {

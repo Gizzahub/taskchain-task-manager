@@ -169,7 +169,7 @@ func validateTransitionShape(raw []byte) error {
 	extra := 0
 	if raw, ok := root["storageProtocol"]; ok {
 		var protocol int
-		if err := json.Unmarshal(raw, &protocol); err != nil || protocol != 1 {
+		if err := json.Unmarshal(raw, &protocol); err != nil || (protocol != 1 && protocol != 2) {
 			return errors.New("unsupported storage protocol")
 		}
 		extra++

@@ -34,8 +34,11 @@ func (s *repairSession) verifyPendingRepair(rec repairRecord, req RepairRequest)
 	if err != nil {
 		return err
 	}
-	if j.StorageProtocol != 1 {
+	if j.StorageProtocol < 1 {
 		return errors.New("pending repair lost its protocol binding")
+	}
+	if err := checkRelocationGate(s.root, j); err != nil {
+		return err
 	}
 	if err := checkBundleGate(s.root, j); err != nil {
 		return err

@@ -55,13 +55,21 @@ func policyActivationSnapshot(r *os.Root, policy boardpolicy.Policy, journal tra
 
 	h := sha256.New()
 	// Preserve legacy snapshot bytes on boards without the new protocol.
-	if journal.StorageProtocol == 1 {
+	if journal.StorageProtocol >= 1 {
 		raw, mode, err := snapshotActivationFile(r, repairsFile, maxRepairsBytes, true)
 		if err != nil {
 			return "", err
 		}
 		writeActivationFrame(h, "storage-receipts", raw)
 		writeActivationFrame(h, "storage-mode", []byte(fmt.Sprintf("%o", mode)))
+	}
+	if journal.StorageProtocol == 2 {
+		raw, mode, err := snapshotActivationFile(r, relocationsFile, maxRepairsBytes, true)
+		if err != nil {
+			return "", err
+		}
+		writeActivationFrame(h, "relocation-receipts", raw)
+		writeActivationFrame(h, "relocation-mode", []byte(fmt.Sprintf("%o", mode)))
 	}
 	// ID contents may be deliberately adopted by join. Their exact hashes are
 	// part of the durable plan; permission changes remain snapshot conflicts.

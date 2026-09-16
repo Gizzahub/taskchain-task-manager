@@ -18,7 +18,11 @@ type repairSession struct {
 }
 
 func openRepairSession(dir string, req RepairRequest) (_ *repairSession, err error) {
-	shared, release, err := acquireSharedStorageOptions(dir, false, false, false, true)
+	return openStorageSession(dir, req, false)
+}
+
+func openStorageSession(dir string, req RepairRequest, relocation bool) (_ *repairSession, err error) {
+	shared, release, err := acquireSharedRelocationOptions(dir, false, false, false, !relocation, relocation)
 	if err != nil {
 		return nil, err
 	}
@@ -45,6 +49,11 @@ func openRepairSession(dir string, req RepairRequest) (_ *repairSession, err err
 	s.transitions, err = loadTransitionsForStorage(r)
 	if err != nil {
 		return nil, err
+	}
+	if !relocation {
+		if err := checkRelocationGate(r, s.transitions); err != nil {
+			return nil, err
+		}
 	}
 	if err := shared.verifyPolicyAuthority(r, s.transitions); err != nil {
 		return nil, err
@@ -86,15 +95,22 @@ func openRepairSession(dir string, req RepairRequest) (_ *repairSession, err err
 	if s.transitions.StorageProtocol == 0 && len(s.journal.Records) != 0 {
 		return nil, errors.New("orphan storage journal; restore its protocol marker")
 	}
+	if relocation {
+		for _, rec := range s.journal.Records {
+			if rec.Kind == "pending" {
+				return nil, errors.New("recover pending status repair before relocation")
+			}
+		}
+	}
 	if shared != nil && shared.state != nil {
-		if s.transitions.StorageProtocol == 1 && shared.state.StorageProtocol != 1 {
+		if s.transitions.StorageProtocol > shared.state.StorageProtocol {
 			return nil, errors.New("storage-adopted board has no common protocol; restore common state")
 		}
 		if p := shared.state.PendingRepair; p != nil {
 			if p.Owner != board || p.RequestID != req.RequestID {
 				return nil, errors.New("shared repair belongs to another request or board")
 			}
-			if s.transitions.StorageProtocol != 1 || !s.journalExists {
+			if s.transitions.StorageProtocol < 1 || !s.journalExists {
 				return nil, errors.New("shared pending repair lost local protocol binding")
 			}
 		}
@@ -103,8 +119,8 @@ func openRepairSession(dir string, req RepairRequest) (_ *repairSession, err err
 }
 
 func (s *repairSession) adopt(explicit bool, step func(string) error) error {
-	commonNeeded := s.shared != nil && s.shared.state != nil && s.shared.state.StorageProtocol != 1
-	if (!s.journalExists || s.transitions.StorageProtocol != 1 || commonNeeded) && !explicit {
+	commonNeeded := s.shared != nil && s.shared.state != nil && s.shared.state.StorageProtocol < 1
+	if (!s.journalExists || s.transitions.StorageProtocol < 1 || commonNeeded) && !explicit {
 		return errors.New("storage protocol adoption requires --adopt after upgrading all writers")
 	}
 	if !s.journalExists {
@@ -122,7 +138,7 @@ func (s *repairSession) adopt(explicit bool, step func(string) error) error {
 	if err := storageStep(step, "after-common-protocol"); err != nil {
 		return err
 	}
-	if s.transitions.StorageProtocol != 1 {
+	if s.transitions.StorageProtocol < 1 {
 		s.transitions.StorageProtocol = 1
 		if err := publishTransitionJournal(s.root, s.transitions); err != nil {
 			return err

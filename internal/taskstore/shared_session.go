@@ -44,6 +44,10 @@ func acquireSharedOptions(dir string, allowInitializing, allowPendingBundle, all
 }
 
 func acquireSharedStorageOptions(dir string, allowInitializing, allowPendingBundle, allowPendingPolicy, allowPendingRepair bool) (session *sharedSession, release func() error, err error) {
+	return acquireSharedRelocationOptions(dir, allowInitializing, allowPendingBundle, allowPendingPolicy, allowPendingRepair, false)
+}
+
+func acquireSharedRelocationOptions(dir string, allowInitializing, allowPendingBundle, allowPendingPolicy, allowPendingRepair, allowPendingRelocation bool) (session *sharedSession, release func() error, err error) {
 	location, err := githistory.LocateBoard(context.Background(), dir)
 	if err != nil {
 		return nil, nil, err
@@ -112,6 +116,9 @@ func acquireSharedStorageOptions(dir string, allowInitializing, allowPendingBund
 	}
 	if state.PendingRepair != nil && !allowPendingRepair {
 		return nil, release, errors.New("shared namespace has a pending status repair; recover from its original board")
+	}
+	if state.PendingRelocation != nil && !allowPendingRelocation {
+		return nil, release, errors.New("shared namespace has a pending relocation; recover from its original board")
 	}
 	if state.Policy != nil && state.Policy.Phase != "active" && !allowPendingPolicy {
 		return nil, release, errors.New("shared policy activation is pending; explicit policy recovery required")

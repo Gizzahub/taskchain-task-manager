@@ -29,14 +29,17 @@ func validateSharedRepairShape(raw []byte) error {
 }
 
 func validateSharedStorage(s sharedState) error {
-	if s.StorageProtocol != 0 && s.StorageProtocol != 1 {
+	if s.StorageProtocol < 0 || s.StorageProtocol > 2 {
 		return errors.New("invalid shared storage protocol")
+	}
+	if err := validateSharedRelocation(s); err != nil {
+		return err
 	}
 	p := s.PendingRepair
 	if p == nil {
 		return nil
 	}
-	if s.StorageProtocol != 1 || s.Phase != "active" || s.PendingBundle != nil || (s.Policy != nil && s.Policy.Phase != "active") {
+	if s.StorageProtocol < 1 || s.Phase != "active" || s.PendingBundle != nil || s.PendingRelocation != nil || (s.Policy != nil && s.Policy.Phase != "active") {
 		return errors.New("conflicting shared storage reservation")
 	}
 	if !validSharedRoot(p.Owner) || !sharedHex32.MatchString(p.RequestID) || !sharedHex64.MatchString(p.OriginalJournalSHA256) {
@@ -103,7 +106,7 @@ func (s *sharedSession) saveStorageState(next sharedState) error {
 }
 
 func (s *sharedSession) adoptStorageProtocol() error {
-	if s == nil || s.state == nil || s.state.StorageProtocol == 1 {
+	if s == nil || s.state == nil || s.state.StorageProtocol >= 1 {
 		return nil
 	}
 	next := *s.state
@@ -112,7 +115,7 @@ func (s *sharedSession) adoptStorageProtocol() error {
 }
 
 func (s *sharedSession) verifyStorageBinding(j transitionJournal) error {
-	if s != nil && s.state != nil && j.StorageProtocol == 1 && s.state.StorageProtocol != 1 {
+	if s != nil && s.state != nil && j.StorageProtocol > s.state.StorageProtocol {
 		return errors.New("storage-adopted board lost its common protocol; restore common state")
 	}
 	return nil

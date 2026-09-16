@@ -137,6 +137,7 @@ Git branch/worktree 관리·범용 카드 편집·분산 잠금은 아직 지원
 
 상태 전이, 멱등 요청, pending journal 복구와 지원 한계는 [상태 전이 사용법](docs/lifecycle.md)을 읽어 주세요.
 이동 없이 본문 Status cell을 고치려면 [같은 경로 상태 보정](docs/status-repair.md)을 따릅니다.
+명시 정책의 kind 경로 이동은 [relocate 사용법과 현재 범위](docs/relocation.md)를 참고하세요.
 보관 영역과 비카드 문서의 구분은 [카드 발견 규칙](docs/discovery.md)을 따릅니다.
 [worktree 읽기 전용 진단](docs/worktree-inspection.md)으로 활성화 전 topology를 확인합니다.
 같은 저장소의 worktree 간 ID 할당은 [공유 ID 채택·복구](docs/shared-ids.md)를 따릅니다.

@@ -61,7 +61,7 @@ func TestCanonicalSortAndSemanticDigest(t *testing.T) {
 
 func TestParseRejectsStrictShapeAndBounds(t *testing.T) {
 	bad := []string{
-		"board-policy: {}\n", "schema-version: 2\nboard-policy: {}\n", "schema-version: 1\nboard-policy: {}\n---\nschema-version: 1\nboard-policy: {}\n",
+		"board-policy: {}\n", "schema-version: 1\nboard-policy: {}\n---\nschema-version: 1\nboard-policy: {}\n",
 		"schema-version: 1\nboard-policy:\n  zones: [manual, manual]\n", "schema-version: 1\nboard-policy:\n  nope: []\n", "schema-version: 1\nboard-policy:\n  zones: [manual]\n  zone-status: {manual: null}\n",
 		"schema-version: 1\nboard-policy:\n  transitions: [{from: todo, to: [manual]}]\n", "schema-version: 1\nboard-policy: &x {}\n", "schema-version: 1\nboard-policy: *x\n",
 		"schema-version: 1\nboard-policy:\n  transitions: [{from: todo, to: [doing], extra: x}]\n", "schema-version: 1\nboard-policy:\n  transitions: [{from: todo, to: [doing]}, {from: todo, to: [done]}]\n",

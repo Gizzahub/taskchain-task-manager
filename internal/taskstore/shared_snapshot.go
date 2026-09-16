@@ -106,8 +106,11 @@ func activationSnapshot(r *os.Root) (string, idLedger, string, error) {
 	if err != nil {
 		return "", ledger, "", err
 	}
-	if journal.StorageProtocol == 1 {
+	if journal.StorageProtocol >= 1 {
 		names = append(names, repairsFile)
+	}
+	if journal.StorageProtocol == 2 {
+		names = append(names, relocationsFile)
 	}
 	for _, name := range names {
 		raw, err := boundedSnapshotFile(r, name, maxTransitionBytes)

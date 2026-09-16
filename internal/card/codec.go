@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/cardpath"
 	"gopkg.in/yaml.v3"
 )
 
@@ -220,17 +221,8 @@ func zoneFromPath(path string) string {
 		parts = parts[:len(parts)-1] // the final segment is the card filename
 	}
 	for _, part := range parts {
-		switch strings.ToLower(part) {
-		case "todo", "todos", "pending":
-			return "pending"
-		case "doing", "doings", "in-progress", "in_progress", "inprogress", "wip":
-			return "in-progress"
-		case "review", "reviews", "in-review", "in_review":
-			return "review"
-		case "blocked", "blockeds", "suspended", "suspend", "on-hold", "on_hold", "waiting":
-			return "blocked"
-		case "done", "dones", "completed", "complete", "finished":
-			return "done"
+		if status := cardpath.WorkflowStatus(part); status != "" {
+			return status
 		}
 	}
 	return ""

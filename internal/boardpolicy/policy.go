@@ -11,6 +11,8 @@ type Declaration struct {
 	Zones       []string
 	ZoneStatus  map[string]string
 	Transitions []Transition
+	Relocations []Transition
+	KindStatus  map[string]string
 }
 
 type Transition struct {
@@ -19,14 +21,17 @@ type Transition struct {
 }
 
 type Policy struct {
-	workflow map[string]string
-	parked   map[string]string
-	edges    map[string]map[string]bool
-	known    []string
+	schemaVersion int
+	workflow      map[string]string
+	parked        map[string]string
+	edges         map[string]map[string]bool
+	relocations   map[string]map[string]bool
+	kindStatus    map[string]string
+	known         []string
 }
 
 func Default() Policy {
-	return Policy{workflow: defaultStatuses(), parked: map[string]string{}, edges: defaultEdges(), known: baseDirs()}
+	return Policy{schemaVersion: 1, workflow: defaultStatuses(), parked: map[string]string{}, edges: defaultEdges(), relocations: map[string]map[string]bool{}, kindStatus: map[string]string{}, known: baseDirs()}
 }
 
 func New(d Declaration) (Policy, error) {
@@ -87,6 +92,46 @@ func New(d Declaration) (Policy, error) {
 			}
 		}
 	}
+	relocations := map[string]map[string]bool{}
+	if d.Relocations != nil {
+		for i, row := range d.Relocations {
+			if row.From == "" || len(row.To) == 0 {
+				return Policy{}, fmt.Errorf("relocation %d requires a source and target", i)
+			}
+			if _, ok := relocations[row.From]; ok {
+				return Policy{}, fmt.Errorf("duplicate relocation source %q", row.From)
+			}
+			if !relocationSource(row.From, workflow, parked) {
+				return Policy{}, fmt.Errorf("relocation %d has unknown source %q", i, row.From)
+			}
+			relocations[row.From] = map[string]bool{}
+			for _, target := range row.To {
+				if !relocationTarget(target, workflow) {
+					return Policy{}, fmt.Errorf("relocation %q targets unsupported zone %q", row.From, target)
+				}
+				if target == row.From {
+					return Policy{}, fmt.Errorf("relocation %q targets itself", row.From)
+				}
+				if relocations[row.From][target] {
+					return Policy{}, fmt.Errorf("relocation %q repeats target %q", row.From, target)
+				}
+				if !isKindDir(row.From) && !isKindDir(target) {
+					return Policy{}, fmt.Errorf("relocation %q to %q must involve a kind endpoint", row.From, target)
+				}
+				relocations[row.From][target] = true
+			}
+		}
+	}
+	kindStatus := map[string]string{}
+	for kind, status := range d.KindStatus {
+		if !isKindDir(kind) {
+			return Policy{}, fmt.Errorf("unknown kind-status key %q", kind)
+		}
+		if !knownStatus(status) {
+			return Policy{}, fmt.Errorf("unknown status %q for kind %q", status, kind)
+		}
+		kindStatus[kind] = status
+	}
 	known := baseDirs()
 	custom := make([]string, 0, len(parked))
 	for zone := range parked {
@@ -94,7 +139,24 @@ func New(d Declaration) (Policy, error) {
 	}
 	sort.Strings(custom)
 	known = append(known, custom...)
-	return Policy{workflow: workflow, parked: parked, edges: edges, known: known}, nil
+	version := 1
+	if d.Relocations != nil || d.KindStatus != nil {
+		version = 2
+	}
+	return Policy{schemaVersion: version, workflow: workflow, parked: parked, edges: edges, relocations: relocations, kindStatus: kindStatus, known: known}, nil
+}
+
+func relocationSource(zone string, workflow map[string]string, parked map[string]string) bool {
+	return workflow[zone] != "" || parkedHas(parked, zone) || isKindDir(zone)
+}
+
+func parkedHas(parked map[string]string, zone string) bool {
+	_, ok := parked[zone]
+	return ok
+}
+
+func relocationTarget(zone string, workflow map[string]string) bool {
+	return workflow[zone] != "" || isKindDir(zone)
 }
 
 func baseDirs() []string {
@@ -171,7 +233,15 @@ func (p Policy) Status(zone string) (string, bool) {
 func (p Policy) Allows(from, to string) bool {
 	return p.edges != nil && p.edges[from] != nil && p.edges[from][to]
 }
-func (p Policy) KnownDirs() []string { return append([]string(nil), p.known...) }
-func (p Policy) ReadyZone() string   { return "todo" }
-func (p Policy) DoneZone() string    { return "done" }
-func (p Policy) InitialZone() string { return "todo" }
+func (p Policy) AllowsRelocation(from, to string) bool {
+	return p.relocations != nil && p.relocations[from] != nil && p.relocations[from][to]
+}
+func (p Policy) KindStatus(zone string) (string, bool) {
+	status, ok := p.kindStatus[zone]
+	return status, ok
+}
+func (p Policy) IsKind(zone string) bool { return isKindDir(zone) }
+func (p Policy) KnownDirs() []string     { return append([]string(nil), p.known...) }
+func (p Policy) ReadyZone() string       { return "todo" }
+func (p Policy) DoneZone() string        { return "done" }
+func (p Policy) InitialZone() string     { return "todo" }

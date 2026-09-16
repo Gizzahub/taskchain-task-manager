@@ -26,6 +26,9 @@ func canonicalStorageBoard(r *os.Root) (string, error) {
 // This gate is also used by exceptional bundle/policy sessions. A storage
 // marker is persistent even after every repair has completed.
 func checkStorageGate(r *os.Root, transitions transitionJournal) error {
+	if err := checkRelocationGate(r, transitions); err != nil {
+		return err
+	}
 	j, err := loadRepairJournal(r)
 	if errors.Is(err, fs.ErrNotExist) {
 		if transitions.StorageProtocol == 0 {
@@ -36,7 +39,7 @@ func checkStorageGate(r *os.Root, transitions transitionJournal) error {
 	if err != nil {
 		return err
 	}
-	if transitions.StorageProtocol != 1 {
+	if transitions.StorageProtocol != 1 && transitions.StorageProtocol != 2 {
 		return errors.New("storage adoption is incomplete; resume explicit adoption")
 	}
 	board, err := canonicalStorageBoard(r)
@@ -53,6 +56,35 @@ func checkStorageGate(r *os.Root, transitions transitionJournal) error {
 	}
 	if _, err := loadIDs(r); err != nil {
 		return fmt.Errorf("storage-adopted board requires its ID ledger: %w", err)
+	}
+	return nil
+}
+
+func checkRelocationGate(r *os.Root, transitions transitionJournal) error {
+	j, err := loadRelocationJournal(r)
+	if errors.Is(err, fs.ErrNotExist) {
+		if transitions.StorageProtocol < 2 {
+			return nil
+		}
+		return errors.New("relocation journal missing from adopted board; restore it")
+	}
+	if err != nil {
+		return err
+	}
+	if transitions.StorageProtocol != 2 {
+		return errors.New("relocation adoption is incomplete; resume explicit adoption")
+	}
+	board, err := canonicalStorageBoard(r)
+	if err != nil {
+		return err
+	}
+	if board != j.BoardPath {
+		return errors.New("relocation journal belongs to another board")
+	}
+	for _, rec := range j.Records {
+		if rec.Kind == "pending" {
+			return errors.New("pending relocation requires exact request recovery")
+		}
 	}
 	return nil
 }

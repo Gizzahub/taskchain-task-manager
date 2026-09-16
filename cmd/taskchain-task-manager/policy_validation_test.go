@@ -55,7 +55,7 @@ func TestPolicyValidationIsExplicitAndReadOnly(t *testing.T) {
 func TestPolicyValidationFailuresDoNotPrintSuccessJSON(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "policy.yaml")
-	for _, raw := range []string{"", "schema-version: 2\nboard-policy: {}\n", "schema-version: 1\nboard-policy: {command: 'touch should-not-exist'}\n", strings.Repeat(" ", 64<<10+1)} {
+	for _, raw := range []string{"", "schema-version: 3\nboard-policy: {}\n", "schema-version: 1\nboard-policy: {command: 'touch should-not-exist'}\n", strings.Repeat(" ", 64<<10+1)} {
 		if err := os.WriteFile(file, []byte(raw), 0o600); err != nil {
 			t.Fatal(err)
 		}

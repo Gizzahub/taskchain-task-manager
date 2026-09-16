@@ -72,8 +72,8 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 		if err != nil {
 			return result, err
 		}
-		if journal.StorageProtocol == 1 {
-			storageProtocol = 1
+		if journal.StorageProtocol > storageProtocol {
+			storageProtocol = journal.StorageProtocol
 		}
 		if err := s.verifyPolicyAuthority(r, journal); err != nil {
 			return result, err
