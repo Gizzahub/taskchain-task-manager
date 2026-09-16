@@ -46,7 +46,7 @@ func openSharedPolicyBoards(s *sharedSession, phase string, plans []policyActiva
 	} else if phase == "joining" {
 		wanted[filepath.Join(s.location.Repository, filepath.FromSlash(s.location.Board))] = true
 	}
-	if phase == "initializing" && len(plans) > 0 && len(inventory.Worktrees) != len(plans) {
+	if (phase == "initializing" || phase == "revising") && len(plans) > 0 && len(inventory.Worktrees) != len(plans) {
 		return nil, errors.New("policy activation worktree inventory changed")
 	}
 	targets := []githistory.Worktree{}
@@ -106,7 +106,7 @@ func verifySharedPolicyInventory(s *sharedSession, boards []sharedPolicyBoard, p
 	if err != nil {
 		return err
 	}
-	if phase == "initializing" && len(inventory.Worktrees) != len(boards) {
+	if (phase == "initializing" || phase == "revising") && len(inventory.Worktrees) != len(boards) {
 		return errors.New("policy activation worktree inventory changed")
 	}
 	for _, b := range boards {

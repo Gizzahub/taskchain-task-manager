@@ -63,6 +63,9 @@ func verifyPolicyActivation(r *os.Root, j transitionJournal) error {
 	if binding.AuthorityID != state.AuthorityID || binding.Scope != state.Scope || binding.Namespace != state.Namespace || j.PolicyDigest != state.Digest {
 		return errors.New("policy activation authority mismatch")
 	}
+	if state.Revision != nil && (j.SchemaVersion != 4 || !bytes.Equal(j.PolicyHistory[state.Revision.PreviousDigest], state.Revision.PreviousCanonical)) {
+		return errors.New("policy revision lost its historical journal binding; restore original history")
+	}
 	owner, err := filepath.EvalSymlinks(r.Name())
 	if err != nil {
 		return err
@@ -101,6 +104,9 @@ func (s *sharedSession) verifyPolicyAuthority(r *os.Root, j transitionJournal) e
 	}
 	if authority.Phase != "active" {
 		return errors.New("shared policy activation is pending; explicit recovery required")
+	}
+	if j.SchemaVersion == 4 && s.state.PolicyRevisionProtocol != 1 {
+		return errors.New("shared policy history lost its permanent revision protocol barrier")
 	}
 	binding := j.PolicyAuthority
 	if (j.SchemaVersion != 3 && j.SchemaVersion != 4) || binding == nil || binding.Scope != "shared" || binding.AuthorityID != authority.AuthorityID || binding.Namespace != s.state.NamespaceID || j.PolicyDigest != authority.Digest {

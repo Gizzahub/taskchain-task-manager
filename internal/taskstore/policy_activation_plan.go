@@ -20,6 +20,10 @@ func preparePolicyActivation(r *os.Root, policy boardpolicy.Policy, binding poli
 }
 
 func preparePolicyActivationJournal(r *os.Root, policy boardpolicy.Policy, binding policyAuthorityBinding, head string, j transitionJournal) (policyActivationState, []byte, error) {
+	return preparePolicyChangeJournal(r, policy, binding, head, j, nil)
+}
+
+func preparePolicyChangeJournal(r *os.Root, policy boardpolicy.Policy, binding policyAuthorityBinding, head string, j transitionJournal, revision *policyRevision) (policyActivationState, []byte, error) {
 	var state policyActivationState
 	if err := checkStorageGate(r, j); err != nil {
 		return state, nil, err
@@ -32,8 +36,14 @@ func preparePolicyActivationJournal(r *os.Root, policy boardpolicy.Policy, bindi
 		return state, nil, err
 	}
 	digest := bytesDigest(canonical)
-	if j.SchemaVersion >= 2 && j.PolicyDigest != digest {
+	if revision == nil && j.SchemaVersion >= 2 && j.PolicyDigest != digest {
 		return state, nil, errors.New("initial policy is immutable; different policy cannot be activated")
+	}
+	if revision != nil {
+		j, err = revisedPolicyJournal(j, policy, binding, *revision)
+		if err != nil {
+			return state, nil, err
+		}
 	}
 	snapshot, err := policyActivationSnapshot(r, policy, j)
 	if err != nil {
@@ -83,6 +93,9 @@ func preparePolicyActivationJournal(r *os.Root, policy boardpolicy.Policy, bindi
 	}
 	plan.TargetJournal = bytesDigest(target)
 	state = policyActivationState{SchemaVersion: 1, Phase: "pending", AuthorityID: binding.AuthorityID, Scope: binding.Scope, Namespace: binding.Namespace, Canonical: canonical, Digest: digest, Plan: plan}
+	if revision != nil {
+		state.SchemaVersion, state.Revision = 2, revision
+	}
 	if _, err := policyActivationBytes(state); err != nil {
 		return policyActivationState{}, nil, err
 	}
@@ -123,7 +136,12 @@ func reconstructPolicyTarget(r *os.Root, state policyActivationState) (transitio
 			return transitionJournal{}, nil, err
 		}
 	}
-	if j.SchemaVersion >= 2 && j.PolicyDigest != state.Digest {
+	if state.Revision != nil {
+		j, err = revisedPolicyJournal(j, policy, policyAuthorityBinding{AuthorityID: state.AuthorityID, Scope: state.Scope, Namespace: state.Namespace}, *state.Revision)
+		if err != nil {
+			return transitionJournal{}, nil, err
+		}
+	} else if j.SchemaVersion >= 2 && j.PolicyDigest != state.Digest {
 		return transitionJournal{}, nil, errors.New("policy activation original journal binds another policy")
 	}
 	if err := checkStorageGate(r, j); err != nil {

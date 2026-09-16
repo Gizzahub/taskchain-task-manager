@@ -39,6 +39,9 @@ func activateLocalPolicy(dir string, s *sharedSession, policy boardpolicy.Policy
 		return result, errors.Join(errors.New("policy activation binding unavailable; preserve activation state"), loadErr)
 	}
 	if loadErr == nil {
+		if activation.Revision != nil && activation.Phase == "pending" {
+			return result, errors.New("policy revision is pending; use explicit revision resume")
+		}
 		if activation.Scope != "local" || activation.Namespace != "" {
 			return result, errors.New("shared policy activation cannot be downgraded to local")
 		}

@@ -44,6 +44,9 @@ func policyJournalForSharedAdoption(r *os.Root, s *sharedSession, canonical []by
 	if binding.Scope == "shared" && (s.state.Policy == nil || binding.AuthorityID != s.state.Policy.AuthorityID || binding.Namespace != s.state.NamespaceID) {
 		return j, errors.New("foreign or orphaned shared policy cannot be adopted")
 	}
+	if binding.Scope == "shared" && j.SchemaVersion == 4 && s.state.PolicyRevisionProtocol != 1 {
+		return j, errors.New("shared policy history lost its permanent revision protocol barrier")
+	}
 	policyRaw, err := boundedSnapshotFile(r, policyFile, 64<<10)
 	if err != nil {
 		return j, err
@@ -83,6 +86,11 @@ func prepareSharedPolicy(s *sharedSession, boards []sharedPolicyBoard, policy bo
 		}
 	}
 	authority := sharedPolicyAuthority{AuthorityID: id, Phase: phase, Canonical: canonical, Digest: bytesDigest(canonical), Pending: []policyActivationPlan{}}
+	if s.state.Policy != nil {
+		// A later join must not erase the evidence requiring the permanent
+		// common barrier. Its own local plan is still an initial/join plan.
+		authority.Revision = s.state.Policy.Revision
+	}
 	binding := policyAuthorityBinding{AuthorityID: id, Scope: "shared", Namespace: s.state.NamespaceID}
 	states := make([]policyActivationState, len(boards))
 	ledgers := make([]idLedger, len(boards))
@@ -90,6 +98,9 @@ func prepareSharedPolicy(s *sharedSession, boards []sharedPolicyBoard, policy bo
 		j, err := policyJournalForSharedAdoption(b.root, s, canonical)
 		if err != nil {
 			return next, err
+		}
+		if j.SchemaVersion == 4 {
+			next.PolicyRevisionProtocol = 1
 		}
 		state, _, err := preparePolicyActivationJournal(b.root, policy, binding, b.head, j)
 		if err != nil {
@@ -155,5 +166,9 @@ func prepareSharedPolicy(s *sharedSession, boards []sharedPolicyBoard, policy bo
 }
 
 func sharedPolicyLocalState(s sharedState, plan policyActivationPlan) policyActivationState {
-	return policyActivationState{SchemaVersion: 1, Phase: "pending", AuthorityID: s.Policy.AuthorityID, Scope: "shared", Namespace: s.NamespaceID, Canonical: s.Policy.Canonical, Digest: s.Policy.Digest, Plan: plan}
+	state := policyActivationState{SchemaVersion: 1, Phase: "pending", AuthorityID: s.Policy.AuthorityID, Scope: "shared", Namespace: s.NamespaceID, Canonical: s.Policy.Canonical, Digest: s.Policy.Digest, Plan: plan}
+	if s.Policy.Phase == "revising" {
+		state.SchemaVersion, state.Revision = 2, s.Policy.Revision
+	}
+	return state
 }

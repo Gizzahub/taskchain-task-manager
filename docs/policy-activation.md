@@ -3,6 +3,7 @@
 모든 보드 writer를 현재 버전으로 업그레이드하고 중지한 뒤 실행한다. 먼저
 `validate-policy policy.yaml --json`으로 정책 문서의 의미를 확인한다.
 활성화는 정책을 최초 채택하는 작업이며 기존 정책을 변경·삭제하는 명령이 아니다.
+기존 정책 변경은 [명시적 policy revision](policy-revision.md)을 사용한다.
 
 ```sh
 taskchain-task-manager activate-policy policy.yaml --dir ./tasks --json

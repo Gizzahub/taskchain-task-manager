@@ -39,6 +39,7 @@ type policyActivationState struct {
 	Canonical     []byte               `json:"canonical"`
 	Digest        string               `json:"digest"`
 	Plan          policyActivationPlan `json:"plan"`
+	Revision      *policyRevision      `json:"revision,omitempty"`
 }
 
 type sharedPolicyAuthority struct {
@@ -47,6 +48,7 @@ type sharedPolicyAuthority struct {
 	Canonical   []byte                 `json:"canonical"`
 	Digest      string                 `json:"digest"`
 	Pending     []policyActivationPlan `json:"pending"`
+	Revision    *policyRevision        `json:"revision,omitempty"`
 }
 
 func loadPolicyActivation(r *os.Root) (policyActivationState, error) {
@@ -133,8 +135,11 @@ func policyActivationBytes(state policyActivationState) ([]byte, error) {
 }
 
 func validatePolicyActivationState(state policyActivationState) error {
-	if state.SchemaVersion != 1 || (state.Phase != "pending" && state.Phase != "completed") {
+	if (state.SchemaVersion != 1 && state.SchemaVersion != 2) || (state.Phase != "pending" && state.Phase != "completed") {
 		return errors.New("invalid policy activation schema or phase")
+	}
+	if err := validateActivationRevision(state); err != nil {
+		return err
 	}
 	if !sharedHex32.MatchString(state.AuthorityID) {
 		return errors.New("invalid policy activation authority ID")
@@ -214,8 +219,19 @@ func validatePolicyActivationPlan(plan policyActivationPlan, shared bool) error 
 }
 
 func validateSharedPolicyAuthority(authority sharedPolicyAuthority) error {
-	if !sharedHex32.MatchString(authority.AuthorityID) || (authority.Phase != "initializing" && authority.Phase != "joining" && authority.Phase != "active") {
+	if !sharedHex32.MatchString(authority.AuthorityID) || (authority.Phase != "initializing" && authority.Phase != "joining" && authority.Phase != "active" && authority.Phase != "revising") {
 		return errors.New("invalid shared policy authority")
+	}
+	if authority.Phase == "revising" && authority.Revision == nil {
+		return errors.New("shared revision requires previous binding")
+	}
+	if authority.Revision != nil {
+		if authority.Phase == "initializing" {
+			return errors.New("policy revision cannot be an initial activation")
+		}
+		if err := validatePolicyRevision(*authority.Revision, authority.AuthorityID, authority.Digest); err != nil {
+			return err
+		}
 	}
 	if len(authority.Canonical) == 0 || !utf8.Valid(authority.Canonical) {
 		return errors.New("invalid shared authority canonical policy")
@@ -234,7 +250,7 @@ func validateSharedPolicyAuthority(authority sharedPolicyAuthority) error {
 	if authority.Phase == "active" && len(authority.Pending) != 0 {
 		return errors.New("active authority requires no pending plans")
 	}
-	if authority.Phase == "initializing" && (len(authority.Pending) == 0 || len(authority.Pending) > 256) {
+	if (authority.Phase == "initializing" || authority.Phase == "revising") && (len(authority.Pending) == 0 || len(authority.Pending) > 256) {
 		return errors.New("initializing authority requires 1..256 pending plans")
 	}
 	seen := map[string]bool{}
@@ -259,10 +275,10 @@ func validateSharedPolicyAuthority(authority sharedPolicyAuthority) error {
 }
 
 func validatePolicyActivationShape(raw []byte) error {
-	return validateObjectShape(raw, []string{"schemaVersion", "phase", "authorityId", "scope", "namespace", "canonical", "digest", "plan"}, policyPlanKeys)
+	return validateRevisionEnvelope(raw, false)
 }
 func validateSharedPolicyShape(raw json.RawMessage) error {
-	return validateObjectShape(raw, []string{"authorityId", "phase", "canonical", "digest", "pending"}, policyPlanKeys)
+	return validateRevisionEnvelope(raw, true)
 }
 
 var policyPlanKeys = []string{"root", "head", "snapshot", "originalJournal", "targetJournal", "originalPolicy", "originalActivation", "originalIds", "targetIds", "idTarget"}

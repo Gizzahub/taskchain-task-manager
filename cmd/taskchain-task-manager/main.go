@@ -14,6 +14,9 @@ import (
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, out, errOut io.Writer) int {
+	if len(args) > 0 && args[0] == "revise-policy" {
+		return runPolicyRevision(args, out, errOut)
+	}
 	if len(args) > 0 && args[0] == "relocate" {
 		return runRelocation(args, out, errOut)
 	}
@@ -68,6 +71,7 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "       taskchain-task-manager validate-completion <file> --config <validation.yaml> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager validate-policy <policy.yaml> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager activate-policy <policy.yaml> --dir <board> [--all-worktrees] [--resume] --json")
+		fmt.Fprintln(out, "       taskchain-task-manager revise-policy <policy.yaml> --dir <board> --expected-authority <id> --expected-digest <sha256> [--all-worktrees] [--resume] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager validate-context <intent-batch-or-iteration.json> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager register-context <file> --dir <board> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager show-context --dir <board> --kind intent|batch|iteration --id ID --revision N --json")

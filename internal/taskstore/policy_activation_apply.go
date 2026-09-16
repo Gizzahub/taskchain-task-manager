@@ -49,10 +49,10 @@ func applyPolicyActivationPlan(r *os.Root, state policyActivationState, step fun
 	if !bytes.Equal(files.policy, state.Canonical) {
 		// A bound policy is immutable and preparation requires canonical bytes.
 		// Thus only an absent initial policy can need publication here.
-		if files.policy != nil {
+		if files.policy != nil && state.Revision == nil {
 			return errors.New("policy activation cannot overwrite an existing policy")
 		}
-		if err := publishPolicyActivationFile(r, policyFile, state.Canonical, true); err != nil {
+		if err := publishPolicyActivationFile(r, policyFile, state.Canonical, files.policy == nil); err != nil {
 			return err
 		}
 	}

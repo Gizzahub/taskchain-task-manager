@@ -18,6 +18,9 @@ func activateSharedPolicy(s *sharedSession, policy boardpolicy.Policy, resume bo
 	phase := "initializing"
 	var plans []policyActivationPlan
 	if existing := s.state.Policy; existing != nil {
+		if existing.Phase == "revising" {
+			return result, errors.New("shared policy revision is pending; use explicit revision resume")
+		}
 		if !bytes.Equal(existing.Canonical, canonical) {
 			return result, errors.New("initial shared policy is immutable; different policy cannot be activated")
 		}
@@ -85,53 +88,5 @@ func activateSharedPolicy(s *sharedSession, policy boardpolicy.Policy, resume bo
 	if err := bundleStep(step, "after-common-policy-pending"); err != nil {
 		return result, err
 	}
-	if err := verifySharedPolicyInventory(s, boards, phase); err != nil {
-		return result, err
-	}
-	// Check every board before advancing any, including a resume from common-only
-	// pending state where no local receipt has been created yet.
-	for i, b := range boards {
-		state := sharedPolicyLocalState(*s.state, s.state.Policy.Pending[i])
-		if _, _, err := inspectPolicyActivationPlan(b.root, state); err != nil {
-			return result, err
-		}
-	}
-	for i, b := range boards {
-		if err := verifyPolicyCommonState(s); err != nil {
-			return result, err
-		}
-		state := sharedPolicyLocalState(*s.state, s.state.Policy.Pending[i])
-		if err := applyPolicyActivationPlan(b.root, state, func(at string) error { return bundleStep(step, fmt.Sprintf("board-%d/%s", i, at)) }); err != nil {
-			return result, err
-		}
-		if err := bundleStep(step, fmt.Sprintf("after-policy-board-%d", i)); err != nil {
-			return result, err
-		}
-	}
-	if err := verifySharedPolicyInventory(s, boards, phase); err != nil {
-		return result, err
-	}
-	for i, b := range boards {
-		files, _, err := inspectPolicyActivationPlan(b.root, sharedPolicyLocalState(*s.state, s.state.Policy.Pending[i]))
-		if err != nil {
-			return result, err
-		}
-		if !files.completed {
-			return result, errors.New("shared policy activation has incomplete local receipt")
-		}
-	}
-	completedResult := policyActivationResult(sharedPolicyLocalState(*s.state, s.state.Policy.Pending[0]), false, len(boards))
-	next := *s.state
-	authority := *s.state.Policy
-	authority.Phase, authority.Pending = "active", []policyActivationPlan{}
-	next.Policy = &authority
-	if err := publishSharedState(s.root, next, false); err != nil {
-		return result, err
-	}
-	s.state = &next
-	result = completedResult
-	if err := bundleStep(step, "after-common-policy-active"); err != nil {
-		return result, err
-	}
-	return result, nil
+	return finishSharedPolicyChange(s, boards, phase, step)
 }
