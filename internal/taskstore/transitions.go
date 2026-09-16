@@ -155,9 +155,10 @@ func ClaimResume(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 		}
 	}
 	var found Entry
+	policy := currentPolicy()
 	for _, entry := range entries {
 		zone := filepath.Dir(entry.Path)
-		if sameIdentity(entry.Card.ID, req.ID) && isWorkTask(entry.Card.ID) && validZone(zone) && zone != "todo" {
+		if sameIdentity(entry.Card.ID, req.ID) && isWorkTask(entry.Card.ID) && policy.Workflow(zone) && zone != policy.ReadyZone() {
 			found = entry
 			break
 		}
@@ -185,28 +186,6 @@ func validateTransitionRequest(req TransitionRequest) error {
 	}
 	return nil
 }
-func validZone(s string) bool {
-	switch s {
-	case "todo", "doing", "review", "blocked", "done":
-		return true
-	}
-	return false
-}
-func allowedEdge(from, to string) bool {
-	switch from {
-	case "todo":
-		return to == "doing"
-	case "doing":
-		return to == "todo" || to == "review" || to == "blocked"
-	case "blocked":
-		return to == "todo" || to == "doing"
-	case "review":
-		return to == "doing" || to == "done"
-	case "done":
-		return to == "todo"
-	}
-	return false
-}
 func sameTransition(rec transitionRecord, req TransitionRequest) bool {
 	return rec.ID == req.ID && rec.Owner == req.Owner && rec.Token == req.Token && rec.From == req.From && rec.To == req.To
 }
@@ -215,6 +194,7 @@ func transitionResult(rec transitionRecord) TransitionResult {
 }
 
 func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest) (transitionRecord, error) {
+	policy := currentPolicy()
 	var entry Entry
 	for _, e := range entries {
 		if sameIdentity(e.Card.ID, req.ID) && isWorkTask(e.Card.ID) {
@@ -233,10 +213,10 @@ func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest) (tran
 			return transitionRecord{}, errors.New("duplicate task ID")
 		}
 	}
-	if req.To == "doing" || req.To == "done" {
+	if req.To == "doing" || req.To == policy.DoneZone() {
 		for _, dep := range entry.Card.DependsOn {
 			for _, e := range entries {
-				if sameIdentity(e.Card.ID, dep) && !(isWorkTask(e.Card.ID) && filepath.Dir(e.Path) == "done" && e.Card.Status == "done") {
+				if sameIdentity(e.Card.ID, dep) && !entryInWorkflowZone(e, policy.DoneZone(), policy) {
 					return transitionRecord{}, errors.New("dependency is not done")
 				}
 			}
@@ -273,12 +253,9 @@ func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest) (tran
 	if err != nil {
 		return transitionRecord{}, err
 	}
-	status := req.To
-	if req.To == "todo" {
-		status = "pending"
-	}
-	if req.To == "doing" {
-		status = "in-progress"
+	status, ok := policy.Status(req.To)
+	if !ok {
+		return transitionRecord{}, errors.New("transition destination has no status")
 	}
 	patched, _, err := doc.SetStatusCell(status)
 	if err != nil {

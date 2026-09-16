@@ -155,12 +155,9 @@ func validateTransitionRecord(rec transitionRecord) error {
 		if !sameIdentity(doc.View().ID, rec.ID) {
 			return errors.New("transition record ID does not match card")
 		}
-		status := rec.To
-		if rec.To == "todo" {
-			status = "pending"
-		}
-		if rec.To == "doing" {
-			status = "in-progress"
+		status, ok := currentPolicy().Status(rec.To)
+		if !ok {
+			return errors.New("transition record destination has no status")
 		}
 		patched, _, err := doc.SetStatusCell(status)
 		if err != nil || !bytes.Equal(patched, rec.Patched) {

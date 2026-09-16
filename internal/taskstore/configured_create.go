@@ -64,7 +64,9 @@ func validSingleLine(value string) bool {
 }
 
 func renderConfigured(id string, req CreateRequest) ([]byte, error) {
-	c := configuredCard{ID: id, Title: req.Title, Status: "pending", DependsOn: req.DependsOn, Type: req.Template.Type, Priority: req.Template.Priority}
+	policy := currentPolicy()
+	status, _ := policy.Status(policy.InitialZone())
+	c := configuredCard{ID: id, Title: req.Title, Status: status, DependsOn: req.DependsOn, Type: req.Template.Type, Priority: req.Template.Priority}
 	fm, err := yaml.Marshal(c)
 	if err != nil {
 		return nil, err
@@ -114,7 +116,7 @@ func validateConfiguredCard(id string, req CreateRequest) ([]byte, *card.Documen
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse configured card: %w", err)
 	}
-	report, err := doc.ValidateCard("tasks/todo/"+id+".md", req.Template.Rules)
+	report, err := doc.ValidateCard("tasks/"+currentPolicy().InitialZone()+"/"+id+".md", req.Template.Rules)
 	if err != nil {
 		return nil, nil, fmt.Errorf("validate configured card: %w", err)
 	}

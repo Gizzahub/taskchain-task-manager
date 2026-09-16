@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode"
@@ -398,14 +397,15 @@ func readyLocked(entries []Entry, ledger claimsLedger) ([]Entry, error) {
 		}
 	}
 	ready := make([]Entry, 0)
+	policy := currentPolicy()
 	for _, entry := range entries {
-		if filepath.Dir(entry.Path) != "todo" || entry.Card.Status != "pending" || !isWorkTask(entry.Card.ID) || held[identityKey(entry.Card.ID)] {
+		if !entryInWorkflowZone(entry, policy.ReadyZone(), policy) || held[identityKey(entry.Card.ID)] {
 			continue
 		}
 		ok := true
 		for _, dep := range entry.Card.DependsOn {
 			depEntry, exists := byID[identityKey(dep)]
-			if !isWorkTask(dep) || !exists || filepath.Dir(depEntry.Path) != "done" || depEntry.Card.Status != "done" || !isWorkTask(depEntry.Card.ID) {
+			if !isWorkTask(dep) || !exists || !entryInWorkflowZone(depEntry, policy.DoneZone(), policy) {
 				ok = false
 				break
 			}

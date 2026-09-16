@@ -32,7 +32,6 @@ type CreateRequest struct {
 }
 
 var canonicalID = regexp.MustCompile(`^TASK-[1-9][0-9]*$`)
-var knownDirs = []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "archive", "_archive"}
 
 func Init(dir string) (err error) {
 	if dir == "" {
@@ -99,7 +98,8 @@ func Init(dir string) (err error) {
 			return err
 		}
 	}
-	info, err := r.Lstat("todo")
+	initialZone := currentPolicy().InitialZone()
+	info, err := r.Lstat(initialZone)
 	if err == nil {
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 			return errors.New("task board todo is not a real directory")
@@ -109,7 +109,7 @@ func Init(dir string) (err error) {
 	if !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("inspect task board todo: %w", err)
 	}
-	if err := r.Mkdir("todo", 0o755); err != nil {
+	if err := r.Mkdir(initialZone, 0o755); err != nil {
 		return fmt.Errorf("create task board todo: %w", err)
 	}
 	return nil
@@ -268,7 +268,7 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 	}
 	zone := strings.ToLower(prefix)
 	if prefix == "TASK" {
-		zone = "todo"
+		zone = currentPolicy().InitialZone()
 	}
 	if err := ensureTransitionDir(r, zone); err != nil {
 		return Entry{}, err
@@ -329,7 +329,7 @@ func listLockedExcept(r *os.Root, skip string) ([]Entry, error) {
 	}
 	out := make([]Entry, 0)
 	ids := map[string]string{}
-	for _, dir := range knownDirs {
+	for _, dir := range currentPolicy().KnownDirs() {
 		if err := scanDirExcept(r, dir, &out, ids, skip); err != nil {
 			return nil, err
 		}
@@ -366,7 +366,9 @@ func Ready(dir string) (entries []Entry, err error) {
 
 func validateDependencies(deps []string, id string, entries []Entry) error {
 	proposed := append([]Entry(nil), entries...)
-	proposed = append(proposed, Entry{Path: "todo/" + id + ".md", Card: card.View{ID: id, Status: "pending", DependsOn: deps}})
+	policy := currentPolicy()
+	status, _ := policy.Status(policy.InitialZone())
+	proposed = append(proposed, Entry{Path: policy.InitialZone() + "/" + id + ".md", Card: card.View{ID: id, Status: status, DependsOn: deps}})
 	return validateGraph(proposed)
 }
 
@@ -459,7 +461,7 @@ func validateRootLayout(r *os.Root) error {
 }
 
 func containsKnownDir(name string) bool {
-	for _, known := range knownDirs {
+	for _, known := range currentPolicy().KnownDirs() {
 		if name == known {
 			return true
 		}
@@ -538,7 +540,9 @@ func render(id, title string) ([]byte, error) {
 }
 
 func renderWithDependencies(id, title string, deps []string) ([]byte, error) {
-	metadata := map[string]any{"id": id, "title": title, "status": "pending"}
+	policy := currentPolicy()
+	status, _ := policy.Status(policy.InitialZone())
+	metadata := map[string]any{"id": id, "title": title, "status": status}
 	if len(deps) > 0 {
 		metadata["depends-on"] = deps
 	}
