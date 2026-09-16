@@ -56,6 +56,25 @@ func loadTransitionsForBundle(r *os.Root) (transitionJournal, error) {
 	if err != nil {
 		return transitionJournal{}, err
 	}
+	j, err := decodeTransitionJournal(raw)
+	if err != nil {
+		return transitionJournal{}, err
+	}
+	policy, err := policyForJournal(r, j)
+	if err != nil {
+		return transitionJournal{}, err
+	}
+	if err := validateTransitionRecords(j, policy); err != nil {
+		return transitionJournal{}, err
+	}
+	return j, nil
+}
+
+// decodeTransitionJournal validates the wire format without consulting mutable
+// policy files. Activation recovery must first prove the original/target hashes,
+// then validate records against the explicitly bound policy. Ordinary callers
+// must still use loadTransitions or loadTransitionsForBundle.
+func decodeTransitionJournal(raw []byte) (transitionJournal, error) {
 	if !utf8.Valid(raw) {
 		return transitionJournal{}, errors.New("transition journal invalid UTF-8")
 	}
@@ -78,36 +97,40 @@ func loadTransitionsForBundle(r *os.Root) (transitionJournal, error) {
 	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
 		return transitionJournal{}, errors.New("transition journal trailing content")
 	}
-	if (j.SchemaVersion != 1 && j.SchemaVersion != 2) || j.Records == nil {
+	if (j.SchemaVersion < 1 || j.SchemaVersion > 3) || j.Records == nil {
 		return transitionJournal{}, errors.New("invalid transition journal schema")
 	}
-	if j.SchemaVersion == 2 && !sharedHex64.MatchString(j.PolicyDigest) {
+	if j.SchemaVersion >= 2 && !sharedHex64.MatchString(j.PolicyDigest) {
 		return transitionJournal{}, errors.New("invalid transition policy digest")
 	}
-	policy, err := policyForJournal(r, j)
-	if err != nil {
-		return transitionJournal{}, err
+	return j, nil
+}
+
+func validateTransitionRecords(j transitionJournal, policy boardpolicy.Policy) error {
+	if j.SchemaVersion == 1 {
+		// Legacy receipts never acquire the semantics of a newly selected policy.
+		policy = boardpolicy.Default()
 	}
 	pending := 0
 	seen := map[string]bool{}
 	for _, rec := range j.Records {
 		if rec.RequestID == "" || seen[rec.RequestID] {
-			return transitionJournal{}, errors.New("duplicate transition request ID")
+			return errors.New("duplicate transition request ID")
 		}
 		seen[rec.RequestID] = true
 		if rec.Kind == "pending" {
 			pending++
 		} else if rec.Kind != "completed" {
-			return transitionJournal{}, errors.New("invalid transition record")
+			return errors.New("invalid transition record")
 		}
 		if err := validateBoundRecord(j, rec, policy); err != nil {
-			return transitionJournal{}, err
+			return err
 		}
 	}
 	if pending > 1 {
-		return transitionJournal{}, errors.New("multiple pending transitions")
+		return errors.New("multiple pending transitions")
 	}
-	return j, nil
+	return nil
 }
 
 func validateTransitionShape(raw []byte) error {
@@ -122,8 +145,11 @@ func validateTransitionShape(raw []byte) error {
 	if err := json.Unmarshal(root["schemaVersion"], &version); err != nil {
 		return errors.New("transition schemaVersion must be integer")
 	}
+	if version < 1 || version > 3 {
+		return errors.New("unsupported transition journal schema")
+	}
 	for key := range root {
-		if key != "schemaVersion" && key != "records" && key != "policyDigest" && key != "bundleProtocol" {
+		if key != "schemaVersion" && key != "records" && key != "policyDigest" && key != "bundleProtocol" && key != "policyAuthority" {
 			return fmt.Errorf("unknown transition journal field %q", key)
 		}
 	}
@@ -138,9 +164,17 @@ func validateTransitionShape(raw []byte) error {
 	if version == 1 && len(root) != 2+extra {
 		return errors.New("legacy transition journal cannot contain policyDigest")
 	}
-	if version == 2 {
+	if version == 3 {
+		if err := validatePolicyAuthorityShape(root["policyAuthority"]); err != nil {
+			return err
+		}
+		extra++
+	} else if _, present := root["policyAuthority"]; present {
+		return errors.New("legacy journal cannot contain policy authority")
+	}
+	if version >= 2 {
 		if len(root) != 3+extra || root["policyDigest"] == nil || string(root["policyDigest"]) == "null" {
-			return errors.New("schema 2 transition journal requires policyDigest")
+			return errors.New("bound transition journal requires policyDigest")
 		}
 		var digest string
 		if err := json.Unmarshal(root["policyDigest"], &digest); err != nil || !sharedHex64.MatchString(digest) {
@@ -158,7 +192,7 @@ func validateTransitionShape(raw []byte) error {
 				return errors.New("legacy transition record cannot contain policyDigest")
 			}
 		}
-		if version == 2 {
+		if version >= 2 {
 			if kindRaw, ok := record["kind"]; ok {
 				var kind string
 				_ = json.Unmarshal(kindRaw, &kind)
@@ -205,7 +239,7 @@ func validateTransitionRecord(rec transitionRecord) error {
 }
 
 func validateBoundRecord(j transitionJournal, rec transitionRecord, policy boardpolicy.Policy) error {
-	if j.SchemaVersion == 2 {
+	if j.SchemaVersion >= 2 {
 		if rec.PolicyDigest == "" && rec.Kind == "completed" {
 			// Carried-over receipts retain the semantics of the legacy journal.
 			return validateTransitionRecord(rec)
@@ -269,32 +303,13 @@ func rejectPendingTransitions(r *os.Root) error {
 }
 
 func publishTransitionJournal(r *os.Root, j transitionJournal) error {
-	shapeRaw, err := json.Marshal(j)
-	if err != nil {
-		return err
-	}
-	if err := validateTransitionShape(shapeRaw); err != nil {
-		return err
-	}
 	policy, err := policyForJournal(r, j)
 	if err != nil {
 		return err
 	}
-	for _, rec := range j.Records {
-		if err := validateBoundRecord(j, rec, policy); err != nil {
-			return err
-		}
-	}
-	if err := validateTransitionCapacity(j); err != nil {
-		return err
-	}
-	raw, err := json.MarshalIndent(j, "", "  ")
+	raw, err := encodeTransitionJournal(j, policy)
 	if err != nil {
 		return err
-	}
-	raw = append(raw, '\n')
-	if len(raw) > maxTransitionBytes {
-		return errors.New("transition journal exceeds 8 MiB")
 	}
 	name, err := stage(r, raw)
 	if err != nil {
@@ -304,6 +319,40 @@ func publishTransitionJournal(r *os.Root, j transitionJournal) error {
 		return errors.Join(err, r.Remove(name))
 	}
 	return nil
+}
+
+// encodeTransitionJournal computes the exact target bytes before activation
+// publishes any files. It does not authorize a policy or write a journal.
+func encodeTransitionJournal(j transitionJournal, policy boardpolicy.Policy) ([]byte, error) {
+	shapeRaw, err := json.Marshal(j)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateTransitionShape(shapeRaw); err != nil {
+		return nil, err
+	}
+	digest, err := policy.Digest()
+	if err != nil {
+		return nil, err
+	}
+	if j.SchemaVersion >= 2 && digest != j.PolicyDigest {
+		return nil, errors.New("transition target policy digest mismatch")
+	}
+	if err := validateTransitionRecords(j, policy); err != nil {
+		return nil, err
+	}
+	if err := validateTransitionCapacity(j); err != nil {
+		return nil, err
+	}
+	raw, err := json.MarshalIndent(j, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	raw = append(raw, '\n')
+	if len(raw) > maxTransitionBytes {
+		return nil, errors.New("transition journal exceeds 8 MiB")
+	}
+	return raw, nil
 }
 
 func validateTransitionCapacity(j transitionJournal) error {

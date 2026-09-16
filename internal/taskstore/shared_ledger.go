@@ -24,14 +24,15 @@ var sharedHex40Or64 = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 var sharedHex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type sharedState struct {
-	SchemaVersion  int                  `json:"schemaVersion"`
-	NamespaceID    string               `json:"namespaceId"`
-	BoardPath      string               `json:"boardPath"`
-	Phase          string               `json:"phase"`
-	Reserved       []string             `json:"reserved"`
-	Participants   []sharedParticipant  `json:"participants"`
-	BundleProtocol int                  `json:"bundleProtocol,omitempty"`
-	PendingBundle  *sharedBundlePending `json:"pendingBundle,omitempty"`
+	SchemaVersion  int                    `json:"schemaVersion"`
+	NamespaceID    string                 `json:"namespaceId"`
+	BoardPath      string                 `json:"boardPath"`
+	Phase          string                 `json:"phase"`
+	Reserved       []string               `json:"reserved"`
+	Participants   []sharedParticipant    `json:"participants"`
+	BundleProtocol int                    `json:"bundleProtocol,omitempty"`
+	PendingBundle  *sharedBundlePending   `json:"pendingBundle,omitempty"`
+	Policy         *sharedPolicyAuthority `json:"policy,omitempty"`
 }
 
 type sharedBundlePending struct {
@@ -138,8 +139,24 @@ func validateSharedShape(raw []byte) error {
 	if err := json.Unmarshal(root["schemaVersion"], &version); err != nil {
 		return err
 	}
-	if version == 2 {
-		allowed["bundleProtocol"] = true
+	if version == 2 || version == 3 {
+		if version == 2 {
+			allowed["bundleProtocol"] = true
+		} else if _, present := root["bundleProtocol"]; present {
+			allowed["bundleProtocol"] = true
+		}
+		if protocolRaw, present := root["bundleProtocol"]; present {
+			if string(protocolRaw) == "null" {
+				return errors.New("bundle protocol cannot be null")
+			}
+			var protocol int
+			if err := json.Unmarshal(protocolRaw, &protocol); err != nil {
+				return errors.New("bundle protocol must be an integer")
+			}
+			if version == 3 && protocol != 1 {
+				return errors.New("schema 3 bundle protocol must be 1 when present")
+			}
+		}
 		if pending, ok := root["pendingBundle"]; ok {
 			allowed["pendingBundle"] = true
 			var fields map[string]json.RawMessage
@@ -151,6 +168,16 @@ func validateSharedShape(raw []byte) error {
 					return errors.New("shared bundle requires all fields")
 				}
 			}
+		}
+	}
+	if version == 3 {
+		allowed["policy"] = true
+		policy, ok := root["policy"]
+		if !ok || string(policy) == "null" {
+			return errors.New("schema 3 shared state requires policy")
+		}
+		if err := validateSharedPolicyShape(policy); err != nil {
+			return err
 		}
 	}
 	if len(root) != len(allowed) {
@@ -180,14 +207,46 @@ func validateSharedShape(raw []byte) error {
 }
 
 func validateSharedState(s sharedState) error {
-	if (s.SchemaVersion != 1 && s.SchemaVersion != 2) || !sharedHex32.MatchString(s.NamespaceID) || !validSharedBoardPath(s.BoardPath) || (s.Phase != "initializing" && s.Phase != "active") {
+	if (s.SchemaVersion != 1 && s.SchemaVersion != 2 && s.SchemaVersion != 3) || !sharedHex32.MatchString(s.NamespaceID) || !validSharedBoardPath(s.BoardPath) || (s.Phase != "initializing" && s.Phase != "active") {
 		return errors.New("invalid shared state header")
 	}
-	if s.SchemaVersion == 1 && (s.BundleProtocol != 0 || s.PendingBundle != nil) {
+	if s.SchemaVersion == 1 && (s.BundleProtocol != 0 || s.PendingBundle != nil || s.Policy != nil) {
 		return errors.New("legacy shared state cannot contain bundle protocol")
 	}
-	if s.SchemaVersion == 2 && (s.BundleProtocol != 1 || s.Phase != "active") {
+	if s.SchemaVersion == 2 && (s.BundleProtocol != 1 || s.Phase != "active" || s.Policy != nil) {
 		return errors.New("invalid shared bundle protocol")
+	}
+	if s.SchemaVersion == 3 {
+		if s.Phase != "active" || (s.BundleProtocol != 0 && s.BundleProtocol != 1) || s.Policy == nil {
+			return errors.New("invalid schema 3 shared state")
+		}
+		if err := validateSharedPolicyAuthority(*s.Policy); err != nil {
+			return fmt.Errorf("invalid shared policy authority: %w", err)
+		}
+		reserved := map[string]bool{}
+		for _, id := range s.Reserved {
+			reserved[id] = true
+		}
+		for _, plan := range s.Policy.Pending {
+			if len(plan.IDTarget) == 0 {
+				continue
+			}
+			ledger, err := decodeIDs(plan.IDTarget)
+			if err != nil || ledger.Namespace != s.NamespaceID {
+				return errors.New("shared policy ID target namespace mismatch")
+			}
+			for _, id := range ledger.Reserved {
+				if !reserved[id] {
+					return errors.New("shared policy target includes unreserved IDs")
+				}
+			}
+		}
+		if s.PendingBundle != nil && len(s.Policy.Pending) != 0 {
+			return errors.New("shared policy and bundle reservations cannot both be pending")
+		}
+		if s.PendingBundle != nil && s.BundleProtocol != 1 {
+			return errors.New("shared pending bundle requires bundle protocol 1")
+		}
 	}
 	if s.Reserved == nil || s.Participants == nil || len(s.Participants) == 0 || len(s.Participants) > 256 {
 		return errors.New("invalid shared state collections")

@@ -52,6 +52,9 @@ func Init(dir string) (err error) {
 			return fmt.Errorf("task board root is not a directory: %s", dir)
 		}
 	} else if errors.Is(err, fs.ErrNotExist) {
+		if shared != nil && shared.state != nil && shared.state.Policy != nil {
+			return errors.New("new board requires explicit shared policy join before initialization")
+		}
 		if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
 			return fmt.Errorf("create task board parent: %w", err)
 		}
@@ -72,6 +75,9 @@ func Init(dir string) (err error) {
 		return err
 	}
 	defer func() { err = errors.Join(err, unlock()) }()
+	if err := shared.verifyBoard(r); err != nil {
+		return err
+	}
 	if err := rejectPendingTransitions(r); err != nil {
 		return err
 	}
@@ -173,6 +179,9 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 		return Entry{}, err
 	}
 	defer func() { err = errors.Join(err, unlock()) }()
+	if err := shared.verifyBoard(r); err != nil {
+		return Entry{}, err
+	}
 	if err := rejectPendingTransitions(r); err != nil {
 		return Entry{}, err
 	}

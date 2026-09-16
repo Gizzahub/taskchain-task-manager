@@ -44,6 +44,10 @@ SHA-256 digest를 출력합니다. 보드 등록, TASK 존재 확인, 권한 부
 요청으로 게시합니다. 명시적 프로토콜 채택·동일 요청 재개와 안전 경계는
 [Task 일괄 생성](docs/task-bundles.md)을 따릅니다. LLM 계획 생성이나 실행 loop는 아닙니다.
 
+`activate-policy`는 검증된 정책을 local/shared 보드에 불변으로 채택합니다.
+모든 writer 업그레이드·중지, 최초 shared 채택의 `--all-worktrees` 확인,
+중단 재개·새 worktree join 절차는 [정책 활성화](docs/policy-activation.md)를 따릅니다.
+
 ## 생성·목록의 안전 경계
 
 - 기본 `create`는 `todo/TASK-N.md`에 새 카드를 만듭니다. 기존 파일을 덮어쓰지 않습니다.

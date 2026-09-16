@@ -62,6 +62,9 @@ func openBundleSession(dir string) (_ *bundleSession, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := shared.verifyPolicyAuthority(r, s.transitions); err != nil {
+		return nil, err
+	}
 	for _, record := range s.transitions.Records {
 		if record.Kind == "pending" {
 			return nil, errors.New("pending transition must be recovered before bundle work")
@@ -124,7 +127,10 @@ func (s *bundleSession) adopt(explicit bool, step func(string) error) error {
 	}
 	if commonNeedsUpgrade {
 		next := *s.shared.state
-		next.SchemaVersion, next.BundleProtocol = 2, 1
+		if next.SchemaVersion != 3 {
+			next.SchemaVersion = 2
+		}
+		next.BundleProtocol = 1
 		if err := s.shared.verify(); err != nil {
 			return err
 		}

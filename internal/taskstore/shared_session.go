@@ -30,6 +30,16 @@ func acquireShared(dir string, allowInitializing bool) (session *sharedSession, 
 // The bundle writer alone may acquire a pending namespace; it must then
 // match the request, board identity and actual owner path before any mutation.
 func acquireSharedForBundle(dir string, allowInitializing, allowPendingBundle bool) (session *sharedSession, release func() error, err error) {
+	return acquireSharedOptions(dir, allowInitializing, allowPendingBundle, false)
+}
+
+// Policy recovery may bypass only the policy pending gate, never a pending
+// ID activation or task bundle. The recovery writer must match the saved plan.
+func acquireSharedForPolicy(dir string) (session *sharedSession, release func() error, err error) {
+	return acquireSharedOptions(dir, false, false, true)
+}
+
+func acquireSharedOptions(dir string, allowInitializing, allowPendingBundle, allowPendingPolicy bool) (session *sharedSession, release func() error, err error) {
 	location, err := githistory.LocateBoard(context.Background(), dir)
 	if err != nil {
 		return nil, nil, err
@@ -96,6 +106,9 @@ func acquireSharedForBundle(dir string, allowInitializing, allowPendingBundle bo
 	if state.PendingBundle != nil && !allowPendingBundle {
 		return nil, release, errors.New("shared namespace has a pending bundle; recover from its original board")
 	}
+	if state.Policy != nil && state.Policy.Phase != "active" && !allowPendingPolicy {
+		return nil, release, errors.New("shared policy activation is pending; explicit policy recovery required")
+	}
 	session.state = &state
 	return session, release, nil
 }
@@ -161,7 +174,11 @@ func (s *sharedSession) verify() error {
 }
 
 func (s *sharedSession) verifyBoard(r *os.Root) error {
-	if _, err := policyForBoard(r); err != nil {
+	j, err := loadTransitions(r)
+	if err != nil {
+		return err
+	}
+	if err := s.verifyPolicyAuthority(r, j); err != nil {
 		return err
 	}
 	if err := s.verifyBoardIdentity(r); err != nil {

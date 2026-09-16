@@ -218,6 +218,9 @@ func ReserveIDs(dir string, ids []string, adopt bool) (result ReservationResult,
 		return result, err
 	}
 	defer func() { err = errors.Join(err, unlock()) }()
+	if err := shared.verifyBoard(r); err != nil {
+		return result, err
+	}
 	if err := rejectPendingTransitions(r); err != nil {
 		return result, err
 	}

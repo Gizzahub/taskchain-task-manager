@@ -14,6 +14,9 @@ import (
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, out, errOut io.Writer) int {
+	if len(args) > 0 && args[0] == "activate-policy" {
+		return runPolicyActivation(args, out, errOut)
+	}
 	if len(args) > 0 && args[0] == "validate-policy" {
 		return runPolicyValidation(args, out, errOut)
 	}
@@ -57,6 +60,7 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "Usage: taskchain-task-manager <show|validate> <file> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager validate <file> --config <validation.yaml> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager validate-policy <policy.yaml> --json")
+		fmt.Fprintln(out, "       taskchain-task-manager activate-policy <policy.yaml> --dir <board> [--all-worktrees] [--resume] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager validate-context <intent-or-batch.json> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager register-context <file> --dir <board> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager show-context --dir <board> --kind intent|batch --id ID --revision N --json")

@@ -60,7 +60,7 @@ func (s *sharedSession) reserveBundle(r *os.Root, journal bundleJournal, record 
 	if s == nil || s.state == nil {
 		return nil
 	}
-	if s.state.SchemaVersion != 2 || s.state.BundleProtocol != 1 {
+	if (s.state.SchemaVersion != 2 && s.state.SchemaVersion != 3) || s.state.BundleProtocol != 1 {
 		return errors.New("bundle shared state requires explicit adoption before reservation")
 	}
 	if p := s.state.PendingBundle; p != nil {
@@ -112,7 +112,10 @@ func (s *sharedSession) prepareBundleReservation(r *os.Root, journal bundleJourn
 		}
 	}
 	next := *s.state
-	next.SchemaVersion, next.BundleProtocol = 2, 1
+	if next.SchemaVersion != 3 {
+		next.SchemaVersion = 2
+	}
+	next.BundleProtocol = 1
 	target, err := decodeIDs(record.TargetIDs)
 	if err != nil {
 		return nil, fmt.Errorf("bundle target IDs: %w", err)

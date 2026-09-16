@@ -65,6 +65,7 @@ completed 기록은 바인딩 digest를 유지한다. 중단 복구도 원래 �
 정책으로 이동을 재해석하지 않는다. 선언된 보관 zone은 조회와 허용된 이동의 출발점만
 지원한다. 그 안의 done 표기는 의존성을 완료시키지 않는다.
 
-정책 활성화·업그레이드 명령은 아직 제공하지 않는다. 내부 파일을 직접 만들어 활성화하지
-말고 기존 보드는 기본 정책으로 사용한다. 다중 worktree 정책 활성화와 공통 writer 장벽은
-아직 지원하지 않으며, shared-ID 활성화는 정책 활성화를 의미하지 않는다.
+명시 채택은 [정책 활성화](policy-activation.md)의 `activate-policy`를 사용한다.
+활성화된 journal v3는 policy digest와 authority·scope·namespace·완료 기록을 함께
+검사한다. 내부 파일을 직접 만들거나 복사해 활성화하지 않는다. shared-ID 활성화만으로
+정책이 활성화되지는 않는다.

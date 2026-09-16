@@ -67,6 +67,13 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 			return result, err
 		}
 		boards = append(boards, activationBoard{root: r, participant: sharedParticipant{Root: wt.Path, HEAD: wt.HEAD}})
+		journal, err := loadTransitions(r)
+		if err != nil {
+			return result, err
+		}
+		if err := s.verifyPolicyAuthority(r, journal); err != nil {
+			return result, err
+		}
 		b := &boards[len(boards)-1]
 		b.participant.Snapshot, b.ledger, b.participant.OriginalLedger, err = activationSnapshot(r)
 		if err != nil {

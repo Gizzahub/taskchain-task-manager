@@ -15,6 +15,9 @@ const policyFile = ".task-manager-policy.json"
 // policyForJournal reads only the policy bound to this journal. An orphan
 // policy is an interrupted activation, never permission to fall back.
 func policyForJournal(r *os.Root, j transitionJournal) (boardpolicy.Policy, error) {
+	if err := verifyPolicyActivation(r, j); err != nil {
+		return boardpolicy.Policy{}, err
+	}
 	raw, err := boundedSnapshotFile(r, policyFile, 64<<10)
 	if j.SchemaVersion == 1 {
 		if !errors.Is(err, fs.ErrNotExist) {
@@ -28,7 +31,7 @@ func policyForJournal(r *os.Root, j transitionJournal) (boardpolicy.Policy, erro
 		}
 		return boardpolicy.Default(), nil
 	}
-	if j.SchemaVersion != 2 || !sharedHex64.MatchString(j.PolicyDigest) {
+	if (j.SchemaVersion != 2 && j.SchemaVersion != 3) || !sharedHex64.MatchString(j.PolicyDigest) {
 		return boardpolicy.Policy{}, errors.New("invalid policy journal binding")
 	}
 	if err != nil {
@@ -44,6 +47,12 @@ func policyForJournal(r *os.Root, j transitionJournal) (boardpolicy.Policy, erro
 	}
 	if !bytes.Equal(canonical, raw) || bytesDigest(raw) != j.PolicyDigest {
 		return boardpolicy.Policy{}, errors.New("bound policy bytes or digest changed; preserve journal and restore the exact policy")
+	}
+	if j.SchemaVersion == 3 {
+		state, err := loadPolicyActivation(r)
+		if err != nil || !bytes.Equal(state.Canonical, raw) {
+			return boardpolicy.Policy{}, errors.New("activation policy bytes differ from bound policy")
+		}
 	}
 	return p, nil
 }
