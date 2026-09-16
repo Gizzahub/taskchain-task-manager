@@ -84,6 +84,9 @@ func loadIDs(r *os.Root) (idLedger, error) {
 }
 
 func publishIDs(r *os.Root, ledger idLedger, initial bool) error {
+	if _, err := policyForBoard(r); err != nil {
+		return err
+	}
 	raw, err := json.Marshal(ledger)
 	if err != nil {
 		return err

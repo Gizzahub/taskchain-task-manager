@@ -6,8 +6,8 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 )
 
-// currentPolicy deliberately selects only the built-in contract. External
-// policies require persisted activation and journal binding before use here.
+// currentPolicy is the built-in contract for legacy records and fixed initial
+// card rendering. Board operations resolve their binding through policyForBoard.
 func currentPolicy() boardpolicy.Policy { return boardpolicy.Default() }
 
 func validZone(zone string) bool { return currentPolicy().Workflow(zone) }

@@ -151,6 +151,9 @@ func (s *sharedSession) verify() error {
 }
 
 func (s *sharedSession) verifyBoard(r *os.Root) error {
+	if _, err := policyForBoard(r); err != nil {
+		return err
+	}
 	if s == nil {
 		return nil
 	}

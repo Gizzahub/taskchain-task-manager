@@ -13,6 +13,9 @@ import (
 )
 
 func finishTransition(r *os.Root, j transitionJournal, rec transitionRecord, req TransitionRequest, step func(string) error) (TransitionResult, error) {
+	if _, err := policyForJournal(r, j); err != nil {
+		return TransitionResult{}, err
+	}
 	if cardpath.IsDocumentation(filepath.Base(rec.Source)) {
 		return TransitionResult{}, errors.New("legacy transition uses a now-excluded documentation filename; finish recovery with the previous binary before upgrading; preserve the journal and cards")
 	}
@@ -87,6 +90,9 @@ func finishTransition(r *os.Root, j transitionJournal, rec transitionRecord, req
 	}
 	// Recheck both files immediately before deleting the original. External
 	// editors do not honor the lock; changed bytes must never be discarded.
+	if _, err := policyForJournal(r, j); err != nil {
+		return TransitionResult{}, err
+	}
 	targetExists, err = matchingTransitionFile(r, rec.Target, rec.Patched, rec.Mode)
 	if err != nil {
 		return TransitionResult{}, err

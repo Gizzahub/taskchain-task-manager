@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardpath"
@@ -98,7 +99,11 @@ func Init(dir string) (err error) {
 			return err
 		}
 	}
-	initialZone := currentPolicy().InitialZone()
+	policy, err := policyForBoard(r)
+	if err != nil {
+		return err
+	}
+	initialZone := policy.InitialZone()
 	info, err := r.Lstat(initialZone)
 	if err == nil {
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
@@ -321,16 +326,20 @@ func listLocked(r *os.Root) ([]Entry, error) {
 }
 
 func listLockedExcept(r *os.Root, skip string) ([]Entry, error) {
+	policy, err := policyForBoard(r)
+	if err != nil {
+		return nil, err
+	}
 	if err := validateOptionalIDs(r); err != nil {
 		return nil, err
 	}
-	if err := validateRootLayout(r); err != nil {
+	if err := validateRootLayoutWithPolicy(r, policy); err != nil {
 		return nil, err
 	}
 	out := make([]Entry, 0)
 	ids := map[string]string{}
-	for _, dir := range currentPolicy().KnownDirs() {
-		if err := scanDirExcept(r, dir, &out, ids, skip); err != nil {
+	for _, dir := range policy.KnownDirs() {
+		if err := scanDirExceptWithPolicy(r, dir, &out, ids, skip, policy); err != nil {
 			return nil, err
 		}
 	}
@@ -361,7 +370,11 @@ func Ready(dir string) (entries []Entry, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return readyLocked(all, ledger)
+	policy, err := policyForBoard(r)
+	if err != nil {
+		return nil, err
+	}
+	return readyLockedWithPolicy(all, ledger, policy)
 }
 
 func validateDependencies(deps []string, id string, entries []Entry) error {
@@ -435,6 +448,10 @@ func validateGraph(entries []Entry) error {
 }
 
 func validateRootLayout(r *os.Root) error {
+	return validateRootLayoutWithPolicy(r, currentPolicy())
+}
+
+func validateRootLayoutWithPolicy(r *os.Root, policy boardpolicy.Policy) error {
 	entries, err := fs.ReadDir(r.FS(), ".")
 	if err != nil {
 		return fmt.Errorf("read task board root: %w", err)
@@ -448,7 +465,7 @@ func validateRootLayout(r *os.Root) error {
 			continue
 		}
 		if entry.IsDir() {
-			if !containsKnownDir(name) {
+			if !containsPolicyDir(name, policy) {
 				return fmt.Errorf("unsupported task directory at board root: %s", name)
 			}
 			continue
@@ -461,7 +478,11 @@ func validateRootLayout(r *os.Root) error {
 }
 
 func containsKnownDir(name string) bool {
-	for _, known := range currentPolicy().KnownDirs() {
+	return containsPolicyDir(name, currentPolicy())
+}
+
+func containsPolicyDir(name string, policy boardpolicy.Policy) bool {
+	for _, known := range policy.KnownDirs() {
 		if name == known {
 			return true
 		}
@@ -474,6 +495,10 @@ func scanDir(r *os.Root, dir string, out *[]Entry, ids map[string]string) error 
 }
 
 func scanDirExcept(r *os.Root, dir string, out *[]Entry, ids map[string]string, skip string) error {
+	return scanDirExceptWithPolicy(r, dir, out, ids, skip, currentPolicy())
+}
+
+func scanDirExceptWithPolicy(r *os.Root, dir string, out *[]Entry, ids map[string]string, skip string, policy boardpolicy.Policy) error {
 	info, err := r.Lstat(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
@@ -522,6 +547,13 @@ func scanDirExcept(r *os.Root, dir string, out *[]Entry, ids map[string]string, 
 			return fmt.Errorf("parse task card %s: %w", path, err)
 		}
 		view := doc.Snapshot(path)
+		if policy.Parked(dir) {
+			// A nested workflow-looking path must not override parking semantics.
+			view = doc.View()
+			if status, ok := policy.Status(dir); ok {
+				view.Status = status
+			}
+		}
 		key := identityKey(view.ID)
 		if key == "" {
 			return fmt.Errorf("invalid task ID %q in %s", view.ID, path)

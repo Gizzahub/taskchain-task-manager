@@ -12,6 +12,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 )
 
 const (
@@ -78,7 +80,11 @@ func Claim(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 			return ClaimRecord{}, fmt.Errorf("task %s is already claimed", req.ID)
 		}
 	}
-	ready, err := readyLocked(entries, ledger)
+	policy, err := policyForBoard(r)
+	if err != nil {
+		return ClaimRecord{}, err
+	}
+	ready, err := readyLockedWithPolicy(entries, ledger, policy)
 	if err != nil {
 		return ClaimRecord{}, err
 	}
@@ -344,6 +350,9 @@ func validateClaims(ledger claimsLedger, entries []Entry) (claimsLedger, error) 
 }
 
 func saveClaims(r *os.Root, ledger claimsLedger) error {
+	if _, err := policyForBoard(r); err != nil {
+		return err
+	}
 	raw, err := json.MarshalIndent(ledger, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode claims ledger: %w", err)
@@ -381,6 +390,10 @@ func ensureReleaseCapacity(ledger claimsLedger) error {
 }
 
 func readyLocked(entries []Entry, ledger claimsLedger) ([]Entry, error) {
+	return readyLockedWithPolicy(entries, ledger, currentPolicy())
+}
+
+func readyLockedWithPolicy(entries []Entry, ledger claimsLedger, policy boardpolicy.Policy) ([]Entry, error) {
 	if err := validateGraph(entries); err != nil {
 		return nil, err
 	}
@@ -397,7 +410,6 @@ func readyLocked(entries []Entry, ledger claimsLedger) ([]Entry, error) {
 		}
 	}
 	ready := make([]Entry, 0)
-	policy := currentPolicy()
 	for _, entry := range entries {
 		if !entryInWorkflowZone(entry, policy.ReadyZone(), policy) || held[identityKey(entry.Card.ID)] {
 			continue

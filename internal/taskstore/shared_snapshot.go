@@ -101,9 +101,13 @@ func activationSnapshot(r *os.Root) (string, idLedger, string, error) {
 		fmt.Fprintf(h, "%d:%s:%o:%d:", len(entry.Path), entry.Path, info.Mode(), len(raw))
 		h.Write(raw)
 	}
-	for _, name := range []string{claimsFile, transitionsFile} {
+	for _, name := range []string{claimsFile, transitionsFile, policyFile} {
 		raw, err := boundedSnapshotFile(r, name, maxTransitionBytes)
 		if errors.Is(err, fs.ErrNotExist) {
+			if name == policyFile {
+				// Keep pre-policy initializing snapshots resumable after upgrade.
+				continue
+			}
 			fmt.Fprintf(h, "missing:%s;", name)
 			continue
 		}

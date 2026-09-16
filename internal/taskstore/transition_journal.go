@@ -12,13 +12,18 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
 )
 
 func loadTransitions(r *os.Root) (transitionJournal, error) {
 	info, err := r.Lstat(transitionsFile)
 	if errors.Is(err, fs.ErrNotExist) {
-		return transitionJournal{SchemaVersion: 1, Records: []transitionRecord{}}, nil
+		j := transitionJournal{SchemaVersion: 1, Records: []transitionRecord{}}
+		if _, policyErr := policyForJournal(r, j); policyErr != nil {
+			return transitionJournal{}, policyErr
+		}
+		return j, nil
 	}
 	if err != nil {
 		return transitionJournal{}, err
@@ -60,8 +65,15 @@ func loadTransitions(r *os.Root) (transitionJournal, error) {
 	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
 		return transitionJournal{}, errors.New("transition journal trailing content")
 	}
-	if j.SchemaVersion != 1 || j.Records == nil {
+	if (j.SchemaVersion != 1 && j.SchemaVersion != 2) || j.Records == nil {
 		return transitionJournal{}, errors.New("invalid transition journal schema")
+	}
+	if j.SchemaVersion == 2 && !sharedHex64.MatchString(j.PolicyDigest) {
+		return transitionJournal{}, errors.New("invalid transition policy digest")
+	}
+	policy, err := policyForJournal(r, j)
+	if err != nil {
+		return transitionJournal{}, err
 	}
 	pending := 0
 	seen := map[string]bool{}
@@ -75,7 +87,7 @@ func loadTransitions(r *os.Root) (transitionJournal, error) {
 		} else if rec.Kind != "completed" {
 			return transitionJournal{}, errors.New("invalid transition record")
 		}
-		if err := validateTransitionRecord(rec); err != nil {
+		if err := validateBoundRecord(j, rec, policy); err != nil {
 			return transitionJournal{}, err
 		}
 	}
@@ -90,20 +102,56 @@ func validateTransitionShape(raw []byte) error {
 	if err := json.Unmarshal(raw, &root); err != nil {
 		return err
 	}
-	if len(root) != 2 || root["schemaVersion"] == nil || root["records"] == nil || string(root["records"]) == "null" {
+	if root["schemaVersion"] == nil || root["records"] == nil || string(root["records"]) == "null" {
 		return errors.New("transition journal requires schemaVersion and records")
 	}
+	var version int
+	if err := json.Unmarshal(root["schemaVersion"], &version); err != nil {
+		return errors.New("transition schemaVersion must be integer")
+	}
 	for key := range root {
-		if key != "schemaVersion" && key != "records" {
+		if key != "schemaVersion" && key != "records" && key != "policyDigest" {
 			return fmt.Errorf("unknown transition journal field %q", key)
+		}
+	}
+	if version == 1 && len(root) != 2 {
+		return errors.New("legacy transition journal cannot contain policyDigest")
+	}
+	if version == 2 {
+		if len(root) != 3 || root["policyDigest"] == nil || string(root["policyDigest"]) == "null" {
+			return errors.New("schema 2 transition journal requires policyDigest")
+		}
+		var digest string
+		if err := json.Unmarshal(root["policyDigest"], &digest); err != nil || !sharedHex64.MatchString(digest) {
+			return errors.New("invalid transition policy digest")
 		}
 	}
 	var records []map[string]json.RawMessage
 	if err := json.Unmarshal(root["records"], &records); err != nil {
 		return errors.New("transition records must be an array of objects")
 	}
-	allowed := map[string]bool{"kind": true, "requestId": true, "id": true, "owner": true, "token": true, "from": true, "to": true, "source": true, "target": true, "mode": true, "original": true, "patched": true, "status": true}
+	allowed := map[string]bool{"kind": true, "requestId": true, "id": true, "owner": true, "token": true, "from": true, "to": true, "source": true, "target": true, "mode": true, "original": true, "patched": true, "status": true, "policyDigest": true}
 	for _, record := range records {
+		if version == 1 {
+			if _, present := record["policyDigest"]; present {
+				return errors.New("legacy transition record cannot contain policyDigest")
+			}
+		}
+		if version == 2 {
+			if kindRaw, ok := record["kind"]; ok {
+				var kind string
+				_ = json.Unmarshal(kindRaw, &kind)
+				if kind == "pending" && (record["policyDigest"] == nil || string(record["policyDigest"]) == "null") {
+					return errors.New("pending transition policy digest is missing")
+				}
+				if digestRaw, ok := record["policyDigest"]; ok {
+					var digest string
+					if err := json.Unmarshal(digestRaw, &digest); err != nil || !sharedHex64.MatchString(digest) {
+						return errors.New("invalid transition record policy digest")
+					}
+				}
+			}
+		}
 		for key := range record {
 			if !allowed[key] {
 				return fmt.Errorf("unknown transition record field %q", key)
@@ -132,7 +180,24 @@ func validateTransitionShape(raw []byte) error {
 }
 
 func validateTransitionRecord(rec transitionRecord) error {
-	if !claimToken.MatchString(rec.RequestID) || !validClaimID(rec.ID) || !validClaimOwner(rec.Owner) || !claimToken.MatchString(rec.Token) || !validZone(rec.From) || !validZone(rec.To) || !allowedEdge(rec.From, rec.To) || rec.From == rec.To {
+	return validateTransitionRecordWithPolicy(rec, boardpolicy.Default())
+}
+
+func validateBoundRecord(j transitionJournal, rec transitionRecord, policy boardpolicy.Policy) error {
+	if j.SchemaVersion == 2 {
+		if rec.PolicyDigest == "" && rec.Kind == "completed" {
+			// Carried-over receipts retain the semantics of the legacy journal.
+			return validateTransitionRecord(rec)
+		}
+		if rec.PolicyDigest != j.PolicyDigest {
+			return errors.New("transition record policy digest mismatch")
+		}
+	}
+	return validateTransitionRecordWithPolicy(rec, policy)
+}
+
+func validateTransitionRecordWithPolicy(rec transitionRecord, policy boardpolicy.Policy) error {
+	if !claimToken.MatchString(rec.RequestID) || !validClaimID(rec.ID) || !validClaimOwner(rec.Owner) || !claimToken.MatchString(rec.Token) || !policy.Allows(rec.From, rec.To) || !policy.Workflow(rec.To) || (!policy.Workflow(rec.From) && !policy.Parked(rec.From)) || rec.From == rec.To {
 		return errors.New("invalid transition record authority")
 	}
 	if filepath.Dir(rec.Source) != rec.From || filepath.Dir(rec.Target) != rec.To || filepath.Base(rec.Source) != filepath.Base(rec.Target) || strings.HasPrefix(filepath.Base(rec.Source), ".") || filepath.Ext(rec.Source) != ".md" || strings.EqualFold(filepath.Base(rec.Source), "README.md") {
@@ -155,7 +220,7 @@ func validateTransitionRecord(rec transitionRecord) error {
 		if !sameIdentity(doc.View().ID, rec.ID) {
 			return errors.New("transition record ID does not match card")
 		}
-		status, ok := currentPolicy().Status(rec.To)
+		status, ok := policy.Status(rec.To)
 		if !ok {
 			return errors.New("transition record destination has no status")
 		}
@@ -183,6 +248,22 @@ func rejectPendingTransitions(r *os.Root) error {
 }
 
 func publishTransitionJournal(r *os.Root, j transitionJournal) error {
+	shapeRaw, err := json.Marshal(j)
+	if err != nil {
+		return err
+	}
+	if err := validateTransitionShape(shapeRaw); err != nil {
+		return err
+	}
+	policy, err := policyForJournal(r, j)
+	if err != nil {
+		return err
+	}
+	for _, rec := range j.Records {
+		if err := validateBoundRecord(j, rec, policy); err != nil {
+			return err
+		}
+	}
 	if err := validateTransitionCapacity(j); err != nil {
 		return err
 	}

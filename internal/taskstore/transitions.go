@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
 )
 
@@ -27,23 +28,25 @@ type TransitionResult struct {
 }
 
 type transitionRecord struct {
-	Kind      string `json:"kind"`
-	RequestID string `json:"requestId"`
-	ID        string `json:"id"`
-	Owner     string `json:"owner"`
-	Token     string `json:"token"`
-	From      string `json:"from"`
-	To        string `json:"to"`
-	Source    string `json:"source"`
-	Target    string `json:"target"`
-	Mode      uint32 `json:"mode"`
-	Original  []byte `json:"original,omitempty"`
-	Patched   []byte `json:"patched,omitempty"`
-	Status    string `json:"status"`
+	PolicyDigest string `json:"policyDigest,omitempty"`
+	Kind         string `json:"kind"`
+	RequestID    string `json:"requestId"`
+	ID           string `json:"id"`
+	Owner        string `json:"owner"`
+	Token        string `json:"token"`
+	From         string `json:"from"`
+	To           string `json:"to"`
+	Source       string `json:"source"`
+	Target       string `json:"target"`
+	Mode         uint32 `json:"mode"`
+	Original     []byte `json:"original,omitempty"`
+	Patched      []byte `json:"patched,omitempty"`
+	Status       string `json:"status"`
 }
 type transitionJournal struct {
 	SchemaVersion int                `json:"schemaVersion"`
 	Records       []transitionRecord `json:"records"`
+	PolicyDigest  string             `json:"policyDigest,omitempty"`
 }
 
 func Transition(dir string, req TransitionRequest) (TransitionResult, error) {
@@ -61,7 +64,7 @@ func Recover(dir string, req TransitionRequest) (TransitionResult, error) {
 }
 
 func executeTransition(dir string, req TransitionRequest, recoverOnly bool, step func(string) error) (result TransitionResult, err error) {
-	if err := validateTransitionRequest(req); err != nil {
+	if err := validateTransitionIdentity(req); err != nil {
 		return result, err
 	}
 	r, err := openBoard(dir)
@@ -98,11 +101,18 @@ func executeTransition(dir string, req TransitionRequest, recoverOnly bool, step
 	if recoverOnly {
 		return result, errors.New("matching transition not found; recover never starts a new operation")
 	}
+	policy, err := policyForJournal(r, j)
+	if err != nil {
+		return result, err
+	}
+	if err := validateTransitionForPolicy(req, policy); err != nil {
+		return result, err
+	}
 	entries, err := listLocked(r)
 	if err != nil {
 		return result, err
 	}
-	rec, err := prepareTransition(r, entries, req)
+	rec, err := prepareTransition(r, entries, req, policy, j.PolicyDigest)
 	if err != nil {
 		return result, err
 	}
@@ -155,10 +165,13 @@ func ClaimResume(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 		}
 	}
 	var found Entry
-	policy := currentPolicy()
+	policy, err := policyForBoard(r)
+	if err != nil {
+		return ClaimRecord{}, err
+	}
 	for _, entry := range entries {
 		zone := filepath.Dir(entry.Path)
-		if sameIdentity(entry.Card.ID, req.ID) && isWorkTask(entry.Card.ID) && policy.Workflow(zone) && zone != policy.ReadyZone() {
+		if sameIdentity(entry.Card.ID, req.ID) && isWorkTask(entry.Card.ID) && (policy.Workflow(zone) || policy.Parked(zone)) && zone != policy.ReadyZone() {
 			found = entry
 			break
 		}
@@ -178,10 +191,21 @@ func ClaimResume(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 }
 
 func validateTransitionRequest(req TransitionRequest) error {
+	return validateTransitionForPolicy(req, currentPolicy())
+}
+
+func validateTransitionIdentity(req TransitionRequest) error {
 	if !validClaimID(req.ID) || !validClaimOwner(req.Owner) || !claimToken.MatchString(req.Token) || !claimToken.MatchString(req.RequestID) {
 		return errors.New("invalid transition identity")
 	}
-	if !validZone(req.From) || !validZone(req.To) || req.From == req.To || !allowedEdge(req.From, req.To) {
+	return nil
+}
+
+func validateTransitionForPolicy(req TransitionRequest, policy boardpolicy.Policy) error {
+	if err := validateTransitionIdentity(req); err != nil {
+		return err
+	}
+	if !(policy.Workflow(req.From) || policy.Parked(req.From)) || !policy.Workflow(req.To) || req.From == req.To || !policy.Allows(req.From, req.To) {
 		return errors.New("unsupported transition")
 	}
 	return nil
@@ -193,8 +217,7 @@ func transitionResult(rec transitionRecord) TransitionResult {
 	return TransitionResult{RequestID: rec.RequestID, ID: rec.ID, From: rec.From, To: rec.To, Path: rec.Target, Status: "completed"}
 }
 
-func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest) (transitionRecord, error) {
-	policy := currentPolicy()
+func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest, policy boardpolicy.Policy, digest string) (transitionRecord, error) {
 	var entry Entry
 	for _, e := range entries {
 		if sameIdentity(e.Card.ID, req.ID) && isWorkTask(e.Card.ID) {
@@ -268,7 +291,8 @@ func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest) (tran
 		return transitionRecord{}, err
 	}
 	rec := transitionRecord{Kind: "pending", RequestID: req.RequestID, ID: req.ID, Owner: req.Owner, Token: req.Token, From: req.From, To: req.To, Source: entry.Path, Target: target, Mode: uint32(info.Mode().Perm()), Original: raw, Patched: patched, Status: "pending"}
-	if err := validateTransitionRecord(rec); err != nil {
+	rec.PolicyDigest = digest
+	if err := validateTransitionRecordWithPolicy(rec, policy); err != nil {
 		return transitionRecord{}, err
 	}
 	return rec, nil
