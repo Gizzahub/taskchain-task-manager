@@ -20,11 +20,12 @@ func runStore(args []string, out, errOut io.Writer) int {
 	flags.SetOutput(errOut)
 	dir := flags.String("dir", "tasks", "task board directory")
 	asJSON := flags.Bool("json", false, "write JSON")
-	var title, id *string
+	var title, id, kind *string
 	var dependsOn repeatedString
 	if args[0] == "create" {
 		title = flags.String("title", "", "task title")
 		id = flags.String("id", "", "optional canonical task ID")
+		kind = flags.String("kind", "", "card kind: task, plan, issue, backlog (default task or explicit ID kind)")
 		flags.Var(&dependsOn, "depends-on", "canonical prerequisite task ID (repeatable)")
 	}
 	if err := flags.Parse(args[1:]); err != nil {
@@ -51,7 +52,7 @@ func runStore(args []string, out, errOut io.Writer) int {
 			fmt.Fprintln(errOut, "create requires --title")
 			return 2
 		}
-		result, err = taskstore.Create(*dir, taskstore.CreateRequest{ID: *id, Title: *title, DependsOn: dependsOn})
+		result, err = taskstore.Create(*dir, taskstore.CreateRequest{ID: *id, Title: *title, DependsOn: dependsOn, Kind: *kind})
 	}
 	if err != nil {
 		fmt.Fprintln(errOut, args[0]+":", err)

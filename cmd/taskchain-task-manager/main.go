@@ -30,7 +30,7 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "Usage: taskchain-task-manager <show|validate> <file> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager <init|list|ready> --dir <board> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager reserve-ids --dir <board> [--adopt] [--id TASK-N ...] --json")
-		fmt.Fprintln(out, "       taskchain-task-manager create --dir <board> --title <title> [--id TASK-N] [--depends-on TASK-N ...] --json")
+		fmt.Fprintln(out, "       taskchain-task-manager create --dir <board> --title <title> [--kind task|plan|issue|backlog] [--id PREFIX-N] [--depends-on PREFIX-N ...] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager <claim|release> --dir <board> --id TASK-N --owner <owner> --token <32 lowercase hex> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager claim --resume --dir <board> --id TASK-N --owner <owner> --token <32 lowercase hex> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager <transition|recover> --dir <board> --id TASK-N --owner <owner> --token <claim token> --request-id <32 lowercase hex> --from <zone> --to <zone> --json")

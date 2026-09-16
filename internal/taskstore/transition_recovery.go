@@ -41,7 +41,7 @@ func finishTransition(r *os.Root, j transitionJournal, rec transitionRecord, req
 	}
 	held := false
 	for _, claim := range claims.Records {
-		if claim.ID == req.ID && claim.Owner == req.Owner && claim.Token == req.Token && claim.Status == "held" {
+		if sameIdentity(claim.ID, req.ID) && claim.Owner == req.Owner && claim.Token == req.Token && claim.Status == "held" {
 			held = true
 		}
 	}

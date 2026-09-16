@@ -61,7 +61,7 @@ func TestReserveIDsCLIUsageAndAdopt(t *testing.T) {
 	}
 	out.Reset()
 	diag.Reset()
-	if code := runReservations([]string{"reserve-ids", "--dir", dir, "--id", "TASK-01", "--json"}, &out, &diag); code != 1 || out.Len() != 0 {
+	if code := runReservations([]string{"reserve-ids", "--dir", dir, "--id", "task-1", "--json"}, &out, &diag); code != 1 || out.Len() != 0 {
 		t.Fatalf("invalid id code=%d out=%q", code, out.String())
 	}
 }

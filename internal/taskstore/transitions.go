@@ -150,14 +150,14 @@ func ClaimResume(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 		}
 	}
 	for _, rec := range j.Records {
-		if rec.Status == "held" && rec.ID == req.ID {
+		if rec.Status == "held" && sameIdentity(rec.ID, req.ID) {
 			return ClaimRecord{}, fmt.Errorf("task %s is already claimed", req.ID)
 		}
 	}
 	var found Entry
 	for _, entry := range entries {
 		zone := filepath.Dir(entry.Path)
-		if entry.Card.ID == req.ID && validZone(zone) && zone != "todo" {
+		if sameIdentity(entry.Card.ID, req.ID) && isWorkTask(entry.Card.ID) && validZone(zone) && zone != "todo" {
 			found = entry
 			break
 		}
@@ -217,7 +217,7 @@ func transitionResult(rec transitionRecord) TransitionResult {
 func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest) (transitionRecord, error) {
 	var entry Entry
 	for _, e := range entries {
-		if e.Card.ID == req.ID {
+		if sameIdentity(e.Card.ID, req.ID) && isWorkTask(e.Card.ID) {
 			entry = e
 			break
 		}
@@ -229,14 +229,14 @@ func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest) (tran
 		return transitionRecord{}, err
 	}
 	for _, e := range entries {
-		if e.Card.ID == req.ID && e.Path != entry.Path {
+		if sameIdentity(e.Card.ID, req.ID) && e.Path != entry.Path {
 			return transitionRecord{}, errors.New("duplicate task ID")
 		}
 	}
 	if req.To == "doing" || req.To == "done" {
 		for _, dep := range entry.Card.DependsOn {
 			for _, e := range entries {
-				if e.Card.ID == dep && !(filepath.Dir(e.Path) == "done" && e.Card.Status == "done") {
+				if sameIdentity(e.Card.ID, dep) && !(isWorkTask(e.Card.ID) && filepath.Dir(e.Path) == "done" && e.Card.Status == "done") {
 					return transitionRecord{}, errors.New("dependency is not done")
 				}
 			}
@@ -248,7 +248,7 @@ func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest) (tran
 		return transitionRecord{}, err
 	}
 	for i := range claims.Records {
-		if claims.Records[i].ID == req.ID && claims.Records[i].Status == "held" {
+		if sameIdentity(claims.Records[i].ID, req.ID) && claims.Records[i].Status == "held" {
 			held = &claims.Records[i]
 		}
 	}

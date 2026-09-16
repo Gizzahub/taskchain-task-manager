@@ -15,7 +15,7 @@ func TestCorruptIDLedgerFailsClosed(t *testing.T) {
 		"duplicate key": []byte(`{"schemaVersion":1,"reserved":[],"reserved":[]}`),
 		"unknown":       []byte(`{"schemaVersion":1,"reserved":[],"extra":1}`),
 		"case":          []byte(`{"schemaVersion":1,"Reserved":[]}`),
-		"version":       []byte(`{"schemaVersion":2,"reserved":[]}`),
+		"version":       []byte(`{"schemaVersion":3,"reserved":[]}`),
 		"null":          []byte(`{"schemaVersion":1,"reserved":null}`),
 		"duplicate ID":  []byte(`{"schemaVersion":1,"reserved":["TASK-1","TASK-1"]}`),
 		"unsorted":      []byte(`{"schemaVersion":1,"reserved":["TASK-2","TASK-1"]}`),

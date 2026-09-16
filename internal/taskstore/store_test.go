@@ -56,8 +56,8 @@ func TestCreateRejectsInvalidDuplicateAndNoOverwrite(t *testing.T) {
 	if err := Init(root); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Create(root, CreateRequest{ID: "TASK-01", Title: "bad"}); err == nil {
-		t.Fatal("leading zero accepted")
+	if _, err := Create(root, CreateRequest{ID: "task-1", Title: "bad"}); err == nil {
+		t.Fatal("lowercase prefix accepted")
 	}
 	if _, err := Create(root, CreateRequest{ID: "TASK-1", Title: "one"}); err != nil {
 		t.Fatal(err)

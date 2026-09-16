@@ -152,7 +152,7 @@ func validateTransitionRecord(rec transitionRecord) error {
 		if err != nil {
 			return errors.New("invalid original card in transition record")
 		}
-		if doc.View().ID != rec.ID {
+		if !sameIdentity(doc.View().ID, rec.ID) {
 			return errors.New("transition record ID does not match card")
 		}
 		status := rec.To

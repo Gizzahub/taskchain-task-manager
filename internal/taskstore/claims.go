@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -76,7 +75,7 @@ func Claim(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 		return ClaimRecord{}, fmt.Errorf("claim token already used")
 	}
 	for _, record := range ledger.Records {
-		if record.Status == "held" && record.ID == req.ID {
+		if record.Status == "held" && sameIdentity(record.ID, req.ID) {
 			return ClaimRecord{}, fmt.Errorf("task %s is already claimed", req.ID)
 		}
 	}
@@ -86,7 +85,7 @@ func Claim(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 	}
 	found := false
 	for _, entry := range ready {
-		if entry.Card.ID == req.ID {
+		if sameIdentity(entry.Card.ID, req.ID) && isWorkTask(entry.Card.ID) {
 			found = true
 			break
 		}
@@ -173,11 +172,7 @@ func validClaimOwner(owner string) bool {
 }
 
 func validClaimID(id string) bool {
-	if !canonicalID.MatchString(id) {
-		return false
-	}
-	_, err := strconv.ParseUint(strings.TrimPrefix(id, "TASK-"), 10, 64)
-	return err == nil
+	return isWorkTask(id) && identityKey(id) != ""
 }
 
 func loadClaims(r *os.Root, entries []Entry) (claimsLedger, error) {
@@ -319,7 +314,9 @@ func consumeJSONValue(dec *json.Decoder) error {
 func validateClaims(ledger claimsLedger, entries []Entry) (claimsLedger, error) {
 	ids := make(map[string]bool, len(entries))
 	for _, entry := range entries {
-		ids[entry.Card.ID] = true
+		if isWorkTask(entry.Card.ID) {
+			ids[identityKey(entry.Card.ID)] = true
+		}
 	}
 	tokens := map[string]bool{}
 	held := map[string]bool{}
@@ -335,13 +332,13 @@ func validateClaims(ledger claimsLedger, entries []Entry) (claimsLedger, error) 
 		}
 		tokens[record.Token] = true
 		if record.Status == "held" {
-			if !ids[record.ID] {
+			if !ids[identityKey(record.ID)] {
 				return claimsLedger{}, fmt.Errorf("held claim references missing task %s", record.ID)
 			}
-			if held[record.ID] {
+			if held[identityKey(record.ID)] {
 				return claimsLedger{}, fmt.Errorf("multiple held claims for task %s", record.ID)
 			}
-			held[record.ID] = true
+			held[identityKey(record.ID)] = true
 		}
 	}
 	return ledger, nil
@@ -391,22 +388,24 @@ func readyLocked(entries []Entry, ledger claimsLedger) ([]Entry, error) {
 	held := map[string]bool{}
 	for _, record := range ledger.Records {
 		if record.Status == "held" {
-			held[record.ID] = true
+			held[identityKey(record.ID)] = true
 		}
 	}
 	byID := make(map[string]Entry, len(entries))
 	for _, entry := range entries {
-		byID[entry.Card.ID] = entry
+		if isWorkTask(entry.Card.ID) {
+			byID[identityKey(entry.Card.ID)] = entry
+		}
 	}
 	ready := make([]Entry, 0)
 	for _, entry := range entries {
-		if filepath.Dir(entry.Path) != "todo" || entry.Card.Status != "pending" || held[entry.Card.ID] {
+		if filepath.Dir(entry.Path) != "todo" || entry.Card.Status != "pending" || !isWorkTask(entry.Card.ID) || held[identityKey(entry.Card.ID)] {
 			continue
 		}
 		ok := true
 		for _, dep := range entry.Card.DependsOn {
-			depEntry, exists := byID[dep]
-			if !exists || filepath.Dir(depEntry.Path) != "done" || depEntry.Card.Status != "done" {
+			depEntry, exists := byID[identityKey(dep)]
+			if !isWorkTask(dep) || !exists || filepath.Dir(depEntry.Path) != "done" || depEntry.Card.Status != "done" || !isWorkTask(depEntry.Card.ID) {
 				ok = false
 				break
 			}

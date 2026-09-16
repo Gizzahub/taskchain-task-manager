@@ -8,9 +8,9 @@ import (
 	"io/fs"
 	"os"
 	"sort"
-	"strconv"
-	"strings"
 	"unicode/utf8"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
 )
 
 const idsFile = ".task-manager-ids.json"
@@ -22,8 +22,9 @@ type idLedger struct {
 }
 
 type ReservationResult struct {
-	ReservedCount int    `json:"reservedCount"`
-	MaxID         string `json:"maxId"`
+	ReservedCount int               `json:"reservedCount"`
+	MaxID         string            `json:"maxId"`
+	MaxIDs        map[string]string `json:"maxIds"`
 }
 
 func loadIDs(r *os.Root) (idLedger, error) {
@@ -63,11 +64,11 @@ func loadIDs(r *os.Root) (idLedger, error) {
 	if err := json.Unmarshal(raw, &ledger); err != nil {
 		return idLedger{}, err
 	}
-	if ledger.SchemaVersion != 1 || ledger.Reserved == nil {
+	if (ledger.SchemaVersion != 1 && ledger.SchemaVersion != 2) || ledger.Reserved == nil {
 		return idLedger{}, errors.New("invalid ID ledger schema")
 	}
 	for i, id := range ledger.Reserved {
-		if !validClaimID(id) || (i > 0 && ledger.Reserved[i-1] >= id) {
+		if identityKey(id) != id || id == "" || (ledger.SchemaVersion == 1 && !canonicalID.MatchString(id)) || (i > 0 && ledger.Reserved[i-1] >= id) {
 			return idLedger{}, errors.New("ID ledger requires sorted unique canonical IDs")
 		}
 	}
@@ -111,41 +112,45 @@ func observedIDs(r *os.Root, entries []Entry, ledger idLedger, extra []string) (
 		set[id] = true
 	}
 	for _, entry := range entries {
-		set[entry.Card.ID] = true
+		set[identityKey(entry.Card.ID)] = true
 	}
 	for _, record := range claims.Records {
-		set[record.ID] = true
+		set[identityKey(record.ID)] = true
 	}
 	for _, record := range transitions.Records {
-		set[record.ID] = true
+		set[identityKey(record.ID)] = true
 	}
 	for _, id := range extra {
-		set[id] = true
+		set[identityKey(id)] = true
 	}
 	ledger.Reserved = make([]string, 0, len(set))
 	for id := range set {
-		if !validClaimID(id) {
+		if identityKey(id) == "" {
 			return idLedger{}, fmt.Errorf("invalid reservation ID %q", id)
 		}
 		ledger.Reserved = append(ledger.Reserved, id)
 	}
 	sort.Strings(ledger.Reserved)
+	ledger.SchemaVersion = 2
 	return ledger, nil
 }
 
-func allocateID(ledger idLedger, requested string) (string, error) {
+func allocateID(ledger idLedger, requested, prefix string) (string, error) {
 	var max uint64
 	for _, id := range ledger.Reserved {
-		if id == requested {
+		if sameIdentity(id, requested) {
 			return "", fmt.Errorf("task ID already reserved: %s", id)
 		}
-		n, _ := strconv.ParseUint(strings.TrimPrefix(id, "TASK-"), 10, 64)
-		if n > max {
-			max = n
+		parsed, err := cardid.Parse(id)
+		if err != nil {
+			return "", err
+		}
+		if parsed.Prefix == prefix && parsed.Number > max {
+			max = parsed.Number
 		}
 	}
 	if requested != "" {
-		if !validClaimID(requested) {
+		if identityKey(requested) == "" {
 			return "", fmt.Errorf("invalid task ID %q", requested)
 		}
 		return requested, nil
@@ -153,13 +158,13 @@ func allocateID(ledger idLedger, requested string) (string, error) {
 	if max == ^uint64(0) {
 		return "", errors.New("task ID allocation overflow")
 	}
-	return fmt.Sprintf("TASK-%d", max+1), nil
+	return fmt.Sprintf("%s-%d", prefix, max+1), nil
 }
 
 // ReserveIDs is a monotonic union, including when explicitly adopting a legacy board.
 func ReserveIDs(dir string, ids []string, adopt bool) (result ReservationResult, err error) {
 	for _, id := range ids {
-		if !validClaimID(id) {
+		if identityKey(id) == "" {
 			return result, fmt.Errorf("invalid reservation ID %q", id)
 		}
 	}
@@ -183,7 +188,7 @@ func ReserveIDs(dir string, ids []string, adopt bool) (result ReservationResult,
 	ledger, err := loadIDs(r)
 	initial := errors.Is(err, fs.ErrNotExist)
 	if initial && adopt {
-		ledger, err = idLedger{SchemaVersion: 1, Reserved: []string{}}, nil
+		ledger, err = idLedger{SchemaVersion: 2, Reserved: []string{}}, nil
 	}
 	if err != nil {
 		return result, fmt.Errorf("load ID ledger (use reserve-ids --adopt for an uninitialized board): %w", err)
@@ -196,13 +201,16 @@ func ReserveIDs(dir string, ids []string, adopt bool) (result ReservationResult,
 		return result, err
 	}
 	result.ReservedCount = len(ledger.Reserved)
-	var max uint64
+	result.MaxIDs = map[string]string{}
 	for _, id := range ledger.Reserved {
-		n, _ := strconv.ParseUint(strings.TrimPrefix(id, "TASK-"), 10, 64)
-		if n > max {
-			max, result.MaxID = n, id
+		parsed, _ := cardid.Parse(id)
+		previous, exists := result.MaxIDs[parsed.Prefix]
+		old, _ := cardid.Parse(previous)
+		if !exists || parsed.Number > old.Number {
+			result.MaxIDs[parsed.Prefix] = id
 		}
 	}
+	result.MaxID = result.MaxIDs["TASK"]
 	return result, nil
 }
 

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
+	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,6 +23,7 @@ type Entry struct {
 }
 
 type CreateRequest struct {
+	Kind      string   `json:"kind,omitempty"`
 	ID        string   `json:"id"`
 	Title     string   `json:"title"`
 	DependsOn []string `json:"dependsOn,omitempty"`
@@ -71,7 +73,7 @@ func Init(dir string) (err error) {
 		if !created || !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("load ID ledger (existing boards require reserve-ids --adopt): %w", err)
 		}
-		if err := publishIDs(r, idLedger{SchemaVersion: 1, Reserved: []string{}}, true); err != nil {
+		if err := publishIDs(r, idLedger{SchemaVersion: 2, Reserved: []string{}}, true); err != nil {
 			return err
 		}
 	}
@@ -157,7 +159,21 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 	if err != nil {
 		return Entry{}, err
 	}
-	id, err := allocateID(ledger, req.ID)
+	prefix, err := cardid.PrefixForKind(req.Kind)
+	if err != nil {
+		return Entry{}, err
+	}
+	if req.ID != "" {
+		parsed, err := cardid.Parse(req.ID)
+		if err != nil {
+			return Entry{}, err
+		}
+		if req.Kind != "" && prefix != parsed.Prefix {
+			return Entry{}, errors.New("card kind does not match ID prefix")
+		}
+		prefix = parsed.Prefix
+	}
+	id, err := allocateID(ledger, req.ID, prefix)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -181,7 +197,7 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 		return Entry{}, err
 	}
 	defer func() { err = errors.Join(err, r.Remove(name)) }()
-	ledger.Reserved = append(ledger.Reserved, id)
+	ledger.Reserved = append(ledger.Reserved, identityKey(id))
 	sort.Strings(ledger.Reserved)
 	if err := publishIDs(r, ledger, false); err != nil {
 		return Entry{}, err
@@ -192,7 +208,14 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 			return Entry{}, err
 		}
 	}
-	dest := filepath.ToSlash(filepath.Join("todo", id+".md"))
+	zone := strings.ToLower(prefix)
+	if prefix == "TASK" {
+		zone = "todo"
+	}
+	if err := ensureTransitionDir(r, zone); err != nil {
+		return Entry{}, err
+	}
+	dest := filepath.ToSlash(filepath.Join(zone, id+".md"))
 	if err = r.Link(name, dest); err != nil {
 		return Entry{}, fmt.Errorf("publish %s: %w", dest, err)
 	}
@@ -289,22 +312,30 @@ func validateDependencies(deps []string, id string, entries []Entry) error {
 func validateGraph(entries []Entry) error {
 	byID := make(map[string]Entry, len(entries))
 	for _, entry := range entries {
-		byID[entry.Card.ID] = entry
+		key := identityKey(entry.Card.ID)
+		if key == "" {
+			return fmt.Errorf("invalid card ID %q", entry.Card.ID)
+		}
+		if _, exists := byID[key]; exists {
+			return fmt.Errorf("duplicate task identity %s", key)
+		}
+		byID[key] = entry
 	}
 	for _, entry := range entries {
 		seen := map[string]bool{}
 		for _, dep := range entry.Card.DependsOn {
-			if !canonicalID.MatchString(dep) {
+			key := identityKey(dep)
+			if key == "" {
 				return fmt.Errorf("invalid dependency ID %q in %s", dep, entry.Path)
 			}
-			if seen[dep] {
+			if seen[key] {
 				return fmt.Errorf("duplicate dependency %s in %s", dep, entry.Path)
 			}
-			seen[dep] = true
-			if dep == entry.Card.ID {
+			seen[key] = true
+			if sameIdentity(dep, entry.Card.ID) {
 				return fmt.Errorf("self dependency %s in %s", dep, entry.Path)
 			}
-			if _, ok := byID[dep]; !ok {
+			if _, ok := byID[key]; !ok {
 				return fmt.Errorf("missing dependency %s referenced by %s", dep, entry.Path)
 			}
 		}
@@ -325,7 +356,7 @@ func validateGraph(entries []Entry) error {
 		}
 		state[id] = 1
 		for _, dep := range byID[id].Card.DependsOn {
-			if err := visit(dep); err != nil {
+			if err := visit(identityKey(dep)); err != nil {
 				return err
 			}
 		}
@@ -428,13 +459,14 @@ func scanDirExcept(r *os.Root, dir string, out *[]Entry, ids map[string]string, 
 			return fmt.Errorf("parse task card %s: %w", path, err)
 		}
 		view := doc.Snapshot(path)
-		if !canonicalID.MatchString(view.ID) {
+		key := identityKey(view.ID)
+		if key == "" {
 			return fmt.Errorf("invalid task ID %q in %s", view.ID, path)
 		}
-		if old, ok := ids[view.ID]; ok {
+		if old, ok := ids[key]; ok {
 			return fmt.Errorf("duplicate task ID %s in %s and %s", view.ID, old, path)
 		}
-		ids[view.ID] = path
+		ids[key] = path
 		*out = append(*out, Entry{Path: filepath.ToSlash(path), Card: view})
 		return nil
 	})
