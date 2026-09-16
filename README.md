@@ -86,7 +86,9 @@ staged write 뒤 rename으로 교체하며 전원 손실이나 잠금을 무시�
 
 ## 출력 계약 (초기, 안정화 전)
 
-- 성공: exit 0, stdout에 JSON 한 개. `validate`는 `{"valid":true}`.
+- 성공: exit 0, stdout에 JSON 한 개. config 없는 `validate`는 `{"valid":true}`인 구문 검사입니다.
+- `validate FILE --config RULES --json`은 명시적 단일 카드 규칙과 criteria를 검사합니다.
+  규칙 위반은 exit 1과 JSON findings를 반환하며 전체 보드나 완료 증거의 검증이 아닙니다.
 - 파일/구문/출력 오류: exit 1, stderr에 원인, 입력 오류 시 stdout은 비어 있음.
 - 잘못된 명령/인자: exit 2. `--help`는 exit 0.
 - `show`는 알려진 메타데이터의 view이며 전체 원본 문서가 아닙니다.
@@ -104,6 +106,7 @@ Git branch/worktree 관리·범용 카드 편집·분산 잠금은 아직 지원
 보관 영역과 비카드 문서의 구분은 [카드 발견 규칙](docs/discovery.md)을 따릅니다.
 [worktree 읽기 전용 진단](docs/worktree-inspection.md)으로 활성화 전 topology를 확인합니다.
 같은 저장소의 worktree 간 ID 할당은 [공유 ID 채택·복구](docs/shared-ids.md)를 따릅니다.
+설정 필드·검증 범위·입력 제한은 [단일 카드 규격 검증](docs/card-validation.md)을 따릅니다.
 
 ## 개발과 라이선스
 

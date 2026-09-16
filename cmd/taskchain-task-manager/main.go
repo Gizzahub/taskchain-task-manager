@@ -14,6 +14,9 @@ import (
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, out, errOut io.Writer) int {
+	if len(args) > 0 && args[0] == "validate" {
+		return runValidation(args, out, errOut)
+	}
 	if len(args) > 0 && args[0] == "enable-shared" {
 		return runEnableShared(args, out, errOut)
 	}
@@ -37,6 +40,7 @@ func run(args []string, out, errOut io.Writer) int {
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "help") {
 		fmt.Fprintln(out, "Usage: taskchain-task-manager <show|validate> <file> --json")
+		fmt.Fprintln(out, "       taskchain-task-manager validate <file> --config <validation.yaml> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager enable-shared --dir <board> --all-worktrees [--resume] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager inspect-worktrees --repo <root> --board <path> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager <init|list|ready> --dir <board> --json")
@@ -48,7 +52,7 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "       taskchain-task-manager <transition|recover> --dir <board> --id TASK-N --owner <owner> --token <claim token> --request-id <32 lowercase hex> --from <zone> --to <zone> --json")
 		return 0
 	}
-	if len(args) != 3 || args[2] != "--json" || (args[0] != "show" && args[0] != "validate") {
+	if len(args) != 3 || args[2] != "--json" || args[0] != "show" {
 		fmt.Fprintln(errOut, "usage: taskchain-task-manager <show|validate> <file> --json")
 		return 2
 	}
@@ -63,11 +67,6 @@ func run(args []string, out, errOut io.Writer) int {
 		return 1
 	}
 	var result any = doc.Snapshot(cardRelativePath(args[1]))
-	if args[0] == "validate" {
-		result = struct {
-			Valid bool `json:"valid"`
-		}{true}
-	}
 	if err := json.NewEncoder(out).Encode(result); err != nil {
 		fmt.Fprintln(errOut, "write result:", err)
 		return 1
