@@ -2,7 +2,7 @@
 
 개발자와 코딩 에이전트를 위한 파일 기반 태스크 관리 도구입니다.
 현재는 초기 개발 단계이며 카드 codec과 **초기화·생성·목록·조회·의존성 기반 ready·구문 검증**을 제공합니다.
-claim/release와 소유권 기반 상태 전이·재개를 지원합니다. Intent/Batch·자동 실행은 아직 없습니다.
+claim/release와 소유권 기반 상태 전이·재개를 지원합니다. 독립 Intent/Batch 문서의 읽기 전용 구문 검증도 제공합니다.
 
 ## 빌드와 실행
 
@@ -17,6 +17,7 @@ make check
 ./build/taskchain-task-manager list --dir ./tasks --json
 ./build/taskchain-task-manager create --dir ./tasks --title '후속 작업' --depends-on TASK-1 --json
 ./build/taskchain-task-manager ready --dir ./tasks --json
+./build/taskchain-task-manager validate-context examples/context/intent.json --json
 ```
 
 `validate`는 YAML frontmatter의 구문·형식을 검사합니다. 완료 조건, 의존성,
@@ -24,6 +25,11 @@ make check
 카드 내용의 명령을 실행하지 않습니다. `show`·`validate`는 읽기 전용이고,
 `init`·`create`는 지정한 보드에 새 디렉터리·카드를 만듭니다.
 `transition`은 소유권을 확인해 카드를 이동하고 `recover`는 기록된 미완료 전이를 재개합니다.
+
+`validate-context`는 하나의 strict JSON Intent/Batch 문서를 읽어 canonical bytes와
+SHA-256 digest를 출력합니다. 보드 등록, TASK 존재 확인, 권한 부여, 실제 목표 달성
+판정은 하지 않으며 입력 파일을 수정하지 않습니다. 문서 한도와 필드는
+[Intent/Batch 문서 검증](docs/context-validation.md)을 따릅니다.
 
 ## 생성·목록의 안전 경계
 

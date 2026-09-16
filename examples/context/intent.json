@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "kind": "intent",
+  "id": "INTENT-0123456789abcdef0123456789abcdef",
+  "revision": 1,
+  "title": "Publish the release",
+  "outcome": "A reviewed release is available",
+  "mode": "completion",
+  "constraints": [],
+  "nonGoals": [],
+  "successCriteria": [
+    {"key": "published", "text": "The release is published."}
+  ]
+}
