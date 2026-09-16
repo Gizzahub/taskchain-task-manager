@@ -15,6 +15,20 @@ var batchID = regexp.MustCompile(`^BATCH-[0-9a-f]{32}$`)
 var digestID = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var criterionKey = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 
+// ValidateIdentity checks a registry key without constructing document content.
+func ValidateIdentity(kind, id string, revision uint32) error {
+	if revision == 0 {
+		return errors.New("revision must be positive")
+	}
+	if kind == "intent" && intentID.MatchString(id) {
+		return nil
+	}
+	if kind == "batch" && batchID.MatchString(id) {
+		return nil
+	}
+	return errors.New("invalid intent/batch kind or ID")
+}
+
 func text(value string, max int, multiline bool) error {
 	if value == "" || len(value) > max || strings.TrimSpace(value) != value {
 		return errors.New("text must be nonempty, bounded and without surrounding whitespace")
@@ -40,7 +54,7 @@ func texts(values []string) error {
 }
 
 func validateIntent(d Intent) error {
-	if d.SchemaVersion != 1 || d.Kind != "intent" || !intentID.MatchString(d.ID) || d.Revision == 0 {
+	if d.SchemaVersion != 1 || d.Kind != "intent" || ValidateIdentity(d.Kind, d.ID, d.Revision) != nil {
 		return errors.New("invalid intent schema, kind, ID or revision")
 	}
 	if d.Mode != "completion" {
@@ -82,7 +96,7 @@ func validateRef(ref IntentRef) error {
 }
 
 func validateBatch(d Batch) error {
-	if d.SchemaVersion != 1 || d.Kind != "batch" || !batchID.MatchString(d.ID) || d.Revision == 0 {
+	if d.SchemaVersion != 1 || d.Kind != "batch" || ValidateIdentity(d.Kind, d.ID, d.Revision) != nil {
 		return errors.New("invalid batch schema, kind, ID or revision")
 	}
 	if err := validateRef(d.Intent); err != nil {

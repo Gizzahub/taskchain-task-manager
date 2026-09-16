@@ -20,6 +20,12 @@ func run(args []string, out, errOut io.Writer) int {
 	if len(args) > 0 && args[0] == "validate-context" {
 		return runContextValidation(args, out, errOut)
 	}
+	if len(args) > 0 && args[0] == "register-context" {
+		return runRegisterContext(args, out, errOut)
+	}
+	if len(args) > 0 && args[0] == "show-context" {
+		return runShowContext(args, out, errOut)
+	}
 	if len(args) > 0 && args[0] == "validate" {
 		return runValidation(args, out, errOut)
 	}
@@ -49,6 +55,8 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "       taskchain-task-manager validate <file> --config <validation.yaml> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager validate-policy <policy.yaml> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager validate-context <intent-or-batch.json> --json")
+		fmt.Fprintln(out, "       taskchain-task-manager register-context <file> --dir <board> --json")
+		fmt.Fprintln(out, "       taskchain-task-manager show-context --dir <board> --kind intent|batch --id ID --revision N --json")
 		fmt.Fprintln(out, "       taskchain-task-manager enable-shared --dir <board> --all-worktrees [--resume] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager inspect-worktrees --repo <root> --board <path> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager <init|list|ready> --dir <board> --json")

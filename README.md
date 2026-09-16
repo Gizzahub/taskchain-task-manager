@@ -18,6 +18,8 @@ make check
 ./build/taskchain-task-manager create --dir ./tasks --title '후속 작업' --depends-on TASK-1 --json
 ./build/taskchain-task-manager ready --dir ./tasks --json
 ./build/taskchain-task-manager validate-context examples/context/intent.json --json
+./build/taskchain-task-manager register-context examples/context/intent.json --dir ./tasks --json
+./build/taskchain-task-manager show-context --dir ./tasks --kind intent --id INTENT-0123456789abcdef0123456789abcdef --revision 1 --json
 ```
 
 `validate`는 YAML frontmatter의 구문·형식을 검사합니다. 완료 조건, 의존성,
@@ -30,6 +32,13 @@ make check
 SHA-256 digest를 출력합니다. 보드 등록, TASK 존재 확인, 권한 부여, 실제 목표 달성
 판정은 하지 않으며 입력 파일을 수정하지 않습니다. 문서 한도와 필드는
 [Intent/Batch 문서 검증](docs/context-validation.md)을 따릅니다.
+
+`register-context`는 검증된 문서를 보드의 불변 context registry에 등록하고,
+`show-context`는 명시한 kind·ID·revision 하나를 조회합니다. 등록은 board-local이며
+자동 latest/head, Git 이력, common worktree 공유, task 생성, 평가 실행을 제공하지
+않습니다. 같은 canonical bytes 재시도는 unchanged이고 다른 bytes는 충돌입니다.
+자세한 참조 검증과 재시도 경계는 [Intent/Batch context registry](docs/context-registry.md)를
+참조하세요.
 
 ## 생성·목록의 안전 경계
 
