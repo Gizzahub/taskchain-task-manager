@@ -133,16 +133,30 @@ func filenameMatches(name string, r ValidationRules) bool {
 }
 
 func criteriaFromBody(body string, r ValidationRules) ([]CriterionReport, bool, bool, bool) {
+	return criteriaFromBodyMode(body, r, false)
+}
+
+var checkboxLike = regexp.MustCompile(`^(?:(?:[-+*]|[0-9]+[.)])[ \t]*)?\[`)
+var listMarker = regexp.MustCompile(`^(?:[-+*]|[0-9]+[.)])[ \t]+`)
+
+func criteriaFromBodyMode(body string, r ValidationRules, strictCompletion bool) ([]CriterionReport, bool, bool, bool) {
 	lines := strings.Split(body, "\n")
 	var fence fenceState
 	criteria := false
 	foundSummary, foundCriteria := false, false
 	malformed := false
+	inList, blankAfterList := false, false
 	out := []CriterionReport{}
 	for _, raw := range lines {
 		line := strings.TrimSuffix(raw, "\r")
 		indent := len(line) - len(strings.TrimLeft(line, " "))
 		if indent >= 4 || strings.HasPrefix(line[indent:], "\t") {
+			if strictCompletion && inList && strings.TrimSpace(line) != "" {
+				blankAfterList = false
+			}
+			if strictCompletion && criteria && fence.length == 0 && inList && checkboxLike.MatchString(strings.TrimSpace(line)) {
+				malformed = true // Could be a nested task, not an independent code block.
+			}
 			continue // Indented code is neither structure nor a fence delimiter.
 		}
 		line = line[indent:]
@@ -152,9 +166,11 @@ func criteriaFromBody(body string, r ValidationRules) ([]CriterionReport, bool, 
 		trimmed := strings.TrimSpace(line)
 		if line == "#" || strings.HasPrefix(line, "# ") || strings.HasPrefix(line, "#\t") {
 			criteria = false
+			inList, blankAfterList = false, false
 			continue
 		}
 		if line == "##" || strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "##\t") {
+			inList, blankAfterList = false, false
 			heading := strings.TrimSpace(line[2:])
 			if i := strings.LastIndex(heading, " #"); i >= 0 && strings.Trim(heading[i:], " #") == "" {
 				heading = strings.TrimSpace(heading[:i])
@@ -172,9 +188,21 @@ func criteriaFromBody(body string, r ValidationRules) ([]CriterionReport, bool, 
 			continue
 		}
 		if criteria {
+			if strictCompletion {
+				if trimmed == "" {
+					blankAfterList = true
+					continue
+				}
+				isList := listMarker.MatchString(trimmed)
+				if blankAfterList && indent == 0 && !isList {
+					inList = false
+				}
+				inList = inList || isList
+				blankAfterList = false
+			}
 			if len(trimmed) >= 6 && strings.HasPrefix(trimmed, "- [") && trimmed[4] == ']' && (trimmed[3] == ' ' || trimmed[3] == 'x' || trimmed[3] == 'X' || trimmed[3] == '>') && (trimmed[5] == ' ' || trimmed[5] == '\t') && strings.TrimSpace(trimmed[6:]) != "" {
 				out = append(out, CriterionReport{Text: strings.TrimSpace(trimmed[5:]), Checked: trimmed[3] == 'x' || trimmed[3] == 'X'})
-			} else if strings.HasPrefix(trimmed, "- [") {
+			} else if strings.HasPrefix(trimmed, "- [") || (strictCompletion && checkboxLike.MatchString(trimmed)) {
 				malformed = true
 			}
 		}

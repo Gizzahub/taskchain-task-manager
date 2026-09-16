@@ -28,6 +28,10 @@ make check
 `init`·`create`는 지정한 보드에 새 디렉터리·카드를 만듭니다.
 `transition`은 소유권을 확인해 카드를 이동하고 `recover`는 기록된 미완료 전이를 재개합니다.
 
+`validate-completion FILE --config RULES --json`은 카드 구조와 모든 완료 체크박스를
+별도로 관측합니다. 실제 구현 완료·CE gate·증거·전이 권한을 인증하지 않습니다.
+출력 필드와 지원 문법은 [완료 조건 관측](docs/completion-observation.md)을 따릅니다.
+
 `validate-context`는 하나의 strict JSON Intent/Batch/Iteration 문서를 읽어 canonical bytes와
 SHA-256 digest를 출력합니다. 보드 등록, TASK 존재 확인, 권한 부여, 실제 목표 달성
 판정은 하지 않으며 입력 파일을 수정하지 않습니다. 문서 한도와 필드는

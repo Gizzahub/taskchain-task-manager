@@ -29,7 +29,7 @@ func run(args []string, out, errOut io.Writer) int {
 	if len(args) > 0 && args[0] == "show-context" {
 		return runShowContext(args, out, errOut)
 	}
-	if len(args) > 0 && args[0] == "validate" {
+	if len(args) > 0 && (args[0] == "validate" || args[0] == "validate-completion") {
 		return runValidation(args, out, errOut)
 	}
 	if len(args) > 0 && args[0] == "enable-shared" {
@@ -59,6 +59,7 @@ func run(args []string, out, errOut io.Writer) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "help") {
 		fmt.Fprintln(out, "Usage: taskchain-task-manager <show|validate> <file> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager validate <file> --config <validation.yaml> --json")
+		fmt.Fprintln(out, "       taskchain-task-manager validate-completion <file> --config <validation.yaml> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager validate-policy <policy.yaml> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager activate-policy <policy.yaml> --dir <board> [--all-worktrees] [--resume] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager validate-context <intent-batch-or-iteration.json> --json")

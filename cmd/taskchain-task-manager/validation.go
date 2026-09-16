@@ -14,16 +14,25 @@ import (
 // Configured validation is deliberately explicit and card-scoped. It must not
 // discover repository policies or execute commands embedded in a document.
 func runValidation(args []string, out, errOut io.Writer) int {
+	completion := len(args) > 0 && args[0] == "validate-completion"
+	usage := "validate <file> [--config <validation.yaml>] --json"
+	if completion {
+		usage = "validate-completion <file> --config <validation.yaml> --json"
+	}
 	if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
-		fmt.Fprintln(out, "Usage: validate <file> [--config <validation.yaml>] --json")
-		fmt.Fprintln(out, "Without --config: syntax only. With --config: work-card rules, not board validation.")
+		fmt.Fprintln(out, "Usage:", usage)
+		if completion {
+			fmt.Fprintln(out, "Single-card checkbox observation only; no evidence or board validation.")
+		} else {
+			fmt.Fprintln(out, "Without --config: syntax only. With --config: work-card rules, not board validation.")
+		}
 		return 0
 	}
 	if len(args) < 3 {
-		fmt.Fprintln(errOut, "usage: validate <file> [--config <validation.yaml>] --json")
+		fmt.Fprintln(errOut, "usage:", usage)
 		return 2
 	}
-	flags := flag.NewFlagSet("validate", flag.ContinueOnError)
+	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(errOut)
 	config := flags.String("config", "", "explicit versioned card validation rules; not board policy")
 	asJSON := flags.Bool("json", false, "write JSON")
@@ -34,11 +43,15 @@ func runValidation(args []string, out, errOut io.Writer) int {
 		return 2
 	}
 	if flags.NArg() != 0 || !*asJSON || args[1] == "" {
-		fmt.Fprintln(errOut, "expected validate <file> [--config <validation.yaml>] --json")
+		fmt.Fprintln(errOut, "expected", usage)
 		return 2
 	}
 	configured := false
 	flags.Visit(func(f *flag.Flag) { configured = configured || f.Name == "config" })
+	if completion && !configured {
+		fmt.Fprintln(errOut, "validate-completion requires explicit --config")
+		return 2
+	}
 	if configured && *config == "" {
 		fmt.Fprintln(errOut, "--config must name a validation file")
 		return 2
@@ -68,7 +81,14 @@ func runValidation(args []string, out, errOut io.Writer) int {
 		Valid bool `json:"valid"`
 	}{true}
 	valid := true
-	if configured {
+	if completion {
+		report, err := doc.ValidateCompletion(args[1], rules)
+		if err != nil {
+			fmt.Fprintln(errOut, "observe completion:", err)
+			return 1
+		}
+		result, valid = report, report.Valid
+	} else if configured {
 		report, err := doc.ValidateCard(args[1], rules)
 		if err != nil {
 			fmt.Fprintln(errOut, "validate card:", err)
@@ -81,7 +101,11 @@ func runValidation(args []string, out, errOut io.Writer) int {
 		return 1
 	}
 	if !valid {
-		fmt.Fprintln(errOut, "card validation failed; see JSON findings")
+		if completion {
+			fmt.Fprintln(errOut, "completion observation failed; see JSON findings")
+		} else {
+			fmt.Fprintln(errOut, "card validation failed; see JSON findings")
+		}
 		return 1
 	}
 	return 0
