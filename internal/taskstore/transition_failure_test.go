@@ -85,6 +85,7 @@ func TestTransitionCrashPhasesAndPendingGates(t *testing.T) {
 				before := boardBytes(t, dir)
 				claimReq := ClaimRequest{ID: req.ID, Owner: req.Owner, Token: req.Token}
 				checks := []func() error{
+					func() error { _, e := ReserveIDs(dir, []string{"TASK-8"}, true); return e },
 					func() error { return Init(dir) },
 					func() error { _, e := List(dir); return e },
 					func() error { _, e := Ready(dir); return e },

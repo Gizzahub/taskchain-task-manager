@@ -1,0 +1,215 @@
+package taskstore
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+)
+
+const idsFile = ".task-manager-ids.json"
+const maxIDsBytes = 1 << 20
+
+type idLedger struct {
+	SchemaVersion int      `json:"schemaVersion"`
+	Reserved      []string `json:"reserved"`
+}
+
+type ReservationResult struct {
+	ReservedCount int    `json:"reservedCount"`
+	MaxID         string `json:"maxId"`
+}
+
+func loadIDs(r *os.Root) (idLedger, error) {
+	info, err := r.Lstat(idsFile)
+	if err != nil {
+		return idLedger{}, err
+	}
+	if !info.Mode().IsRegular() {
+		return idLedger{}, errors.New("ID ledger is not a regular file")
+	}
+	if info.Size() > maxIDsBytes {
+		return idLedger{}, errors.New("ID ledger exceeds 1 MiB")
+	}
+	f, err := r.Open(idsFile)
+	if err != nil {
+		return idLedger{}, err
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, maxIDsBytes+1))
+	if err != nil {
+		return idLedger{}, err
+	}
+	if len(raw) > maxIDsBytes || !utf8.Valid(raw) {
+		return idLedger{}, errors.New("invalid ID ledger size or UTF-8")
+	}
+	if err := rejectDuplicateJSON(raw); err != nil {
+		return idLedger{}, err
+	}
+	var shape map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &shape); err != nil {
+		return idLedger{}, err
+	}
+	if len(shape) != 2 || shape["schemaVersion"] == nil || shape["reserved"] == nil {
+		return idLedger{}, errors.New("ID ledger requires exactly schemaVersion and reserved")
+	}
+	var ledger idLedger
+	if err := json.Unmarshal(raw, &ledger); err != nil {
+		return idLedger{}, err
+	}
+	if ledger.SchemaVersion != 1 || ledger.Reserved == nil {
+		return idLedger{}, errors.New("invalid ID ledger schema")
+	}
+	for i, id := range ledger.Reserved {
+		if !validClaimID(id) || (i > 0 && ledger.Reserved[i-1] >= id) {
+			return idLedger{}, errors.New("ID ledger requires sorted unique canonical IDs")
+		}
+	}
+	return ledger, nil
+}
+
+func publishIDs(r *os.Root, ledger idLedger, initial bool) error {
+	raw, err := json.Marshal(ledger)
+	if err != nil {
+		return err
+	}
+	raw = append(raw, '\n')
+	if len(raw) > maxIDsBytes {
+		return errors.New("ID ledger exceeds 1 MiB")
+	}
+	name, err := stage(r, raw)
+	if err != nil {
+		return err
+	}
+	if initial {
+		return errors.Join(r.Link(name, idsFile), r.Remove(name))
+	}
+	if err := r.Rename(name, idsFile); err != nil {
+		return errors.Join(err, r.Remove(name))
+	}
+	return nil
+}
+
+// observedIDs does not inspect Git history or infer IDs of deleted manual cards.
+func observedIDs(r *os.Root, entries []Entry, ledger idLedger, extra []string) (idLedger, error) {
+	claims, err := loadClaims(r, entries)
+	if err != nil {
+		return idLedger{}, err
+	}
+	transitions, err := loadTransitions(r)
+	if err != nil {
+		return idLedger{}, err
+	}
+	set := map[string]bool{}
+	for _, id := range ledger.Reserved {
+		set[id] = true
+	}
+	for _, entry := range entries {
+		set[entry.Card.ID] = true
+	}
+	for _, record := range claims.Records {
+		set[record.ID] = true
+	}
+	for _, record := range transitions.Records {
+		set[record.ID] = true
+	}
+	for _, id := range extra {
+		set[id] = true
+	}
+	ledger.Reserved = make([]string, 0, len(set))
+	for id := range set {
+		if !validClaimID(id) {
+			return idLedger{}, fmt.Errorf("invalid reservation ID %q", id)
+		}
+		ledger.Reserved = append(ledger.Reserved, id)
+	}
+	sort.Strings(ledger.Reserved)
+	return ledger, nil
+}
+
+func allocateID(ledger idLedger, requested string) (string, error) {
+	var max uint64
+	for _, id := range ledger.Reserved {
+		if id == requested {
+			return "", fmt.Errorf("task ID already reserved: %s", id)
+		}
+		n, _ := strconv.ParseUint(strings.TrimPrefix(id, "TASK-"), 10, 64)
+		if n > max {
+			max = n
+		}
+	}
+	if requested != "" {
+		if !validClaimID(requested) {
+			return "", fmt.Errorf("invalid task ID %q", requested)
+		}
+		return requested, nil
+	}
+	if max == ^uint64(0) {
+		return "", errors.New("task ID allocation overflow")
+	}
+	return fmt.Sprintf("TASK-%d", max+1), nil
+}
+
+// ReserveIDs is a monotonic union, including when explicitly adopting a legacy board.
+func ReserveIDs(dir string, ids []string, adopt bool) (result ReservationResult, err error) {
+	for _, id := range ids {
+		if !validClaimID(id) {
+			return result, fmt.Errorf("invalid reservation ID %q", id)
+		}
+	}
+	r, err := openBoard(dir)
+	if err != nil {
+		return result, err
+	}
+	defer r.Close()
+	unlock, err := lock(r)
+	if err != nil {
+		return result, err
+	}
+	defer func() { err = errors.Join(err, unlock()) }()
+	if err := rejectPendingTransitions(r); err != nil {
+		return result, err
+	}
+	entries, err := listLocked(r)
+	if err != nil {
+		return result, err
+	}
+	ledger, err := loadIDs(r)
+	initial := errors.Is(err, fs.ErrNotExist)
+	if initial && adopt {
+		ledger, err = idLedger{SchemaVersion: 1, Reserved: []string{}}, nil
+	}
+	if err != nil {
+		return result, fmt.Errorf("load ID ledger (use reserve-ids --adopt for an uninitialized board): %w", err)
+	}
+	ledger, err = observedIDs(r, entries, ledger, ids)
+	if err != nil {
+		return result, err
+	}
+	if err := publishIDs(r, ledger, initial); err != nil {
+		return result, err
+	}
+	result.ReservedCount = len(ledger.Reserved)
+	var max uint64
+	for _, id := range ledger.Reserved {
+		n, _ := strconv.ParseUint(strings.TrimPrefix(id, "TASK-"), 10, 64)
+		if n > max {
+			max, result.MaxID = n, id
+		}
+	}
+	return result, nil
+}
+
+func validateOptionalIDs(r *os.Root) error {
+	_, err := loadIDs(r)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	return err
+}

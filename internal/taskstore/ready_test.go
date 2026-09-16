@@ -3,6 +3,7 @@ package taskstore
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -41,6 +42,7 @@ func TestCreateRejectsExistingCycleWithoutPublishing(t *testing.T) {
 	if err := os.WriteFile(path, raw, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	before := boardBytes(t, root)
 	if _, err := Create(root, CreateRequest{Title: "must not publish"}); err == nil || !strings.Contains(err.Error(), "self dependency") {
 		t.Fatalf("error=%v", err)
 	}
@@ -52,8 +54,7 @@ func TestCreateRejectsExistingCycleWithoutPublishing(t *testing.T) {
 	if err != nil || len(entries) != 1 {
 		t.Fatalf("cards=%v err=%v", entries, err)
 	}
-	entries, err = os.ReadDir(root)
-	if err != nil || len(entries) != 1 || entries[0].Name() != "todo" {
-		t.Fatalf("root artifacts=%v err=%v", entries, err)
+	if !reflect.DeepEqual(before, boardBytes(t, root)) {
+		t.Fatal("invalid graph changed board or ID reservations")
 	}
 }

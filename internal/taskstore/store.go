@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
@@ -36,6 +35,7 @@ func Init(dir string) (err error) {
 		return errors.New("task board directory is empty")
 	}
 	dir = filepath.Clean(dir)
+	created := false
 	if info, err := os.Lstat(dir); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("task board root is a symlink: %s", dir)
@@ -44,9 +44,13 @@ func Init(dir string) (err error) {
 			return fmt.Errorf("task board root is not a directory: %s", dir)
 		}
 	} else if errors.Is(err, fs.ErrNotExist) {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+			return fmt.Errorf("create task board parent: %w", err)
+		}
+		if err := os.Mkdir(dir, 0o755); err != nil {
 			return fmt.Errorf("create task board root: %w", err)
 		}
+		created = true
 	} else {
 		return fmt.Errorf("inspect task board root: %w", err)
 	}
@@ -62,6 +66,14 @@ func Init(dir string) (err error) {
 	defer func() { err = errors.Join(err, unlock()) }()
 	if err := rejectPendingTransitions(r); err != nil {
 		return err
+	}
+	if _, err := loadIDs(r); err != nil {
+		if !created || !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("load ID ledger (existing boards require reserve-ids --adopt): %w", err)
+		}
+		if err := publishIDs(r, idLedger{SchemaVersion: 1, Reserved: []string{}}, true); err != nil {
+			return err
+		}
 	}
 	info, err := r.Lstat("todo")
 	if err == nil {
@@ -104,6 +116,16 @@ func List(dir string) (entries []Entry, err error) {
 }
 
 func Create(dir string, req CreateRequest) (entry Entry, err error) {
+	return createWithStep(dir, req, nil)
+}
+
+func createWithStep(dir string, req CreateRequest, step func(string) error) (entry Entry, err error) {
+	reservedID := ""
+	defer func() {
+		if err != nil && reservedID != "" {
+			err = fmt.Errorf("ID %s is reserved; inspect card publication before retry: %w", reservedID, err)
+		}
+	}()
 	r, err := openBoard(dir)
 	if err != nil {
 		return Entry{}, err
@@ -127,31 +149,17 @@ func Create(dir string, req CreateRequest) (entry Entry, err error) {
 	if err := validateGraph(entries); err != nil {
 		return Entry{}, err
 	}
-	used := make(map[string]bool, len(entries))
-	var max uint64
-	for _, e := range entries {
-		used[e.Card.ID] = true
-		n, parseErr := strconv.ParseUint(strings.TrimPrefix(e.Card.ID, "TASK-"), 10, 64)
-		if parseErr != nil {
-			return Entry{}, fmt.Errorf("task ID overflow: %s", e.Card.ID)
-		}
-		if n > max {
-			max = n
-		}
+	ledger, err := loadIDs(r)
+	if err != nil {
+		return Entry{}, fmt.Errorf("load ID ledger (existing boards require reserve-ids --adopt): %w", err)
 	}
-	id := req.ID
-	if id == "" {
-		if max == ^uint64(0) {
-			return Entry{}, errors.New("task ID allocation overflow")
-		}
-		id = fmt.Sprintf("TASK-%d", max+1)
-	} else if !canonicalID.MatchString(id) {
-		return Entry{}, fmt.Errorf("invalid task ID %q", id)
-	} else if _, parseErr := strconv.ParseUint(strings.TrimPrefix(id, "TASK-"), 10, 64); parseErr != nil {
-		return Entry{}, fmt.Errorf("task ID overflow: %s", id)
+	ledger, err = observedIDs(r, entries, ledger, nil)
+	if err != nil {
+		return Entry{}, err
 	}
-	if used[id] {
-		return Entry{}, fmt.Errorf("task ID already exists: %s", id)
+	id, err := allocateID(ledger, req.ID)
+	if err != nil {
+		return Entry{}, err
 	}
 	if strings.TrimSpace(req.Title) == "" {
 		return Entry{}, errors.New("task title is empty")
@@ -173,6 +181,17 @@ func Create(dir string, req CreateRequest) (entry Entry, err error) {
 		return Entry{}, err
 	}
 	defer func() { err = errors.Join(err, r.Remove(name)) }()
+	ledger.Reserved = append(ledger.Reserved, id)
+	sort.Strings(ledger.Reserved)
+	if err := publishIDs(r, ledger, false); err != nil {
+		return Entry{}, err
+	}
+	reservedID = id
+	if step != nil {
+		if err := step("after-reservation"); err != nil {
+			return Entry{}, err
+		}
+	}
 	dest := filepath.ToSlash(filepath.Join("todo", id+".md"))
 	if err = r.Link(name, dest); err != nil {
 		return Entry{}, fmt.Errorf("publish %s: %w", dest, err)
@@ -218,6 +237,9 @@ func listLocked(r *os.Root) ([]Entry, error) {
 }
 
 func listLockedExcept(r *os.Root, skip string) ([]Entry, error) {
+	if err := validateOptionalIDs(r); err != nil {
+		return nil, err
+	}
 	if err := validateRootLayout(r); err != nil {
 		return nil, err
 	}
