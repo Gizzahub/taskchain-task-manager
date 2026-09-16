@@ -96,7 +96,8 @@ staged write 뒤 rename으로 교체하며 전원 손실이나 잠금을 무시�
 내부 codec은 원본 byte를 보존하고 본문의 첫 Status 셀만 변경할 수 있습니다.
 상태 patch는 소유권을 확인하는 `transition`에서 사용하며 안정적인 외부 Go API는 아닙니다.
 알 수 없는 필드는 파생 view에서 생략되지만 원본 byte에는 보존됩니다.
-Git 연동·범용 카드 편집·분산 잠금은 아직 지원하지 않습니다.
+명시적인 [Git 이력 ID 가져오기](docs/git-import.md)를 지원합니다.
+Git branch/worktree 관리·범용 카드 편집·분산 잠금은 아직 지원하지 않습니다.
 
 상태 전이, 멱등 요청, pending journal 복구와 지원 한계는 [상태 전이 사용법](docs/lifecycle.md)을 읽어 주세요.
 

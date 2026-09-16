@@ -44,4 +44,5 @@ PLAN/ISSUE/BACKLOG를 todo/done에 놓아도 ready나 완료된 선행 작업으
 claim/token 또는 transition/request-id 재시도에는 처음 요청한 ID 문자열을 그대로 쓴다.
 release에는 claim receipt의 ID를 쓴다. 숫자가 같아도 요청 문자열을 바꿔 재시도하지 않는다.
 충돌 검사는 alias를 같은 작업으로 취급하므로 다른 token으로도 이중 예약할 수 없다.
-Git ref 삭제 이력·공유 worktree 예약·CE 전체 dialect 호환은 아직 지원하지 않는다.
+로컬 Git ref에서 도달 가능한 삭제 이력은 명시적인 [Git ID 가져오기](git-import.md)로
+예약할 수 있다. 공유 worktree 예약·CE 전체 dialect 호환은 아직 지원하지 않는다.
