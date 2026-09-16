@@ -55,6 +55,9 @@ func Claim(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 		return ClaimRecord{}, err
 	}
 	defer func() { err = errors.Join(err, unlock()) }()
+	if err := rejectPendingTransitions(r); err != nil {
+		return ClaimRecord{}, err
+	}
 	entries, err := listLocked(r)
 	if err != nil {
 		return ClaimRecord{}, err
@@ -116,6 +119,9 @@ func Release(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 		return ClaimRecord{}, err
 	}
 	defer func() { err = errors.Join(err, unlock()) }()
+	if err := rejectPendingTransitions(r); err != nil {
+		return ClaimRecord{}, err
+	}
 	entries, err := listLocked(r)
 	if err != nil {
 		return ClaimRecord{}, err

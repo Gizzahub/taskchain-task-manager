@@ -31,7 +31,7 @@ type CreateRequest struct {
 var canonicalID = regexp.MustCompile(`^TASK-[1-9][0-9]*$`)
 var knownDirs = []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "archive"}
 
-func Init(dir string) error {
+func Init(dir string) (err error) {
 	if dir == "" {
 		return errors.New("task board directory is empty")
 	}
@@ -55,6 +55,14 @@ func Init(dir string) error {
 		return fmt.Errorf("open task board root: %w", err)
 	}
 	defer r.Close()
+	unlock, err := lock(r)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, unlock()) }()
+	if err := rejectPendingTransitions(r); err != nil {
+		return err
+	}
 	info, err := r.Lstat("todo")
 	if err == nil {
 		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
@@ -82,6 +90,9 @@ func List(dir string) (entries []Entry, err error) {
 		return nil, err
 	}
 	defer func() { err = errors.Join(err, unlock()) }()
+	if err := rejectPendingTransitions(r); err != nil {
+		return nil, err
+	}
 	entries, err = listLocked(r)
 	if err != nil {
 		return nil, err
@@ -103,6 +114,9 @@ func Create(dir string, req CreateRequest) (entry Entry, err error) {
 		return Entry{}, err
 	}
 	defer func() { err = errors.Join(err, unlock()) }()
+	if err := rejectPendingTransitions(r); err != nil {
+		return Entry{}, err
+	}
 	entries, err := listLocked(r)
 	if err != nil {
 		return Entry{}, err
@@ -200,13 +214,17 @@ func lock(r *os.Root) (func() error, error) {
 }
 
 func listLocked(r *os.Root) ([]Entry, error) {
+	return listLockedExcept(r, "")
+}
+
+func listLockedExcept(r *os.Root, skip string) ([]Entry, error) {
 	if err := validateRootLayout(r); err != nil {
 		return nil, err
 	}
 	out := make([]Entry, 0)
 	ids := map[string]string{}
 	for _, dir := range knownDirs {
-		if err := scanDir(r, dir, &out, ids); err != nil {
+		if err := scanDirExcept(r, dir, &out, ids, skip); err != nil {
 			return nil, err
 		}
 	}
@@ -226,6 +244,9 @@ func Ready(dir string) (entries []Entry, err error) {
 		return nil, err
 	}
 	defer func() { err = errors.Join(err, unlock()) }()
+	if err := rejectPendingTransitions(r); err != nil {
+		return nil, err
+	}
 	all, err := listLocked(r)
 	if err != nil {
 		return nil, err
@@ -333,6 +354,10 @@ func containsKnownDir(name string) bool {
 }
 
 func scanDir(r *os.Root, dir string, out *[]Entry, ids map[string]string) error {
+	return scanDirExcept(r, dir, out, ids, "")
+}
+
+func scanDirExcept(r *os.Root, dir string, out *[]Entry, ids map[string]string, skip string) error {
 	info, err := r.Lstat(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
@@ -349,6 +374,9 @@ func scanDir(r *os.Root, dir string, out *[]Entry, ids map[string]string) error 
 		}
 		if path != dir && d.IsDir() && strings.HasPrefix(d.Name(), ".") {
 			return fs.SkipDir
+		}
+		if path == skip {
+			return nil
 		}
 		if path == dir || d.IsDir() {
 			return nil

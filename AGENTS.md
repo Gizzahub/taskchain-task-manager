@@ -8,5 +8,6 @@ Use synthetic examples and tests. Keep private paths, credentials and boards out
 - File reads must not execute commands embedded in task content.
 - Preserve source bytes for no-op operations. Parsing a view is not serialization.
 - Add tests for malformed input and boundary cases alongside implementation.
-- Do not claim full task lifecycle support: claim/release reserve work but do not move cards.
+- Keep claim reservations separate from transitions; a done path is not proof of verified implementation.
+- Preserve pending transition journals; never auto-delete locks or overwrite recovery conflicts.
 - Work on separate task worktrees; preserve unrelated changes.

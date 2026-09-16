@@ -18,6 +18,10 @@ func runClaim(args []string, out, errOut io.Writer) int {
 	owner := flags.String("owner", "", "explicit local owner identity (not authentication)")
 	token := flags.String("token", "", "unique 32 lowercase hex retry identifier")
 	asJSON := flags.Bool("json", false, "write JSON")
+	var resume bool
+	if args[0] == "claim" {
+		flags.BoolVar(&resume, "resume", false, "explicitly reserve an unclaimed non-todo workflow card")
+	}
 	if err := flags.Parse(args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -31,7 +35,9 @@ func runClaim(args []string, out, errOut io.Writer) int {
 	req := taskstore.ClaimRequest{ID: *id, Owner: *owner, Token: *token}
 	var result taskstore.ClaimRecord
 	var err error
-	if args[0] == "claim" {
+	if args[0] == "claim" && resume {
+		result, err = taskstore.ClaimResume(*dir, req)
+	} else if args[0] == "claim" {
 		result, err = taskstore.Claim(*dir, req)
 	} else {
 		result, err = taskstore.Release(*dir, req)

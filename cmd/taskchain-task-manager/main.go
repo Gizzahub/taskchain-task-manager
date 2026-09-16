@@ -14,6 +14,9 @@ import (
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, out, errOut io.Writer) int {
+	if len(args) > 0 && (args[0] == "transition" || args[0] == "recover") {
+		return runTransition(args, out, errOut)
+	}
 	if len(args) > 0 && (args[0] == "claim" || args[0] == "release") {
 		return runClaim(args, out, errOut)
 	}
@@ -25,6 +28,8 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "       taskchain-task-manager <init|list|ready> --dir <board> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager create --dir <board> --title <title> [--id TASK-N] [--depends-on TASK-N ...] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager <claim|release> --dir <board> --id TASK-N --owner <owner> --token <32 lowercase hex> --json")
+		fmt.Fprintln(out, "       taskchain-task-manager claim --resume --dir <board> --id TASK-N --owner <owner> --token <32 lowercase hex> --json")
+		fmt.Fprintln(out, "       taskchain-task-manager <transition|recover> --dir <board> --id TASK-N --owner <owner> --token <claim token> --request-id <32 lowercase hex> --from <zone> --to <zone> --json")
 		return 0
 	}
 	if len(args) != 3 || args[2] != "--json" || (args[0] != "show" && args[0] != "validate") {
