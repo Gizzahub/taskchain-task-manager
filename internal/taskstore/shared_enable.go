@@ -41,6 +41,7 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 		return result, err
 	}
 	boards := []activationBoard{}
+	storageProtocol := 0
 	defer func() {
 		for i := len(boards) - 1; i >= 0; i-- {
 			err = errors.Join(err, boards[i].root.Remove(".task-manager.lock"), boards[i].root.Close())
@@ -71,6 +72,9 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 		if err != nil {
 			return result, err
 		}
+		if journal.StorageProtocol == 1 {
+			storageProtocol = 1
+		}
 		if err := s.verifyPolicyAuthority(r, journal); err != nil {
 			return result, err
 		}
@@ -95,6 +99,7 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 			return result, err
 		}
 		state = sharedState{SchemaVersion: 1, NamespaceID: fmt.Sprintf("%x", token), BoardPath: s.location.Board, Phase: "initializing", Reserved: []string{}, Participants: []sharedParticipant{}}
+		state.StorageProtocol = storageProtocol
 		for _, b := range boards {
 			if b.ledger.SchemaVersion == 3 {
 				return result, errors.New("orphaned shared local binding; restore common state")

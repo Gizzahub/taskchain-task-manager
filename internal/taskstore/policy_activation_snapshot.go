@@ -26,6 +26,9 @@ func policyActivationSnapshot(r *os.Root, policy boardpolicy.Policy, journal tra
 	if err := checkBundleGate(r, journal); err != nil {
 		return "", err
 	}
+	if err := checkStorageGate(r, journal); err != nil {
+		return "", err
+	}
 	entries, err := listLockedWithPolicy(r, "", policy)
 	if err != nil {
 		return "", err
@@ -51,6 +54,15 @@ func policyActivationSnapshot(r *os.Root, policy boardpolicy.Policy, journal tra
 	}
 
 	h := sha256.New()
+	// Preserve legacy snapshot bytes on boards without the new protocol.
+	if journal.StorageProtocol == 1 {
+		raw, mode, err := snapshotActivationFile(r, repairsFile, maxRepairsBytes, true)
+		if err != nil {
+			return "", err
+		}
+		writeActivationFrame(h, "storage-receipts", raw)
+		writeActivationFrame(h, "storage-mode", []byte(fmt.Sprintf("%o", mode)))
+	}
 	// ID contents may be deliberately adopted by join. Their exact hashes are
 	// part of the durable plan; permission changes remain snapshot conflicts.
 	idsInfo, err := r.Lstat(idsFile)

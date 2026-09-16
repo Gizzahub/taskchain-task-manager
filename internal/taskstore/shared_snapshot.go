@@ -101,7 +101,15 @@ func activationSnapshot(r *os.Root) (string, idLedger, string, error) {
 		fmt.Fprintf(h, "%d:%s:%o:%d:", len(entry.Path), entry.Path, info.Mode(), len(raw))
 		h.Write(raw)
 	}
-	for _, name := range []string{claimsFile, transitionsFile, policyFile} {
+	names := []string{claimsFile, transitionsFile, policyFile}
+	journal, err := loadTransitions(r)
+	if err != nil {
+		return "", ledger, "", err
+	}
+	if journal.StorageProtocol == 1 {
+		names = append(names, repairsFile)
+	}
+	for _, name := range names {
 		raw, err := boundedSnapshotFile(r, name, maxTransitionBytes)
 		if errors.Is(err, fs.ErrNotExist) {
 			if name == policyFile {

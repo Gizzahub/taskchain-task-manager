@@ -30,6 +30,19 @@ func loadTransitions(r *os.Root) (transitionJournal, error) {
 // Bundle admission/recovery must validate its own journal under the same
 // session. Ordinary callers must use loadTransitions, including receipt replay.
 func loadTransitionsForBundle(r *os.Root) (transitionJournal, error) {
+	j, err := loadTransitionsForStorage(r)
+	if err != nil {
+		return transitionJournal{}, err
+	}
+	if err := checkStorageGate(r, j); err != nil {
+		return transitionJournal{}, err
+	}
+	return j, nil
+}
+
+// Only the storage recovery session bypasses the storage pending gate. It
+// validates its exact request and both journals before publishing anything.
+func loadTransitionsForStorage(r *os.Root) (transitionJournal, error) {
 	info, err := r.Lstat(transitionsFile)
 	if errors.Is(err, fs.ErrNotExist) {
 		j := transitionJournal{SchemaVersion: 1, Records: []transitionRecord{}}
@@ -149,17 +162,24 @@ func validateTransitionShape(raw []byte) error {
 		return errors.New("unsupported transition journal schema")
 	}
 	for key := range root {
-		if key != "schemaVersion" && key != "records" && key != "policyDigest" && key != "bundleProtocol" && key != "policyAuthority" {
+		if key != "schemaVersion" && key != "records" && key != "policyDigest" && key != "bundleProtocol" && key != "policyAuthority" && key != "storageProtocol" {
 			return fmt.Errorf("unknown transition journal field %q", key)
 		}
 	}
 	extra := 0
+	if raw, ok := root["storageProtocol"]; ok {
+		var protocol int
+		if err := json.Unmarshal(raw, &protocol); err != nil || protocol != 1 {
+			return errors.New("unsupported storage protocol")
+		}
+		extra++
+	}
 	if raw, ok := root["bundleProtocol"]; ok {
 		var protocol int
 		if err := json.Unmarshal(raw, &protocol); err != nil || protocol != 1 {
 			return errors.New("unsupported bundle protocol")
 		}
-		extra = 1
+		extra++
 	}
 	if version == 1 && len(root) != 2+extra {
 		return errors.New("legacy transition journal cannot contain policyDigest")

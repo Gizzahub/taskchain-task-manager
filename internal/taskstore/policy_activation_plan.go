@@ -21,6 +21,9 @@ func preparePolicyActivation(r *os.Root, policy boardpolicy.Policy, binding poli
 
 func preparePolicyActivationJournal(r *os.Root, policy boardpolicy.Policy, binding policyAuthorityBinding, head string, j transitionJournal) (policyActivationState, []byte, error) {
 	var state policyActivationState
+	if err := checkStorageGate(r, j); err != nil {
+		return state, nil, err
+	}
 	if err := validatePolicyAuthority(binding); err != nil {
 		return state, nil, err
 	}
@@ -119,6 +122,9 @@ func reconstructPolicyTarget(r *os.Root, state policyActivationState) (transitio
 	}
 	if j.SchemaVersion >= 2 && j.PolicyDigest != state.Digest {
 		return transitionJournal{}, nil, errors.New("policy activation original journal binds another policy")
+	}
+	if err := checkStorageGate(r, j); err != nil {
+		return transitionJournal{}, nil, err
 	}
 	if err := validateTransitionRecords(j, policy); err != nil {
 		return transitionJournal{}, nil, err

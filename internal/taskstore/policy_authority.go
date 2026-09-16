@@ -83,6 +83,9 @@ func verifyPolicyActivation(r *os.Root, j transitionJournal) error {
 // This is an identity check only. It neither adopts a markerless worktree nor
 // validates completed task receipts against the board's current graph.
 func (s *sharedSession) verifyPolicyAuthority(r *os.Root, j transitionJournal) error {
+	if err := s.verifyStorageBinding(j); err != nil {
+		return err
+	}
 	if err := verifyPolicyActivation(r, j); err != nil {
 		return err
 	}

@@ -48,6 +48,7 @@ type transitionJournal struct {
 	Records         []transitionRecord      `json:"records"`
 	PolicyDigest    string                  `json:"policyDigest,omitempty"`
 	BundleProtocol  int                     `json:"bundleProtocol,omitempty"`
+	StorageProtocol int                     `json:"storageProtocol,omitempty"`
 	PolicyAuthority *policyAuthorityBinding `json:"policyAuthority,omitempty"`
 }
 

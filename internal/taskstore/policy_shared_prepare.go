@@ -27,6 +27,9 @@ func policyJournalForSharedAdoption(r *os.Root, s *sharedSession, canonical []by
 	if err != nil {
 		return j, err
 	}
+	if err := s.verifyStorageBinding(j); err != nil {
+		return j, err
+	}
 	if j.SchemaVersion != 3 {
 		return loadTransitions(r)
 	}
@@ -56,6 +59,9 @@ func policyJournalForSharedAdoption(r *os.Root, s *sharedSession, canonical []by
 		return j, err
 	}
 	if err := checkBundleGate(r, j); err != nil {
+		return j, err
+	}
+	if err := checkStorageGate(r, j); err != nil {
 		return j, err
 	}
 	return j, nil

@@ -24,15 +24,17 @@ var sharedHex40Or64 = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 var sharedHex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type sharedState struct {
-	SchemaVersion  int                    `json:"schemaVersion"`
-	NamespaceID    string                 `json:"namespaceId"`
-	BoardPath      string                 `json:"boardPath"`
-	Phase          string                 `json:"phase"`
-	Reserved       []string               `json:"reserved"`
-	Participants   []sharedParticipant    `json:"participants"`
-	BundleProtocol int                    `json:"bundleProtocol,omitempty"`
-	PendingBundle  *sharedBundlePending   `json:"pendingBundle,omitempty"`
-	Policy         *sharedPolicyAuthority `json:"policy,omitempty"`
+	SchemaVersion   int                    `json:"schemaVersion"`
+	NamespaceID     string                 `json:"namespaceId"`
+	BoardPath       string                 `json:"boardPath"`
+	Phase           string                 `json:"phase"`
+	Reserved        []string               `json:"reserved"`
+	Participants    []sharedParticipant    `json:"participants"`
+	BundleProtocol  int                    `json:"bundleProtocol,omitempty"`
+	PendingBundle   *sharedBundlePending   `json:"pendingBundle,omitempty"`
+	Policy          *sharedPolicyAuthority `json:"policy,omitempty"`
+	StorageProtocol int                    `json:"storageProtocol,omitempty"`
+	PendingRepair   *sharedRepairPending   `json:"pendingRepair,omitempty"`
 }
 
 type sharedBundlePending struct {
@@ -135,6 +137,19 @@ func validateSharedShape(raw []byte) error {
 		return err
 	}
 	allowed := map[string]bool{"schemaVersion": true, "namespaceId": true, "boardPath": true, "phase": true, "reserved": true, "participants": true}
+	if raw, ok := root["storageProtocol"]; ok {
+		var protocol int
+		if err := json.Unmarshal(raw, &protocol); err != nil || protocol != 1 {
+			return errors.New("unsupported shared storage protocol")
+		}
+		allowed["storageProtocol"] = true
+	}
+	if raw, ok := root["pendingRepair"]; ok {
+		if err := validateSharedRepairShape(raw); err != nil {
+			return err
+		}
+		allowed["pendingRepair"] = true
+	}
 	var version int
 	if err := json.Unmarshal(root["schemaVersion"], &version); err != nil {
 		return err
@@ -207,6 +222,9 @@ func validateSharedShape(raw []byte) error {
 }
 
 func validateSharedState(s sharedState) error {
+	if err := validateSharedStorage(s); err != nil {
+		return err
+	}
 	if (s.SchemaVersion != 1 && s.SchemaVersion != 2 && s.SchemaVersion != 3) || !sharedHex32.MatchString(s.NamespaceID) || !validSharedBoardPath(s.BoardPath) || (s.Phase != "initializing" && s.Phase != "active") {
 		return errors.New("invalid shared state header")
 	}
