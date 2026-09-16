@@ -24,4 +24,4 @@ symlink·대소문자 별칭·중첩 Git repository 경계·Git metadata 내부�
 관측 전후 worktree 목록·common directory 경로/identity와 현재 board identity가 바뀌면 오류다.
 이 검사는 전역 잠금이 아니며 종료 후 변경이나 중간 변경 후 원상복구까지 보장하지 않는다.
 namespace 생성, 예약 활성화, Git fetch/prune/repair, 카드 변경은 하지 않는다.
-이 출력은 활성화 승인이나 이관 완료 증거가 아니다. 공유 예약 쓰기는 아직 지원하지 않는다.
+이 출력은 활성화 승인이나 이관 완료 증거가 아니다. 실제 채택은 [공유 ID 사용법](shared-ids.md)을 따른다.

@@ -37,6 +37,11 @@ func Init(dir string) (err error) {
 	if dir == "" {
 		return errors.New("task board directory is empty")
 	}
+	shared, release, err := acquireShared(dir, false)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, release()) }()
 	dir = filepath.Clean(dir)
 	created := false
 	if info, err := os.Lstat(dir); err == nil {
@@ -70,11 +75,26 @@ func Init(dir string) (err error) {
 	if err := rejectPendingTransitions(r); err != nil {
 		return err
 	}
-	if _, err := loadIDs(r); err != nil {
-		if !created || !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("load ID ledger (existing boards require reserve-ids --adopt): %w", err)
+	ledger, loadErr := loadIDs(r)
+	initial := errors.Is(loadErr, fs.ErrNotExist)
+	if loadErr != nil {
+		if !created || !initial {
+			return fmt.Errorf("load ID ledger (existing boards require reserve-ids --adopt): %w", loadErr)
 		}
-		if err := publishIDs(r, idLedger{SchemaVersion: 2, Reserved: []string{}}, true); err != nil {
+		ledger = idLedger{SchemaVersion: 2, Reserved: []string{}}
+	}
+	ledger, err = shared.merge(ledger)
+	if err != nil {
+		return err
+	}
+	if err := shared.verifyBoard(r); err != nil {
+		return err
+	}
+	if err := shared.publish(ledger); err != nil {
+		return err
+	}
+	if initial || ledger.SchemaVersion == 3 {
+		if err := publishIDs(r, ledger, initial); err != nil {
 			return err
 		}
 	}
@@ -129,6 +149,11 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 			err = fmt.Errorf("ID %s is reserved; inspect card publication before retry: %w", reservedID, err)
 		}
 	}()
+	shared, release, err := acquireShared(dir, false)
+	if err != nil {
+		return Entry{}, err
+	}
+	defer func() { err = errors.Join(err, release()) }()
 	r, err := openBoard(dir)
 	if err != nil {
 		return Entry{}, err
@@ -157,6 +182,10 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 		return Entry{}, fmt.Errorf("load ID ledger (existing boards require reserve-ids --adopt): %w", err)
 	}
 	ledger, err = observedIDs(r, entries, ledger, nil)
+	if err != nil {
+		return Entry{}, err
+	}
+	ledger, err = shared.merge(ledger)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -200,6 +229,20 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 	defer func() { err = errors.Join(err, r.Remove(name)) }()
 	ledger.Reserved = append(ledger.Reserved, identityKey(id))
 	sort.Strings(ledger.Reserved)
+	if err := shared.verifyBoard(r); err != nil {
+		return Entry{}, err
+	}
+	if err := shared.publish(ledger); err != nil {
+		return Entry{}, fmt.Errorf("shared ID %s publication may have applied; inspect before retry: %w", id, err)
+	}
+	if shared != nil && shared.state != nil {
+		reservedID = id
+		if step != nil {
+			if err := step("after-shared-reservation"); err != nil {
+				return Entry{}, err
+			}
+		}
+	}
 	if err := publishIDs(r, ledger, false); err != nil {
 		return Entry{}, err
 	}
@@ -217,6 +260,9 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 		return Entry{}, err
 	}
 	dest := filepath.ToSlash(filepath.Join(zone, id+".md"))
+	if err := shared.verifyBoard(r); err != nil {
+		return Entry{}, err
+	}
 	if err = r.Link(name, dest); err != nil {
 		return Entry{}, fmt.Errorf("publish %s: %w", dest, err)
 	}

@@ -30,7 +30,8 @@ make check
 - 기본 `create`는 `todo/TASK-N.md`에 새 카드를 만듭니다. 기존 파일을 덮어쓰지 않습니다.
 - `--id`를 생략하면 해당 종류의 현재 카드·소유권/전이 이력·영구 ID 원장 최댓값 다음을 할당합니다.
   새로 생성하거나 명시적으로 예약한 ID는 카드 삭제 후에도 다시 쓰지 않습니다.
-  Git 이력은 자동 조회하지 않습니다. 기존 보드와 과거 ID는 [ID 예약·채택](docs/ids.md)을 따릅니다.
+  기본 local 모드는 Git 이력을 자동 조회하지 않습니다. 공유 ID 모드는 생성 때 이력을 확인합니다.
+  기존 보드와 과거 ID는 [ID 예약·채택](docs/ids.md)을 따릅니다.
 - `list`는 알려진 workflow·종류·archive/_archive 디렉터리를 검사하고 경로순 결과를 반환합니다.
   ID 중복·잘못된 카드·symlink를 발견하면 조용히 건너뛰지 않고 실패합니다.
 - TASK/PLAN/ISSUE/BACKLOG ID를 읽고 `create --kind`로 종류별 카드를 생성합니다.
@@ -101,7 +102,8 @@ Git branch/worktree 관리·범용 카드 편집·분산 잠금은 아직 지원
 
 상태 전이, 멱등 요청, pending journal 복구와 지원 한계는 [상태 전이 사용법](docs/lifecycle.md)을 읽어 주세요.
 보관 영역과 비카드 문서의 구분은 [카드 발견 규칙](docs/discovery.md)을 따릅니다.
-공유 예약 구현 전의 [worktree 읽기 전용 진단](docs/worktree-inspection.md)을 제공합니다.
+[worktree 읽기 전용 진단](docs/worktree-inspection.md)으로 활성화 전 topology를 확인합니다.
+같은 저장소의 worktree 간 ID 할당은 [공유 ID 채택·복구](docs/shared-ids.md)를 따릅니다.
 
 ## 개발과 라이선스
 

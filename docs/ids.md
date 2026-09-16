@@ -36,7 +36,7 @@
 PLAN/ISSUE/BACKLOG를 todo/done에 놓아도 ready나 완료된 선행 작업으로 인정하지 않는다.
 종류 카드도 참조는 저장할 수 있지만 TASK 완료 의존성을 충족시키지는 않는다.
 
-신규 원장은 schemaVersion 2다. 기존 v1 TASK-only 원장은 읽고, 성공하는 create/reserve-ids에서
+기본 local 모드의 신규 원장은 schemaVersion 2다. 기존 v1 TASK-only 원장은 읽고, local 모드의 성공하는 create/reserve-ids에서
 원자적으로 v2로 갱신한다. 구버전 binary는 v2를 거부한다. v1의 기존 검증 규칙은 완화하지 않는다.
 예약 결과의 `maxId`는 기존처럼 TASK 최댓값이며 없으면 빈 문자열이다. 추가 필드 `maxIds`는
 존재하는 prefix별 최댓값을 제공하며 0도 포함한다. 빈 prefix의 첫 자동 번호는 1이다.
@@ -45,4 +45,6 @@ claim/token 또는 transition/request-id 재시도에는 처음 요청한 ID 문
 release에는 claim receipt의 ID를 쓴다. 숫자가 같아도 요청 문자열을 바꿔 재시도하지 않는다.
 충돌 검사는 alias를 같은 작업으로 취급하므로 다른 token으로도 이중 예약할 수 없다.
 로컬 Git ref에서 도달 가능한 삭제 이력은 명시적인 [Git ID 가져오기](git-import.md)로
-예약할 수 있다. 공유 worktree 예약·CE 전체 dialect 호환은 아직 지원하지 않는다.
+예약할 수 있다. 같은 저장소의 [공유 worktree 예약](shared-ids.md)은 명시적으로 채택한다.
+공유 모드는 local schemaVersion 3과 namespace binding을 사용한다. 구버전은 이를 거부한다.
+CE 전체 dialect 호환은 아직 지원하지 않는다.

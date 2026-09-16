@@ -19,6 +19,7 @@ const maxIDsBytes = 1 << 20
 type idLedger struct {
 	SchemaVersion int      `json:"schemaVersion"`
 	Reserved      []string `json:"reserved"`
+	Namespace     string   `json:"namespace,omitempty"`
 }
 
 type ReservationResult struct {
@@ -57,15 +58,22 @@ func loadIDs(r *os.Root) (idLedger, error) {
 	if err := json.Unmarshal(raw, &shape); err != nil {
 		return idLedger{}, err
 	}
-	if len(shape) != 2 || shape["schemaVersion"] == nil || shape["reserved"] == nil {
+	if (len(shape) != 2 && len(shape) != 3) || shape["schemaVersion"] == nil || shape["reserved"] == nil || (len(shape) == 3 && shape["namespace"] == nil) {
 		return idLedger{}, errors.New("ID ledger requires exactly schemaVersion and reserved")
 	}
 	var ledger idLedger
 	if err := json.Unmarshal(raw, &ledger); err != nil {
 		return idLedger{}, err
 	}
-	if (ledger.SchemaVersion != 1 && ledger.SchemaVersion != 2) || ledger.Reserved == nil {
+	if (ledger.SchemaVersion != 1 && ledger.SchemaVersion != 2 && ledger.SchemaVersion != 3) || ledger.Reserved == nil {
 		return idLedger{}, errors.New("invalid ID ledger schema")
+	}
+	if ledger.SchemaVersion == 3 {
+		if len(shape) != 3 || !sharedHex32.MatchString(ledger.Namespace) {
+			return idLedger{}, errors.New("invalid shared ID namespace binding")
+		}
+	} else if len(shape) != 2 || ledger.Namespace != "" {
+		return idLedger{}, errors.New("unexpected local ID namespace binding")
 	}
 	for i, id := range ledger.Reserved {
 		if identityKey(id) != id || id == "" || (ledger.SchemaVersion == 1 && !canonicalID.MatchString(id)) || (i > 0 && ledger.Reserved[i-1] >= id) {
@@ -89,10 +97,18 @@ func publishIDs(r *os.Root, ledger idLedger, initial bool) error {
 		return err
 	}
 	if initial {
-		return errors.Join(r.Link(name, idsFile), r.Remove(name))
-	}
-	if err := r.Rename(name, idsFile); err != nil {
+		if err := errors.Join(r.Link(name, idsFile), r.Remove(name)); err != nil {
+			return err
+		}
+	} else if err := r.Rename(name, idsFile); err != nil {
 		return errors.Join(err, r.Remove(name))
+	}
+	if ledger.SchemaVersion == 3 {
+		dir, err := r.Open(".")
+		if err != nil {
+			return err
+		}
+		return errors.Join(dir.Sync(), dir.Close())
 	}
 	return nil
 }
@@ -131,7 +147,9 @@ func observedIDs(r *os.Root, entries []Entry, ledger idLedger, extra []string) (
 		ledger.Reserved = append(ledger.Reserved, id)
 	}
 	sort.Strings(ledger.Reserved)
-	ledger.SchemaVersion = 2
+	if ledger.SchemaVersion != 3 {
+		ledger.SchemaVersion = 2
+	}
 	return ledger, nil
 }
 
@@ -168,6 +186,11 @@ func ReserveIDs(dir string, ids []string, adopt bool) (result ReservationResult,
 			return result, fmt.Errorf("invalid reservation ID %q", id)
 		}
 	}
+	shared, release, err := acquireShared(dir, false)
+	if err != nil {
+		return result, err
+	}
+	defer func() { err = errors.Join(err, release()) }()
 	r, err := openBoard(dir)
 	if err != nil {
 		return result, err
@@ -195,6 +218,16 @@ func ReserveIDs(dir string, ids []string, adopt bool) (result ReservationResult,
 	}
 	ledger, err = observedIDs(r, entries, ledger, ids)
 	if err != nil {
+		return result, err
+	}
+	ledger, err = shared.merge(ledger)
+	if err != nil {
+		return result, err
+	}
+	if err := shared.publish(ledger); err != nil {
+		return result, err
+	}
+	if err := shared.verifyBoard(r); err != nil {
 		return result, err
 	}
 	if err := publishIDs(r, ledger, initial); err != nil {
