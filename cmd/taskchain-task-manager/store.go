@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -22,13 +23,18 @@ func runStore(args []string, out, errOut io.Writer) int {
 	asJSON := flags.Bool("json", false, "write JSON")
 	var title, id, kind *string
 	var dependsOn repeatedString
+	var profile createProfileFlags
 	if args[0] == "create" {
 		title = flags.String("title", "", "task title")
 		id = flags.String("id", "", "optional canonical task ID")
 		kind = flags.String("kind", "", "card kind: task, plan, issue, backlog (default task or explicit ID kind)")
 		flags.Var(&dependsOn, "depends-on", "canonical prerequisite task ID (repeatable)")
+		profile.register(flags)
 	}
 	if err := flags.Parse(args[1:]); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 	if flags.NArg() != 0 || !*asJSON || *dir == "" {
@@ -52,7 +58,16 @@ func runStore(args []string, out, errOut io.Writer) int {
 			fmt.Fprintln(errOut, "create requires --title")
 			return 2
 		}
-		result, err = taskstore.Create(*dir, taskstore.CreateRequest{ID: *id, Title: *title, DependsOn: dependsOn, Kind: *kind})
+		if profile.mentioned(flags) && *profile.config == "" {
+			fmt.Fprintln(errOut, "create profile options require a nonempty --config")
+			return 2
+		}
+		template, loadErr := profile.load()
+		if loadErr != nil {
+			fmt.Fprintln(errOut, "create config:", loadErr)
+			return 1
+		}
+		result, err = taskstore.Create(*dir, taskstore.CreateRequest{ID: *id, Title: *title, DependsOn: dependsOn, Kind: *kind, Template: template})
 	}
 	if err != nil {
 		fmt.Fprintln(errOut, args[0]+":", err)

@@ -24,10 +24,11 @@ type Entry struct {
 }
 
 type CreateRequest struct {
-	Kind      string   `json:"kind,omitempty"`
-	ID        string   `json:"id"`
-	Title     string   `json:"title"`
-	DependsOn []string `json:"dependsOn,omitempty"`
+	Kind      string          `json:"kind,omitempty"`
+	ID        string          `json:"id"`
+	Title     string          `json:"title"`
+	DependsOn []string        `json:"dependsOn,omitempty"`
+	Template  *CreateTemplate `json:"-"`
 }
 
 var canonicalID = regexp.MustCompile(`^TASK-[1-9][0-9]*$`)
@@ -143,6 +144,14 @@ func Create(dir string, req CreateRequest) (entry Entry, err error) {
 }
 
 func createWithStep(dir string, req CreateRequest, step func(string) error) (entry Entry, err error) {
+	if req.Template != nil {
+		if err := validateConfiguredRequest(req); err != nil {
+			return Entry{}, err
+		}
+		if _, _, err := validateConfiguredCard("TASK-1", req); err != nil {
+			return Entry{}, err
+		}
+	}
 	reservedID := ""
 	defer func() {
 		if err != nil && reservedID != "" {
@@ -214,13 +223,18 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 		return Entry{}, err
 	}
 
-	raw, err := renderWithDependencies(id, req.Title, req.DependsOn)
-	if err != nil {
-		return Entry{}, err
+	var raw []byte
+	var doc *card.Document
+	if req.Template != nil {
+		raw, doc, err = validateConfiguredCard(id, req)
+	} else {
+		raw, err = renderWithDependencies(id, req.Title, req.DependsOn)
+		if err == nil {
+			doc, err = card.Parse(raw)
+		}
 	}
-	doc, parseErr := card.Parse(raw)
-	if parseErr != nil {
-		return Entry{}, fmt.Errorf("parse created task: %w", parseErr)
+	if err != nil {
+		return Entry{}, fmt.Errorf("parse created task: %w", err)
 	}
 	name, err := stage(r, raw)
 	if err != nil {

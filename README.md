@@ -107,6 +107,7 @@ Git branch/worktree 관리·범용 카드 편집·분산 잠금은 아직 지원
 [worktree 읽기 전용 진단](docs/worktree-inspection.md)으로 활성화 전 topology를 확인합니다.
 같은 저장소의 worktree 간 ID 할당은 [공유 ID 채택·복구](docs/shared-ids.md)를 따릅니다.
 설정 필드·검증 범위·입력 제한은 [단일 카드 규격 검증](docs/card-validation.md)을 따릅니다.
+같은 규칙을 생성에도 적용하려면 [명시 규칙으로 카드 생성](docs/configured-create.md)을 사용합니다.
 
 ## 개발과 라이선스
 

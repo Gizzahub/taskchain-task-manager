@@ -50,7 +50,8 @@ schema-version과 card-dialect 블록은 필수다. 설정은 단일 YAML 문서
 `zones`, `zone-status`, `transitions`와 알 수 없는 설정은 **거부**한다. 보드·writer 정책을
 평가하지 않은 채 성공한 것으로 표시하지 않는다. CE 설정 파일의 자동 탐색·runtime fallback은
 없으며, `ce-tasks.yaml`을 그대로 전달하는 호환 명령도 아니다. 별도 명시적 설정을 사용한다.
-다른 명령의 생성·상태 이동·ready 동작은 이 설정의 영향을 받지 않는다.
+기본 생성·상태 이동·ready가 이 설정을 자동으로 읽지는 않는다. 생성 시에도 같은 규칙을
+적용하려면 [명시 규칙으로 생성](configured-create.md)의 `create --config`를 사용한다.
 
 ID 없는 카드가 검증돼도 Task Manager lifecycle에서 사용할 수 있다는 뜻은 아니다.
 현재 lifecycle은 안정적인 ID를 요구한다. 전체 CE 검증·증거 gate와 동일한 결과를 보장하지 않는다.
