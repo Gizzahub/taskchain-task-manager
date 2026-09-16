@@ -1,6 +1,6 @@
-# Intent/Batch 문서 검증
+# Intent/Batch/Iteration 문서 검증
 
-`validate-context FILE --json`은 독립적인 Intent 또는 Batch JSON 문서 하나만
+`validate-context FILE --json`은 독립적인 Intent, Batch 또는 Iteration JSON 문서 하나만
 검증합니다.
 
 ```sh
@@ -11,10 +11,12 @@ taskchain-task-manager validate-context examples/context/intent.json --json
 `id`, `revision`, `canonical`, `digest`, `registered: false`,
 `referenceValidation: "not_evaluated"`, `evaluationValidation: "not_evaluated"`를
 포함합니다. canonical은 고정 필드 순서의 compact JSON이며 digest는 그 바이트의
-SHA-256입니다.
+SHA-256입니다. Iteration의 scope는 `iteration-document`이며 출력 envelope의
+schemaVersion은 여전히 1입니다. 문서 내부의 schemaVersion과 구분하세요.
 배열 순서와 TASK ID의 원래 표기를 보존하며 필드 순서·들여쓰기는 정규화합니다.
 같은 kind/id/revision은 불변 내용을 뜻하지만 이 단일 파일 검사는 기존 등록과의 충돌을
-확인하지 않습니다. 수정은 새 revision으로 기록하며, 저장·등록 명령은 아직 제공하지 않습니다.
+확인하지 않습니다. Intent/Batch 수정은 새 revision, Iteration 수정은 새 ID로 기록합니다.
+저장·등록은 별도 [context registry](context-registry.md) 명령을 사용합니다.
 
 이 명령은 파일 하나만 읽고 보드·Git·등록 원장·권한·실제 목표 달성을 조회하지
 않습니다. Batch의 TASK가 존재하는지나 evaluation 증거가 진짜인지도 판단하지
@@ -44,7 +46,8 @@ canonical bytes의 SHA-256 소문자 hex 64자입니다. 성공 기준의 각 �
 포함합니다. `constraints`, `nonGoals`, `authorizationRefs`, `remainingGaps`, `evidenceRefs`는
 문자열 배열이며 빈 배열은 허용합니다. evaluation을 제외한 필드는 모두 필수입니다.
 authorizationRefs는 실제 실행 승인이 아니며 actor는 인증된 신원이 아닙니다.
-유지형 Intent·자동 반복·스케줄러는 지원하지 않습니다.
+schemaVersion 2의 유지형 Intent와 Iteration은 [유지형 관측 기록](maintenance-iterations.md)을
+따릅니다. 자동 반복·스케줄러는 제공하지 않습니다.
 
 잘못된 입력은 stdout 없이 exit 1을 반환합니다. 잘못된 인자에는 exit 2,
 `--help`에는 exit 0을 사용합니다.

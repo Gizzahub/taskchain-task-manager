@@ -37,6 +37,9 @@ func prepareTaskBundle(document intentdoc.BundleDocument, entries []Entry, ledge
 	if registered.Kind() != "intent" || registered.ID() != req.Batch.Intent.ID || registered.Revision() != req.Batch.Intent.Revision || digest != req.Batch.Intent.Digest {
 		return preparedBundle{}, errors.New("bundle requires its exact registered Intent revision and digest")
 	}
+	if err := intentdoc.ValidateBatchIntentReference(intentdoc.Batch{Intent: req.Batch.Intent}, registered); err != nil {
+		return preparedBundle{}, err
+	}
 	if err := validateGraph(entries); err != nil {
 		return preparedBundle{}, err
 	}

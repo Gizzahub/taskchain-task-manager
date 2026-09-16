@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "kind": "intent",
+  "id": "INTENT-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "revision": 1,
+  "title": "Keep synthetic checks healthy",
+  "outcome": "The example check stays healthy",
+  "mode": "maintenance",
+  "constraints": [],
+  "nonGoals": ["Run a scheduler"],
+  "successCriteria": [{"key": "healthy", "text": "The example check passes."}],
+  "maintenance": {
+    "triggers": [{"key": "manual-check", "kind": "manual"}],
+    "budget": {"maxIterations": 10, "maxTasks": 20, "maxElapsedSeconds": 3600, "noProgressLimit": 3}
+  }
+}

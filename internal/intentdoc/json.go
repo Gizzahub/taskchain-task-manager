@@ -123,6 +123,10 @@ func validateShape(value any, typ reflect.Type, path string) error {
 		if _, ok := value.(string); !ok {
 			return fmt.Errorf("%s must be a string", path)
 		}
+	case reflect.Bool:
+		if _, ok := value.(bool); !ok {
+			return fmt.Errorf("%s must be a boolean", path)
+		}
 	case reflect.Uint32:
 		number, ok := value.(json.Number)
 		if !ok {

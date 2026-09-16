@@ -14,10 +14,16 @@ import (
 const contextDirectory = ".task-manager-context"
 
 func contextKindDirectory(kind string) string {
-	if kind == "batch" {
+	switch kind {
+	case "batch":
 		return "batches"
+	case "iteration":
+		return "iterations"
+	case "intent":
+		return "intents"
+	default:
+		return "" // Callers validate the identity before resolving paths.
 	}
-	return "intents"
 }
 
 func contextPath(kind, id string, revision uint32) (string, error) {

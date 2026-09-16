@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "kind": "iteration",
+  "id": "ITERATION-0123456789abcdef0123456789abcdef",
+  "revision": 1,
+  "intent": {
+    "id": "INTENT-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "revision": 1,
+    "digest": "b292693e5572d4e28f014f779b9f4ed7719d48973c1278d8c6fe0304373e80aa"
+  },
+  "ordinal": 1,
+  "trigger": {"key": "manual-check", "evidenceRefs": ["synthetic:manual-observation"]},
+  "usage": {"tasks": 0, "elapsedSeconds": 10, "noProgressCount": 0},
+  "evaluation": {
+    "actor": "example-observer",
+    "progress": false,
+    "criteria": [{"key": "healthy", "result": "met", "evidenceRefs": ["synthetic:passing-check"]}],
+    "decision": "idle",
+    "stopReason": "none",
+    "reason": "The synthetic check is healthy; no new task is needed.",
+    "remainingGaps": [],
+    "evidenceRefs": []
+  }
+}

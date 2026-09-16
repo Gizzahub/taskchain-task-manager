@@ -2,7 +2,7 @@
 
 개발자와 코딩 에이전트를 위한 파일 기반 태스크 관리 도구입니다.
 현재는 초기 개발 단계이며 카드 codec과 **초기화·생성·목록·조회·의존성 기반 ready·구문 검증**을 제공합니다.
-claim/release와 소유권 기반 상태 전이·재개를 지원합니다. 독립 Intent/Batch 문서의 읽기 전용 구문 검증도 제공합니다.
+claim/release와 소유권 기반 상태 전이·재개를 지원합니다. Intent/Batch/Iteration 문서의 구문 검증과 불변 등록·조회를 제공합니다.
 
 ## 빌드와 실행
 
@@ -28,7 +28,7 @@ make check
 `init`·`create`는 지정한 보드에 새 디렉터리·카드를 만듭니다.
 `transition`은 소유권을 확인해 카드를 이동하고 `recover`는 기록된 미완료 전이를 재개합니다.
 
-`validate-context`는 하나의 strict JSON Intent/Batch 문서를 읽어 canonical bytes와
+`validate-context`는 하나의 strict JSON Intent/Batch/Iteration 문서를 읽어 canonical bytes와
 SHA-256 digest를 출력합니다. 보드 등록, TASK 존재 확인, 권한 부여, 실제 목표 달성
 판정은 하지 않으며 입력 파일을 수정하지 않습니다. 문서 한도와 필드는
 [Intent/Batch 문서 검증](docs/context-validation.md)을 따릅니다.
@@ -38,6 +38,11 @@ SHA-256 digest를 출력합니다. 보드 등록, TASK 존재 확인, 권한 부
 자동 latest/head, Git 이력, common worktree 공유, task 생성, 평가 실행을 제공하지
 않습니다. 같은 canonical bytes 재시도는 unchanged이고 다른 bytes는 충돌입니다.
 자세한 참조 검증과 재시도 경계는 [Intent/Batch context registry](docs/context-registry.md)를
+참조하세요.
+
+유지형 Intent는 trigger와 유한 예산을 선언하고, Iteration은 기준별 관측·사용량·중단
+사유를 기록합니다. 작업 없는 idle도 기록할 수 있습니다. 스케줄러나 실행기는 아니며
+실제 예산 집행·증거 인증은 하지 않습니다. [유지형 관측 기록](docs/maintenance-iterations.md)을
 참조하세요.
 
 `create-bundle`은 정확한 등록 Intent에 연결된 여러 TASK와 Batch를 하나의 복구 가능한

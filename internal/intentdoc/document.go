@@ -21,16 +21,17 @@ type Criterion struct {
 }
 
 type Intent struct {
-	SchemaVersion   uint32      `json:"schemaVersion"`
-	Kind            string      `json:"kind"`
-	ID              string      `json:"id"`
-	Revision        uint32      `json:"revision"`
-	Title           string      `json:"title"`
-	Outcome         string      `json:"outcome"`
-	Mode            string      `json:"mode"`
-	Constraints     []string    `json:"constraints"`
-	NonGoals        []string    `json:"nonGoals"`
-	SuccessCriteria []Criterion `json:"successCriteria"`
+	SchemaVersion   uint32       `json:"schemaVersion"`
+	Kind            string       `json:"kind"`
+	ID              string       `json:"id"`
+	Revision        uint32       `json:"revision"`
+	Title           string       `json:"title"`
+	Outcome         string       `json:"outcome"`
+	Mode            string       `json:"mode"`
+	Constraints     []string     `json:"constraints"`
+	NonGoals        []string     `json:"nonGoals"`
+	SuccessCriteria []Criterion  `json:"successCriteria"`
+	Maintenance     *Maintenance `json:"maintenance,omitempty"`
 }
 
 type IntentRef struct {
@@ -115,8 +116,10 @@ func Parse(raw []byte) (Document, error) {
 		data = &Intent{}
 	case "batch":
 		data = &Batch{}
+	case "iteration":
+		data = &Iteration{}
 	default:
-		return Document{}, errors.New("kind must be intent or batch")
+		return Document{}, errors.New("kind must be intent, batch or iteration")
 	}
 	if err := validateShape(value, reflect.TypeOf(data).Elem(), "document"); err != nil {
 		return Document{}, err
@@ -133,6 +136,11 @@ func Parse(raw []byte) (Document, error) {
 		id, revision = doc.ID, doc.Revision
 	case *Batch:
 		if err := validateBatch(*doc); err != nil {
+			return Document{}, err
+		}
+		id, revision = doc.ID, doc.Revision
+	case *Iteration:
+		if err := validateIteration(*doc); err != nil {
 			return Document{}, err
 		}
 		id, revision = doc.ID, doc.Revision

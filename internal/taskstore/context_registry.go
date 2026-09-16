@@ -156,6 +156,9 @@ func validateContextReferences(r *os.Root, doc intentdoc.Document) (string, erro
 	if doc.Kind() == "intent" {
 		return "not_applicable", nil
 	}
+	if doc.Kind() == "iteration" {
+		return validateIterationContextReferences(r, doc)
+	}
 	raw, err := doc.Canonical()
 	if err != nil {
 		return "", err
@@ -177,6 +180,9 @@ func validateContextReferences(r *os.Root, doc intentdoc.Document) (string, erro
 	}
 	if digest != batch.Intent.Digest {
 		return "", errors.New("referenced intent digest mismatch")
+	}
+	if err := intentdoc.ValidateBatchIntentReference(batch, intent); err != nil {
+		return "", err
 	}
 	entries, err := listLocked(r)
 	if err != nil {

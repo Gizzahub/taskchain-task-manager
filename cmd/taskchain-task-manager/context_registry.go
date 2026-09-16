@@ -16,7 +16,7 @@ import (
 func runRegisterContext(args []string, out, errOut io.Writer) int {
 	if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
 		fmt.Fprintln(out, "Usage: register-context <file> --dir <board> --json")
-		fmt.Fprintln(out, "Register one immutable Intent/Batch document in a board-local registry.")
+		fmt.Fprintln(out, "Register one immutable Intent/Batch/Iteration document in a board-local registry.")
 		return 0
 	}
 	if len(args) < 3 || args[1] == "" {
@@ -56,14 +56,14 @@ func runRegisterContext(args []string, out, errOut io.Writer) int {
 
 func runShowContext(args []string, out, errOut io.Writer) int {
 	if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
-		fmt.Fprintln(out, "Usage: show-context --dir <board> --kind intent|batch --id ID --revision N --json")
-		fmt.Fprintln(out, "Show one immutable board-local Intent/Batch registration.")
+		fmt.Fprintln(out, "Usage: show-context --dir <board> --kind intent|batch|iteration --id ID --revision N --json")
+		fmt.Fprintln(out, "Show one immutable board-local Intent/Batch/Iteration registration.")
 		return 0
 	}
 	flags := flag.NewFlagSet("show-context", flag.ContinueOnError)
 	flags.SetOutput(errOut)
 	dir := flags.String("dir", "", "task board directory")
-	kind := flags.String("kind", "", "intent or batch")
+	kind := flags.String("kind", "", "intent, batch or iteration")
 	id := flags.String("id", "", "context ID")
 	revision := flags.String("revision", "", "positive uint32 revision")
 	asJSON := flags.Bool("json", false, "write JSON")
@@ -74,11 +74,11 @@ func runShowContext(args []string, out, errOut io.Writer) int {
 		return 2
 	}
 	if flags.NArg() != 0 || !*asJSON || *dir == "" || *kind == "" || *id == "" || *revision == "" {
-		fmt.Fprintln(errOut, "expected show-context --dir <board> --kind intent|batch --id ID --revision N --json")
+		fmt.Fprintln(errOut, "expected show-context --dir <board> --kind intent|batch|iteration --id ID --revision N --json")
 		return 2
 	}
-	if *kind != "intent" && *kind != "batch" {
-		fmt.Fprintln(errOut, "show-context: --kind must be intent or batch")
+	if *kind != "intent" && *kind != "batch" && *kind != "iteration" {
+		fmt.Fprintln(errOut, "show-context: --kind must be intent, batch or iteration")
 		return 2
 	}
 	rev, err := parseContextRevision(*revision)

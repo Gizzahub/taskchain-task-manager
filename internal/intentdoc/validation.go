@@ -12,6 +12,7 @@ import (
 
 var intentID = regexp.MustCompile(`^INTENT-[0-9a-f]{32}$`)
 var batchID = regexp.MustCompile(`^BATCH-[0-9a-f]{32}$`)
+var iterationID = regexp.MustCompile(`^ITERATION-[0-9a-f]{32}$`)
 var digestID = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var criterionKey = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 
@@ -26,7 +27,10 @@ func ValidateIdentity(kind, id string, revision uint32) error {
 	if kind == "batch" && batchID.MatchString(id) {
 		return nil
 	}
-	return errors.New("invalid intent/batch kind or ID")
+	if kind == "iteration" && iterationID.MatchString(id) && revision == 1 {
+		return nil
+	}
+	return errors.New("invalid context kind, ID or revision")
 }
 
 func text(value string, max int, multiline bool) error {
@@ -54,11 +58,23 @@ func texts(values []string) error {
 }
 
 func validateIntent(d Intent) error {
-	if d.SchemaVersion != 1 || d.Kind != "intent" || ValidateIdentity(d.Kind, d.ID, d.Revision) != nil {
+	if d.Kind != "intent" || ValidateIdentity(d.Kind, d.ID, d.Revision) != nil {
 		return errors.New("invalid intent schema, kind, ID or revision")
 	}
-	if d.Mode != "completion" {
-		return errors.New("only completion mode is supported; maintenance requires a separate loop contract")
+	switch d.SchemaVersion {
+	case 1:
+		if d.Mode != "completion" || d.Maintenance != nil {
+			return errors.New("schema 1 intent requires completion mode without maintenance")
+		}
+	case 2:
+		if d.Mode != "maintenance" || d.Maintenance == nil {
+			return errors.New("schema 2 intent requires maintenance mode and contract")
+		}
+		if err := validateMaintenance(*d.Maintenance); err != nil {
+			return err
+		}
+	default:
+		return errors.New("unsupported intent schema version")
 	}
 	if err := text(d.Title, 256, false); err != nil {
 		return fmt.Errorf("title: %w", err)

@@ -10,13 +10,13 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/intentdoc"
 )
 
-// runContextValidation validates one standalone Intent/Batch document. It
+// runContextValidation validates one standalone context document. It
 // deliberately does not inspect a board, register a document, or evaluate
 // references; those are separate product operations.
 func runContextValidation(args []string, out, errOut io.Writer) int {
 	if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
 		fmt.Fprintln(out, "Usage: validate-context <file> --json")
-		fmt.Fprintln(out, "Validate one standalone Intent/Batch document without board access or writes.")
+		fmt.Fprintln(out, "Validate one standalone Intent/Batch/Iteration document without board access or writes.")
 		return 0
 	}
 	if len(args) < 3 {
@@ -56,6 +56,10 @@ func runContextValidation(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "context digest:", err)
 		return 1
 	}
+	scope := "intent-batch-document"
+	if doc.Kind() == "iteration" {
+		scope = "iteration-document"
+	}
 	result := struct {
 		SchemaVersion        int             `json:"schemaVersion"`
 		Scope                string          `json:"scope"`
@@ -68,7 +72,7 @@ func runContextValidation(args []string, out, errOut io.Writer) int {
 		Registered           bool            `json:"registered"`
 		ReferenceValidation  string          `json:"referenceValidation"`
 		EvaluationValidation string          `json:"evaluationValidation"`
-	}{1, "intent-batch-document", true, doc.Kind(), doc.ID(), doc.Revision(), canonical, digest, false, "not_evaluated", "not_evaluated"}
+	}{1, scope, true, doc.Kind(), doc.ID(), doc.Revision(), canonical, digest, false, "not_evaluated", "not_evaluated"}
 	if err := json.NewEncoder(out).Encode(result); err != nil {
 		fmt.Fprintln(errOut, "write context result:", err)
 		return 1
