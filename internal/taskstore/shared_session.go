@@ -20,8 +20,9 @@ type sharedSession struct {
 	commonInfo fs.FileInfo
 }
 
-// Every ID writer takes this lock before a board lock, even before sharing is
-// enabled. Thus a local-mode decision cannot race with namespace activation.
+// Every board operation takes this lock before a board lock, even before
+// sharing is enabled. Thus claims, transitions and completed replay also
+// participate in coordination with namespace activation.
 func acquireShared(dir string, allowInitializing bool) (session *sharedSession, release func() error, err error) {
 	location, err := githistory.LocateBoard(context.Background(), dir)
 	if err != nil {
@@ -154,13 +155,37 @@ func (s *sharedSession) verifyBoard(r *os.Root) error {
 	if _, err := policyForBoard(r); err != nil {
 		return err
 	}
-	if s == nil {
+	if s != nil {
+		if err := s.verify(); err != nil {
+			return err
+		}
+		if err := verifyBoardHandle(r, filepath.Join(s.location.Repository, filepath.FromSlash(s.location.Board))); err != nil {
+			return err
+		}
+	}
+	return s.verifyLocalIDBinding(r)
+}
+
+// Readers and receipt replay must not bypass an existing shared identity.
+// This only checks identity; it never merges IDs, scans history or adopts a board.
+func (s *sharedSession) verifyLocalIDBinding(r *os.Root) error {
+	ledger, err := loadIDs(r)
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
-	if err := s.verify(); err != nil {
+	if err != nil {
 		return err
 	}
-	return verifyBoardHandle(r, filepath.Join(s.location.Repository, filepath.FromSlash(s.location.Board)))
+	if ledger.SchemaVersion != 3 {
+		return nil
+	}
+	if s == nil || s.state == nil {
+		return errors.New("shared local binding has no common state; restore shared state, never reinitialize")
+	}
+	if ledger.Namespace != s.state.NamespaceID {
+		return errors.New("local shared namespace binding mismatch")
+	}
+	return nil
 }
 
 func unionIDs(groups ...[]string) []string {

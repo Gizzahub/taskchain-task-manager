@@ -1,7 +1,8 @@
 # 같은 Git 저장소의 worktree 간 ID 예약
 
-공유 모드는 **ID 할당만** 조정한다. claim·transition의 분산 실행권이나 서로 다른 clone 간
-잠금이 아니다. 기존 모든 writer를 중단하고 보드 및 Git common directory를 백업한 뒤 채택한다.
+공유 원장은 **ID 예약만** 합친다. claim·transition도 같은 namespace 잠금에 참여하지만,
+서로 다른 worktree의 claim을 합치거나 분산 실행권을 제공하지는 않는다. 서로 다른 clone 간
+잠금도 아니다. 기존 모든 writer를 중단하고 보드 및 Git common directory를 백업한 뒤 채택한다.
 
 ```sh
 ./build/taskchain-task-manager inspect-worktrees --repo ./repo --board tasks --json
@@ -22,12 +23,17 @@ worktree, 누락 보드, pending transition, 잘못된 카드·원장은 오류�
   저장소 상대 보드 경로, namespace 식별자, phase, 정규화된 예약 집합, 활성화 snapshot을 기록한다.
 - local 원장은 schemaVersion 3과 namespace binding으로 변환한다. 구버전 제품은 이를 거부한다.
   공통 원장과 local 원장을 함께 보존한다. 공통 상태 삭제를 비활성화 방법으로 사용하지 않는다.
-- 모든 Git 보드의 `init/create/reserve-ids/import-ids`는 공통 namespace 잠금을 먼저 잡는다.
-  공유 활성화 전에도 이 검사를 위한 Git metadata 디렉터리가 만들어질 수 있다.
+  조회·claim·완료 영수증 재실행도 local v3의 namespace가 common 상태와 일치하는지 검사한다.
+  common 유실·불일치 또는 v3 보드를 non-Git 경로로 옮긴 경우에는 오류다. legacy 원장이
+  없거나 v1/v2인 보드를 읽는 것만으로 ID를 병합하거나 자동 채택하지 않는다.
+- 모든 Git 보드의 `init/create/reserve-ids/import-ids`, `list/ready`,
+  `claim/release`, `claim --resume`, `transition/recover`는 common namespace → board 순서로
+  잠금을 잡는다. 완료 요청 재실행도 참여한다. 공유 활성화 전이나 조회 명령에서도 이 검사를
+  위한 Git metadata 디렉터리가 만들어질 수 있다. 잠금 경합은 대기 없이 오류로 보고한다.
   일반 standalone 디렉터리는 기존 local 예약을 사용한다.
   Git 보드는 local 모드에서도 Git topology 검증을 수행하므로 shallow/partial/replace/graft나
   Git 경로·설정 override가 있으면 오류다. 이를 standalone으로 조용히 취급하지 않는다.
-- 공유가 active이면 일반 명령도 자동으로 이를 따른다. 별도 `--shared` 옵션은 없다.
+- 공유가 active이면 ID writer가 자동으로 이를 따른다. 별도 `--shared` 옵션은 없다.
   새 worktree의 local v2 원장도 새 writer가 공통 원장에 연결한다. 원장 자체가 없으면 명시 채택한다.
 - 자동 번호는 local 관측·Git 이력·공통 예약 최댓값 다음이다. 명시 ID는 예약되지 않은 hole을
   허용하며 `TASK-090`과 `TASK-90`의 동시 예약은 같은 identity 충돌이다.
@@ -37,7 +43,9 @@ worktree, 누락 보드, pending transition, 잘못된 카드·원장은 오류�
 ## 중단과 복구
 
 활성화는 initializing → 모든 local v3 게시 → inventory/snapshot 재검증 → active 순서다.
-initializing 동안 일반 ID writer는 오류로 중단한다. 원래 기록과 현재 상태가 맞을 때만
+initializing 동안 일반 보드 조회·claim·전이·복구·ID writer는 오류로 중단한다.
+단일 파일 inspect/validate와 Git 이력 preview는 보드 실행권 조회가 아니므로 이 잠금에
+참여하지 않는다. 원래 기록과 현재 상태가 맞을 때만
 `--resume`이 전진한다. 예약 집합을 줄이거나 원장을 초기화하는 복구는 하지 않는다.
 worktree 추가·이동·누락 또는 카드/원장 변경이 있으면 임의로 수리하지 말고 원인부터 확인한다.
 

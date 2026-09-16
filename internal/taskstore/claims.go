@@ -45,16 +45,12 @@ func Claim(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 	if err := validateClaimRequest(req); err != nil {
 		return ClaimRecord{}, err
 	}
-	r, err := openBoard(dir)
+	session, err := openBoardSession(dir)
 	if err != nil {
 		return ClaimRecord{}, err
 	}
-	defer r.Close()
-	unlock, err := lock(r)
-	if err != nil {
-		return ClaimRecord{}, err
-	}
-	defer func() { err = errors.Join(err, unlock()) }()
+	defer func() { err = errors.Join(err, session.close()) }()
+	r := session.root
 	if err := rejectPendingTransitions(r); err != nil {
 		return ClaimRecord{}, err
 	}
@@ -113,16 +109,12 @@ func Release(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 	if err := validateClaimRequest(req); err != nil {
 		return ClaimRecord{}, err
 	}
-	r, err := openBoard(dir)
+	session, err := openBoardSession(dir)
 	if err != nil {
 		return ClaimRecord{}, err
 	}
-	defer r.Close()
-	unlock, err := lock(r)
-	if err != nil {
-		return ClaimRecord{}, err
-	}
-	defer func() { err = errors.Join(err, unlock()) }()
+	defer func() { err = errors.Join(err, session.close()) }()
+	r := session.root
 	if err := rejectPendingTransitions(r); err != nil {
 		return ClaimRecord{}, err
 	}

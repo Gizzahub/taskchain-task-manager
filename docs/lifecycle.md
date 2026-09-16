@@ -45,6 +45,9 @@ Status 표 셀만 동기화합니다. frontmatter의 status·알 수 없는 필�
 
 전이는 `.task-manager-transitions.json`에 pending을 먼저 쓰고 대상 파일을
 no-overwrite 게시한 뒤 원본을 제거하고 완료 receipt를 기록합니다. 같은 board lock을 사용합니다.
+Git 보드는 common namespace lock을 먼저 잡으며 completed receipt 재실행도 생략하지 않습니다.
+공통 잠금 경합·손상·shared-ID 활성화 중에는 보드 작업이 오류로 중단됩니다. 이는 여러 worktree의
+claim 소유권을 합치는 기능이 아닙니다. 자세한 범위는 [공유 ID 계약](shared-ids.md)을 따릅니다.
 원장은 최대 8 MiB이고 재시도 기록을 자동 삭제하지 않습니다. 새 요청의 pending과 완료
 기록 공간이 모두 부족하지 않아야 시작합니다. 원장을 지우면 재시도 안전성을 잃습니다.
 

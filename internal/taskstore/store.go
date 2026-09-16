@@ -121,16 +121,12 @@ func Init(dir string) (err error) {
 }
 
 func List(dir string) (entries []Entry, err error) {
-	r, err := openBoard(dir)
+	session, err := openBoardSession(dir)
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
-	unlock, err := lock(r)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { err = errors.Join(err, unlock()) }()
+	defer func() { err = errors.Join(err, session.close()) }()
+	r := session.root
 	if err := rejectPendingTransitions(r); err != nil {
 		return nil, err
 	}
@@ -349,16 +345,12 @@ func listLockedExcept(r *os.Root, skip string) ([]Entry, error) {
 
 // Ready returns pending top-level todo cards whose canonical prerequisites are done.
 func Ready(dir string) (entries []Entry, err error) {
-	r, err := openBoard(dir)
+	session, err := openBoardSession(dir)
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
-	unlock, err := lock(r)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { err = errors.Join(err, unlock()) }()
+	defer func() { err = errors.Join(err, session.close()) }()
+	r := session.root
 	if err := rejectPendingTransitions(r); err != nil {
 		return nil, err
 	}
