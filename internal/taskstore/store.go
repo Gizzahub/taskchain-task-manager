@@ -14,7 +14,6 @@ import (
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
-	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardpath"
 	"gopkg.in/yaml.v3"
 )
@@ -199,19 +198,9 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 	if err != nil {
 		return Entry{}, err
 	}
-	prefix, err := cardid.PrefixForKind(req.Kind)
+	prefix, err := createPrefix(req)
 	if err != nil {
 		return Entry{}, err
-	}
-	if req.ID != "" {
-		parsed, err := cardid.Parse(req.ID)
-		if err != nil {
-			return Entry{}, err
-		}
-		if req.Kind != "" && prefix != parsed.Prefix {
-			return Entry{}, errors.New("card kind does not match ID prefix")
-		}
-		prefix = parsed.Prefix
 	}
 	id, err := allocateID(ledger, req.ID, prefix)
 	if err != nil {
@@ -224,20 +213,11 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 		return Entry{}, err
 	}
 
-	var raw []byte
-	var doc *card.Document
-	if req.Template != nil {
-		raw, doc, err = validateConfiguredCard(id, req)
-	} else {
-		raw, err = renderWithDependencies(id, req.Title, req.DependsOn)
-		if err == nil {
-			doc, err = card.Parse(raw)
-		}
-	}
+	prepared, err := prepareCreatedCard(id, req)
 	if err != nil {
-		return Entry{}, fmt.Errorf("parse created task: %w", err)
+		return Entry{}, err
 	}
-	name, err := stage(r, raw)
+	name, err := stage(r, prepared.Raw)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -267,22 +247,18 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 			return Entry{}, err
 		}
 	}
-	zone := strings.ToLower(prefix)
-	if prefix == "TASK" {
-		zone = currentPolicy().InitialZone()
-	}
+	zone := filepath.Dir(prepared.Entry.Path)
 	if err := ensureTransitionDir(r, zone); err != nil {
 		return Entry{}, err
 	}
-	dest := filepath.ToSlash(filepath.Join(zone, id+".md"))
+	dest := prepared.Entry.Path
 	if err := shared.verifyBoard(r); err != nil {
 		return Entry{}, err
 	}
 	if err = r.Link(name, dest); err != nil {
 		return Entry{}, fmt.Errorf("publish %s: %w", dest, err)
 	}
-	view := doc.Snapshot(dest)
-	return Entry{Path: dest, Card: view}, nil
+	return prepared.Entry, nil
 }
 
 func openBoard(dir string) (*os.Root, error) {
