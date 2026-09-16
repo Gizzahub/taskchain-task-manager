@@ -330,6 +330,9 @@ func listLockedWithPolicy(r *os.Root, skip string, policy boardpolicy.Policy) ([
 			return nil, err
 		}
 	}
+	if err := scanModulesWithPolicy(r, &out, ids, skip, policy); err != nil {
+		return nil, err
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, nil
 }
@@ -448,7 +451,7 @@ func validateRootLayoutWithPolicy(r *os.Root, policy boardpolicy.Policy) error {
 			continue
 		}
 		if entry.IsDir() {
-			if !containsPolicyDir(name, policy) {
+			if !containsPolicyDir(name, policy) && !policy.IsModule(name) {
 				return fmt.Errorf("unsupported task directory at board root: %s", name)
 			}
 			continue

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
@@ -172,7 +171,7 @@ func ClaimResume(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 		return ClaimRecord{}, err
 	}
 	for _, entry := range entries {
-		zone := filepath.Dir(entry.Path)
+		zone := entryZone(entry.Path, policy)
 		if sameIdentity(entry.Card.ID, req.ID) && isWorkTask(entry.Card.ID) && (policy.Workflow(zone) || policy.Parked(zone)) && zone != policy.ReadyZone() {
 			found = entry
 			break
@@ -227,7 +226,7 @@ func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest, polic
 			break
 		}
 	}
-	if entry.Card.ID == "" || filepath.Dir(entry.Path) != req.From {
+	if entry.Card.ID == "" || entryZone(entry.Path, policy) != req.From {
 		return transitionRecord{}, errors.New("source card does not match transition")
 	}
 	if err := validateGraph(entries); err != nil {
@@ -286,7 +285,10 @@ func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest, polic
 	if err != nil {
 		return transitionRecord{}, err
 	}
-	target := filepath.ToSlash(filepath.Join(req.To, filepath.Base(entry.Path)))
+	target, err := transitionTargetPath(entry.Path, req.From, req.To, policy)
+	if err != nil {
+		return transitionRecord{}, err
+	}
 	if _, err := r.Lstat(target); err == nil {
 		return transitionRecord{}, errors.New("transition target already exists")
 	} else if !errors.Is(err, fs.ErrNotExist) {

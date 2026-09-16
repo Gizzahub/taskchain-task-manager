@@ -50,8 +50,8 @@ func Parse(raw []byte) (Policy, error) {
 			return Policy{}, fmt.Errorf("unknown root field %q", root.Content[i].Value)
 		}
 	}
-	if schema == nil || schema.Kind != yaml.ScalarNode || schema.Tag != "!!int" || (schema.Value != "1" && schema.Value != "2") {
-		return Policy{}, errors.New("schema-version must be 1 or 2")
+	if schema == nil || schema.Kind != yaml.ScalarNode || schema.Tag != "!!int" || (schema.Value != "1" && schema.Value != "2" && schema.Value != "3") {
+		return Policy{}, errors.New("schema-version must be 1, 2, or 3")
 	}
 	version := schema.Value[0] - '0'
 	if block == nil || block.Kind != yaml.MappingNode {
@@ -61,10 +61,11 @@ func Parse(raw []byte) (Policy, error) {
 		return Policy{}, err
 	}
 	decl := Declaration{}
-	if version == 2 {
+	if version >= 2 {
 		decl.Relocations = []Transition{}
 		decl.KindStatus = map[string]string{}
 	}
+	modulesSeen := false
 	for i := 0; i < len(block.Content); i += 2 {
 		key, value := block.Content[i].Value, block.Content[i+1]
 		switch key {
@@ -133,7 +134,7 @@ func Parse(raw []byte) (Policy, error) {
 				decl.Transitions = append(decl.Transitions, row)
 			}
 		case "relocations":
-			if version != 2 {
+			if version < 2 {
 				return Policy{}, errors.New("relocations require schema-version 2")
 			}
 			rows, err := parseRelocations(value)
@@ -142,7 +143,7 @@ func Parse(raw []byte) (Policy, error) {
 			}
 			decl.Relocations = rows
 		case "kind-status":
-			if version != 2 {
+			if version < 2 {
 				return Policy{}, errors.New("kind-status requires schema-version 2")
 			}
 			if value.Kind != yaml.MappingNode {
@@ -158,9 +159,27 @@ func Parse(raw []byte) (Policy, error) {
 				}
 				decl.KindStatus[k.Value] = v.Value
 			}
+		case "modules":
+			if version < 3 {
+				return Policy{}, errors.New("modules require schema-version 3")
+			}
+			if value.Kind != yaml.SequenceNode {
+				return Policy{}, errors.New("board-policy.modules must be a sequence")
+			}
+			modulesSeen = true
+			decl.Modules = []string{}
+			for _, item := range value.Content {
+				if item.Kind != yaml.ScalarNode || item.Tag != "!!str" || !validModuleName(item.Value) {
+					return Policy{}, errors.New("board-policy.modules entries must be valid names")
+				}
+				decl.Modules = append(decl.Modules, item.Value)
+			}
 		default:
 			return Policy{}, fmt.Errorf("unknown board-policy field %q", key)
 		}
+	}
+	if version == 3 && !modulesSeen {
+		return Policy{}, errors.New("schema-version 3 requires board-policy.modules")
 	}
 	policy, err := New(decl)
 	if err != nil {

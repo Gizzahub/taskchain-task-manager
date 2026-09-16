@@ -13,6 +13,7 @@ type Declaration struct {
 	Transitions []Transition
 	Relocations []Transition
 	KindStatus  map[string]string
+	Modules     []string
 }
 
 type Transition struct {
@@ -27,6 +28,7 @@ type Policy struct {
 	edges         map[string]map[string]bool
 	relocations   map[string]map[string]bool
 	kindStatus    map[string]string
+	modules       []string
 	known         []string
 }
 
@@ -132,6 +134,24 @@ func New(d Declaration) (Policy, error) {
 		}
 		kindStatus[kind] = status
 	}
+	var modules []string
+	if d.Modules != nil {
+		modules = make([]string, len(d.Modules))
+		copy(modules, d.Modules)
+		seenModules := map[string]bool{}
+		for _, module := range modules {
+			if !validModuleName(module) {
+				return Policy{}, fmt.Errorf("invalid module name %q", module)
+			}
+			if seenModules[module] {
+				return Policy{}, fmt.Errorf("duplicate module %q", module)
+			}
+			seenModules[module] = true
+			if workflow[module] != "" || isZoneAlias(module) || isKindDir(module) || isReserved(module) || seenZones[module] {
+				return Policy{}, fmt.Errorf("module %q conflicts with a board zone or reserved name", module)
+			}
+		}
+	}
 	known := baseDirs()
 	custom := make([]string, 0, len(parked))
 	for zone := range parked {
@@ -143,7 +163,10 @@ func New(d Declaration) (Policy, error) {
 	if d.Relocations != nil || d.KindStatus != nil {
 		version = 2
 	}
-	return Policy{schemaVersion: version, workflow: workflow, parked: parked, edges: edges, relocations: relocations, kindStatus: kindStatus, known: known}, nil
+	if d.Modules != nil {
+		version = 3
+	}
+	return Policy{schemaVersion: version, workflow: workflow, parked: parked, edges: edges, relocations: relocations, kindStatus: kindStatus, modules: modules, known: known}, nil
 }
 
 func relocationSource(zone string, workflow map[string]string, parked map[string]string) bool {

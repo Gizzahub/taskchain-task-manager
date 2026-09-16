@@ -303,7 +303,8 @@ func validateTransitionRecordWithPolicy(rec transitionRecord, policy boardpolicy
 	if !claimToken.MatchString(rec.RequestID) || !validClaimID(rec.ID) || !validClaimOwner(rec.Owner) || !claimToken.MatchString(rec.Token) || !policy.Allows(rec.From, rec.To) || !policy.Workflow(rec.To) || (!policy.Workflow(rec.From) && !policy.Parked(rec.From)) || rec.From == rec.To {
 		return errors.New("invalid transition record authority")
 	}
-	if filepath.Dir(rec.Source) != rec.From || filepath.Dir(rec.Target) != rec.To || filepath.Base(rec.Source) != filepath.Base(rec.Target) || strings.HasPrefix(filepath.Base(rec.Source), ".") || filepath.Ext(rec.Source) != ".md" || strings.EqualFold(filepath.Base(rec.Source), "README.md") {
+	expectedTarget, pathErr := transitionTargetPath(rec.Source, rec.From, rec.To, policy)
+	if pathErr != nil || rec.Target != expectedTarget || filepath.Base(rec.Source) != filepath.Base(rec.Target) || strings.HasPrefix(filepath.Base(rec.Source), ".") || filepath.Ext(rec.Source) != ".md" || strings.EqualFold(filepath.Base(rec.Source), "README.md") {
 		return errors.New("invalid transition record paths")
 	}
 	if filepath.IsAbs(rec.Source) || filepath.IsAbs(rec.Target) || strings.ContainsAny(rec.Source+rec.Target, "\\\x00") || filepath.Clean(rec.Source) != rec.Source || filepath.Clean(rec.Target) != rec.Target {

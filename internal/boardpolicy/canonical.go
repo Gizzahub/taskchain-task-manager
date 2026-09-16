@@ -22,6 +22,7 @@ type canonicalBlock struct {
 	Transitions []canonicalTransition  `json:"transitions"`
 	Relocations *[]canonicalTransition `json:"relocations,omitempty"`
 	KindStatus  *map[string]string     `json:"kind-status,omitempty"`
+	Modules     *[]string              `json:"modules,omitempty"`
 }
 
 func (p Policy) Canonical() ([]byte, error) {
@@ -58,7 +59,7 @@ func (p Policy) Canonical() ([]byte, error) {
 		version = 1
 	}
 	block := canonicalBlock{Zones: zones, ZoneStatus: status, Transitions: transitions}
-	if version == 2 {
+	if version >= 2 {
 		froms = froms[:0]
 		for from := range p.relocations {
 			froms = append(froms, from)
@@ -79,6 +80,14 @@ func (p Policy) Canonical() ([]byte, error) {
 			kindStatus[kind] = value
 		}
 		block.KindStatus = &kindStatus
+	}
+	if version >= 3 {
+		modules := append([]string(nil), p.modules...)
+		if modules == nil {
+			modules = []string{}
+		}
+		sort.Strings(modules)
+		block.Modules = &modules
 	}
 	raw, err := json.Marshal(canonicalRoot{SchemaVersion: version, BoardPolicy: block})
 	if err != nil {

@@ -57,7 +57,7 @@ func finishTransition(r *os.Root, j transitionJournal, rec transitionRecord, req
 		return TransitionResult{}, errors.New("matching held claim not found")
 	}
 	if !targetExists {
-		if err := ensureTransitionDir(r, filepath.Dir(rec.Target)); err != nil {
+		if err := relocationParents(r, rec.Target, true); err != nil {
 			return TransitionResult{}, err
 		}
 		name, err := stageWith(r, rec.Patched, func(f *os.File, raw []byte) error {
@@ -80,6 +80,9 @@ func finishTransition(r *os.Root, j transitionJournal, rec transitionRecord, req
 			return TransitionResult{}, errors.Join(err, r.Remove(name))
 		}
 		if err := r.Remove(name); err != nil {
+			return TransitionResult{}, err
+		}
+		if err := syncRelocationDirectory(r, filepath.Dir(rec.Target)); err != nil {
 			return TransitionResult{}, err
 		}
 		if step != nil {
@@ -108,6 +111,9 @@ func finishTransition(r *os.Root, j transitionJournal, rec transitionRecord, req
 		if err := r.Remove(rec.Source); err != nil {
 			return TransitionResult{}, err
 		}
+		if err := syncRelocationDirectory(r, filepath.Dir(rec.Source)); err != nil {
+			return TransitionResult{}, err
+		}
 	}
 	if step != nil {
 		if err := step("after-source"); err != nil {
@@ -134,6 +140,12 @@ func finishTransition(r *os.Root, j transitionJournal, rec transitionRecord, req
 }
 
 func matchingTransitionFile(r *os.Root, path string, want []byte, mode uint32) (bool, error) {
+	if err := relocationParents(r, path, false); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
 	parent, err := r.Lstat(filepath.Dir(path))
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
