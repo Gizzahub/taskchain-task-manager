@@ -14,6 +14,7 @@ import (
 
 // View is the derived, intentionally small public projection of a card.
 type View struct {
+	ID        string   `json:"id"`
 	Title     string   `json:"title"`
 	Status    string   `json:"status"`
 	Priority  string   `json:"priority"`
@@ -47,6 +48,7 @@ func Parse(raw []byte) (*Document, error) {
 	}
 	d := &Document{raw: append([]byte(nil), raw...)}
 	d.view = View{
+		ID:    fmString(metadata["id"]),
 		Title: fmString(metadata["title"]), Status: fmString(metadata["status"]),
 		Priority: fmString(metadata["priority"]), DependsOn: fmStrings(metadata["depends-on"]),
 	}
