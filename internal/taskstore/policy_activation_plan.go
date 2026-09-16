@@ -73,7 +73,10 @@ func preparePolicyActivationJournal(r *os.Root, policy boardpolicy.Policy, bindi
 		}
 		*item.target = bytesDigest(raw)
 	}
-	j.SchemaVersion, j.PolicyDigest, j.PolicyAuthority = 3, digest, &binding
+	if j.SchemaVersion < 3 {
+		j.SchemaVersion = 3
+	}
+	j.PolicyDigest, j.PolicyAuthority = digest, &binding
 	target, err := encodeTransitionJournal(j, policy)
 	if err != nil {
 		return state, nil, err
@@ -134,7 +137,10 @@ func reconstructPolicyTarget(r *os.Root, state policyActivationState) (transitio
 			return transitionJournal{}, nil, errors.New("pending transition cannot be activated")
 		}
 	}
-	j.SchemaVersion, j.PolicyDigest = 3, state.Digest
+	if j.SchemaVersion < 3 {
+		j.SchemaVersion = 3
+	}
+	j.PolicyDigest = state.Digest
 	j.PolicyAuthority = &policyAuthorityBinding{AuthorityID: state.AuthorityID, Scope: state.Scope, Namespace: state.Namespace}
 	target, err := encodeTransitionJournal(j, policy)
 	if err != nil {

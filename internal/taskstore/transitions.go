@@ -50,6 +50,7 @@ type transitionJournal struct {
 	BundleProtocol  int                     `json:"bundleProtocol,omitempty"`
 	StorageProtocol int                     `json:"storageProtocol,omitempty"`
 	PolicyAuthority *policyAuthorityBinding `json:"policyAuthority,omitempty"`
+	PolicyHistory   map[string][]byte       `json:"policyHistory,omitempty"`
 }
 
 type policyAuthorityBinding struct {

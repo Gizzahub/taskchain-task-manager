@@ -30,7 +30,7 @@ func policyJournalForSharedAdoption(r *os.Root, s *sharedSession, canonical []by
 	if err := s.verifyStorageBinding(j); err != nil {
 		return j, err
 	}
-	if j.SchemaVersion != 3 {
+	if j.SchemaVersion != 3 && j.SchemaVersion != 4 {
 		return loadTransitions(r)
 	}
 	state, err := loadPolicyActivation(r)

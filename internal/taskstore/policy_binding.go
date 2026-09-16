@@ -31,7 +31,7 @@ func policyForJournal(r *os.Root, j transitionJournal) (boardpolicy.Policy, erro
 		}
 		return boardpolicy.Default(), nil
 	}
-	if (j.SchemaVersion != 2 && j.SchemaVersion != 3) || !sharedHex64.MatchString(j.PolicyDigest) {
+	if (j.SchemaVersion < 2 || j.SchemaVersion > 4) || !sharedHex64.MatchString(j.PolicyDigest) {
 		return boardpolicy.Policy{}, errors.New("invalid policy journal binding")
 	}
 	if err != nil {
@@ -48,7 +48,7 @@ func policyForJournal(r *os.Root, j transitionJournal) (boardpolicy.Policy, erro
 	if !bytes.Equal(canonical, raw) || bytesDigest(raw) != j.PolicyDigest {
 		return boardpolicy.Policy{}, errors.New("bound policy bytes or digest changed; preserve journal and restore the exact policy")
 	}
-	if j.SchemaVersion == 3 {
+	if j.SchemaVersion >= 3 {
 		state, err := loadPolicyActivation(r)
 		if err != nil || !bytes.Equal(state.Canonical, raw) {
 			return boardpolicy.Policy{}, errors.New("activation policy bytes differ from bound policy")

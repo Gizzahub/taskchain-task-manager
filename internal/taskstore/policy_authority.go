@@ -44,7 +44,7 @@ func validatePolicyAuthority(binding policyAuthorityBinding) error {
 // Snapshot and HEAD belong to activation recovery, not ongoing admission.
 func verifyPolicyActivation(r *os.Root, j transitionJournal) error {
 	state, err := loadPolicyActivation(r)
-	if errors.Is(err, fs.ErrNotExist) && j.SchemaVersion != 3 {
+	if errors.Is(err, fs.ErrNotExist) && j.SchemaVersion < 3 {
 		return nil
 	}
 	if err != nil {
@@ -53,7 +53,7 @@ func verifyPolicyActivation(r *os.Root, j transitionJournal) error {
 	if state.Phase != "completed" {
 		return errors.New("policy activation is pending; explicit policy recovery required")
 	}
-	if j.SchemaVersion != 3 || j.PolicyAuthority == nil {
+	if (j.SchemaVersion != 3 && j.SchemaVersion != 4) || j.PolicyAuthority == nil {
 		return errors.New("policy activation journal binding missing; restore journal")
 	}
 	binding := *j.PolicyAuthority
@@ -103,7 +103,7 @@ func (s *sharedSession) verifyPolicyAuthority(r *os.Root, j transitionJournal) e
 		return errors.New("shared policy activation is pending; explicit recovery required")
 	}
 	binding := j.PolicyAuthority
-	if j.SchemaVersion != 3 || binding == nil || binding.Scope != "shared" || binding.AuthorityID != authority.AuthorityID || binding.Namespace != s.state.NamespaceID || j.PolicyDigest != authority.Digest {
+	if (j.SchemaVersion != 3 && j.SchemaVersion != 4) || binding == nil || binding.Scope != "shared" || binding.AuthorityID != authority.AuthorityID || binding.Namespace != s.state.NamespaceID || j.PolicyDigest != authority.Digest {
 		return errors.New("board has not joined the shared policy authority; explicit join required")
 	}
 	state, err := loadPolicyActivation(r)

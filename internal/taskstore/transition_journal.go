@@ -110,16 +110,29 @@ func decodeTransitionJournal(raw []byte) (transitionJournal, error) {
 	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
 		return transitionJournal{}, errors.New("transition journal trailing content")
 	}
-	if (j.SchemaVersion < 1 || j.SchemaVersion > 3) || j.Records == nil {
+	if (j.SchemaVersion < 1 || j.SchemaVersion > 4) || j.Records == nil {
 		return transitionJournal{}, errors.New("invalid transition journal schema")
 	}
 	if j.SchemaVersion >= 2 && !sharedHex64.MatchString(j.PolicyDigest) {
 		return transitionJournal{}, errors.New("invalid transition policy digest")
 	}
+	if _, err := transitionPolicyHistory(j); err != nil {
+		return transitionJournal{}, err
+	}
 	return j, nil
 }
 
 func validateTransitionRecords(j transitionJournal, policy boardpolicy.Policy) error {
+	history, err := transitionPolicyHistory(j)
+	if err != nil {
+		return err
+	}
+	if j.SchemaVersion == 4 {
+		digest, err := policy.Digest()
+		if err != nil || digest != j.PolicyDigest {
+			return errors.New("active policy differs from journal history binding")
+		}
+	}
 	if j.SchemaVersion == 1 {
 		// Legacy receipts never acquire the semantics of a newly selected policy.
 		policy = boardpolicy.Default()
@@ -136,7 +149,7 @@ func validateTransitionRecords(j transitionJournal, policy boardpolicy.Policy) e
 		} else if rec.Kind != "completed" {
 			return errors.New("invalid transition record")
 		}
-		if err := validateBoundRecord(j, rec, policy); err != nil {
+		if err := validateBoundRecord(j, rec, policy, history); err != nil {
 			return err
 		}
 	}
@@ -158,15 +171,23 @@ func validateTransitionShape(raw []byte) error {
 	if err := json.Unmarshal(root["schemaVersion"], &version); err != nil {
 		return errors.New("transition schemaVersion must be integer")
 	}
-	if version < 1 || version > 3 {
+	if version < 1 || version > 4 {
 		return errors.New("unsupported transition journal schema")
 	}
 	for key := range root {
-		if key != "schemaVersion" && key != "records" && key != "policyDigest" && key != "bundleProtocol" && key != "policyAuthority" && key != "storageProtocol" {
+		if key != "schemaVersion" && key != "records" && key != "policyDigest" && key != "bundleProtocol" && key != "policyAuthority" && key != "storageProtocol" && key != "policyHistory" {
 			return fmt.Errorf("unknown transition journal field %q", key)
 		}
 	}
 	extra := 0
+	if version == 4 {
+		if err := validatePolicyHistoryShape(root["policyHistory"]); err != nil {
+			return err
+		}
+		extra++
+	} else if _, present := root["policyHistory"]; present {
+		return errors.New("legacy journal cannot contain policy history")
+	}
 	if raw, ok := root["storageProtocol"]; ok {
 		var protocol int
 		if err := json.Unmarshal(raw, &protocol); err != nil || (protocol != 1 && protocol != 2) {
@@ -184,7 +205,7 @@ func validateTransitionShape(raw []byte) error {
 	if version == 1 && len(root) != 2+extra {
 		return errors.New("legacy transition journal cannot contain policyDigest")
 	}
-	if version == 3 {
+	if version >= 3 {
 		if err := validatePolicyAuthorityShape(root["policyAuthority"]); err != nil {
 			return err
 		}
@@ -258,11 +279,18 @@ func validateTransitionRecord(rec transitionRecord) error {
 	return validateTransitionRecordWithPolicy(rec, boardpolicy.Default())
 }
 
-func validateBoundRecord(j transitionJournal, rec transitionRecord, policy boardpolicy.Policy) error {
+func validateBoundRecord(j transitionJournal, rec transitionRecord, policy boardpolicy.Policy, history map[string]boardpolicy.Policy) error {
 	if j.SchemaVersion >= 2 {
 		if rec.PolicyDigest == "" && rec.Kind == "completed" {
 			// Carried-over receipts retain the semantics of the legacy journal.
 			return validateTransitionRecord(rec)
+		}
+		if j.SchemaVersion == 4 && rec.Kind == "completed" {
+			p, ok := history[rec.PolicyDigest]
+			if !ok {
+				return errors.New("completed transition historical policy is missing")
+			}
+			return validateTransitionRecordWithPolicy(rec, p)
 		}
 		if rec.PolicyDigest != j.PolicyDigest {
 			return errors.New("transition record policy digest mismatch")
