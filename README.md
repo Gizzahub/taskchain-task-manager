@@ -101,6 +101,7 @@ Git branch/worktree 관리·범용 카드 편집·분산 잠금은 아직 지원
 
 상태 전이, 멱등 요청, pending journal 복구와 지원 한계는 [상태 전이 사용법](docs/lifecycle.md)을 읽어 주세요.
 보관 영역과 비카드 문서의 구분은 [카드 발견 규칙](docs/discovery.md)을 따릅니다.
+공유 예약 구현 전의 [worktree 읽기 전용 진단](docs/worktree-inspection.md)을 제공합니다.
 
 ## 개발과 라이선스
 

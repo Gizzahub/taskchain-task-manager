@@ -14,6 +14,9 @@ import (
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, out, errOut io.Writer) int {
+	if len(args) > 0 && args[0] == "inspect-worktrees" {
+		return runInspectWorktrees(args, out, errOut)
+	}
 	if len(args) > 0 && args[0] == "import-ids" {
 		return runImportIDs(args, out, errOut)
 	}
@@ -31,6 +34,7 @@ func run(args []string, out, errOut io.Writer) int {
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "help") {
 		fmt.Fprintln(out, "Usage: taskchain-task-manager <show|validate> <file> --json")
+		fmt.Fprintln(out, "       taskchain-task-manager inspect-worktrees --repo <root> --board <path> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager <init|list|ready> --dir <board> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager import-ids --repo <root> --board <path> (--preview | --dir <target> [--adopt]) --json")
 		fmt.Fprintln(out, "       taskchain-task-manager reserve-ids --dir <board> [--adopt] [--id TASK-N ...] --json")
