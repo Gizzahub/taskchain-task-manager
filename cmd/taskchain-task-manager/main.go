@@ -14,13 +14,13 @@ import (
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, out, errOut io.Writer) int {
-	if len(args) > 0 && (args[0] == "init" || args[0] == "create" || args[0] == "list") {
+	if len(args) > 0 && (args[0] == "init" || args[0] == "create" || args[0] == "list" || args[0] == "ready") {
 		return runStore(args, out, errOut)
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "help") {
 		fmt.Fprintln(out, "Usage: taskchain-task-manager <show|validate> <file> --json")
-		fmt.Fprintln(out, "       taskchain-task-manager <init|list> --dir <board> --json")
-		fmt.Fprintln(out, "       taskchain-task-manager create --dir <board> --title <title> [--id TASK-N] --json")
+		fmt.Fprintln(out, "       taskchain-task-manager <init|list|ready> --dir <board> --json")
+		fmt.Fprintln(out, "       taskchain-task-manager create --dir <board> --title <title> [--id TASK-N] [--depends-on TASK-N ...] --json")
 		return 0
 	}
 	if len(args) != 3 || args[2] != "--json" || (args[0] != "show" && args[0] != "validate") {

@@ -23,8 +23,9 @@ type Entry struct {
 }
 
 type CreateRequest struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
+	ID        string   `json:"id"`
+	Title     string   `json:"title"`
+	DependsOn []string `json:"dependsOn,omitempty"`
 }
 
 var canonicalID = regexp.MustCompile(`^TASK-[1-9][0-9]*$`)
@@ -99,6 +100,9 @@ func Create(dir string, req CreateRequest) (entry Entry, err error) {
 	if err != nil {
 		return Entry{}, err
 	}
+	if err := validateGraph(entries); err != nil {
+		return Entry{}, err
+	}
 	used := make(map[string]bool, len(entries))
 	var max uint64
 	for _, e := range entries {
@@ -128,8 +132,11 @@ func Create(dir string, req CreateRequest) (entry Entry, err error) {
 	if strings.TrimSpace(req.Title) == "" {
 		return Entry{}, errors.New("task title is empty")
 	}
+	if err := validateDependencies(req.DependsOn, id, entries); err != nil {
+		return Entry{}, err
+	}
 
-	raw, err := render(id, req.Title)
+	raw, err := renderWithDependencies(id, req.Title, req.DependsOn)
 	if err != nil {
 		return Entry{}, err
 	}
@@ -195,6 +202,113 @@ func listLocked(r *os.Root) ([]Entry, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, nil
+}
+
+// Ready returns pending top-level todo cards whose canonical prerequisites are done.
+func Ready(dir string) (entries []Entry, err error) {
+	r, err := openBoard(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	unlock, err := lock(r)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { err = errors.Join(err, unlock()) }()
+	all, err := listLocked(r)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateGraph(all); err != nil {
+		return nil, err
+	}
+	ready := make([]Entry, 0)
+	byID := make(map[string]Entry, len(all))
+	for _, entry := range all {
+		byID[entry.Card.ID] = entry
+	}
+	for _, entry := range all {
+		if filepath.Dir(entry.Path) != "todo" || entry.Card.Status != "pending" {
+			continue
+		}
+		ok := true
+		for _, dep := range entry.Card.DependsOn {
+			depEntry, exists := byID[dep]
+			// Only the top-level done zone is an actionable completion. A card
+			// copied into a kind/archive or nested directory remains readable but
+			// must not satisfy execution dependencies; its basename need not match
+			// the canonical ID because the frontmatter ID is authoritative.
+			if !exists || filepath.Dir(depEntry.Path) != "done" || depEntry.Card.Status != "done" {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			ready = append(ready, entry)
+		}
+	}
+	return ready, nil
+}
+
+func validateDependencies(deps []string, id string, entries []Entry) error {
+	proposed := append([]Entry(nil), entries...)
+	proposed = append(proposed, Entry{Path: "todo/" + id + ".md", Card: card.View{ID: id, Status: "pending", DependsOn: deps}})
+	return validateGraph(proposed)
+}
+
+func validateGraph(entries []Entry) error {
+	byID := make(map[string]Entry, len(entries))
+	for _, entry := range entries {
+		byID[entry.Card.ID] = entry
+	}
+	for _, entry := range entries {
+		seen := map[string]bool{}
+		for _, dep := range entry.Card.DependsOn {
+			if !canonicalID.MatchString(dep) {
+				return fmt.Errorf("invalid dependency ID %q in %s", dep, entry.Path)
+			}
+			if seen[dep] {
+				return fmt.Errorf("duplicate dependency %s in %s", dep, entry.Path)
+			}
+			seen[dep] = true
+			if dep == entry.Card.ID {
+				return fmt.Errorf("self dependency %s in %s", dep, entry.Path)
+			}
+			if _, ok := byID[dep]; !ok {
+				return fmt.Errorf("missing dependency %s referenced by %s", dep, entry.Path)
+			}
+		}
+	}
+	ids := make([]string, 0, len(byID))
+	for id := range byID {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	state := map[string]uint8{}
+	var visit func(string) error
+	visit = func(id string) error {
+		if state[id] == 1 {
+			return fmt.Errorf("dependency cycle involving %s", id)
+		}
+		if state[id] == 2 {
+			return nil
+		}
+		state[id] = 1
+		for _, dep := range byID[id].Card.DependsOn {
+			if err := visit(dep); err != nil {
+				return err
+			}
+		}
+		state[id] = 2
+		return nil
+	}
+	for _, id := range ids {
+		if err := visit(id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validateRootLayout(r *os.Root) error {
@@ -291,7 +405,15 @@ func scanDir(r *os.Root, dir string, out *[]Entry, ids map[string]string) error 
 }
 
 func render(id, title string) ([]byte, error) {
-	fm, err := yaml.Marshal(map[string]string{"id": id, "title": title, "status": "pending"})
+	return renderWithDependencies(id, title, nil)
+}
+
+func renderWithDependencies(id, title string, deps []string) ([]byte, error) {
+	metadata := map[string]any{"id": id, "title": title, "status": "pending"}
+	if len(deps) > 0 {
+		metadata["depends-on"] = deps
+	}
+	fm, err := yaml.Marshal(metadata)
 	if err != nil {
 		return nil, fmt.Errorf("render task frontmatter: %w", err)
 	}

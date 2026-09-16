@@ -1,8 +1,8 @@
 # TaskChain Task Manager
 
 개발자와 코딩 에이전트를 위한 파일 기반 태스크 관리 도구입니다.
-현재는 초기 개발 단계이며 카드 codec과 **초기화·생성·목록·조회·구문 검증**을 제공합니다.
-claim·의존성 처리·Intent/Batch·자동 실행은 아직 제공하지 않습니다.
+현재는 초기 개발 단계이며 카드 codec과 **초기화·생성·목록·조회·의존성 기반 ready·구문 검증**을 제공합니다.
+claim·상태 전이·Intent/Batch·자동 실행은 아직 제공하지 않습니다.
 
 ## 빌드와 실행
 
@@ -15,6 +15,8 @@ make check
 ./build/taskchain-task-manager init --dir ./tasks --json
 ./build/taskchain-task-manager create --dir ./tasks --title '첫 작업' --json
 ./build/taskchain-task-manager list --dir ./tasks --json
+./build/taskchain-task-manager create --dir ./tasks --title '후속 작업' --depends-on TASK-1 --json
+./build/taskchain-task-manager ready --dir ./tasks --json
 ```
 
 `validate`는 YAML frontmatter의 구문·형식을 검사합니다. 완료 조건, 의존성,
@@ -30,7 +32,7 @@ make check
 - `list`는 알려진 workflow·종류·archive 디렉터리를 검사하고 경로순 결과를 반환합니다.
   ID 중복·잘못된 카드·symlink를 발견하면 조용히 건너뛰지 않고 실패합니다.
 - 지원 대상은 TASK-N 카드입니다. 기존 도구의 모든 카드 종류·dialect와 호환된다는 뜻은 아닙니다.
-- 목록과 생성은 보드의 `.task-manager.lock`을 사용합니다. 다른 프로세스의 잠금이 있으면
+- 목록·생성·ready는 보드의 `.task-manager.lock`을 사용합니다. 다른 프로세스의 잠금이 있으면
   즉시 실패하며 자동으로 강제 해제하지 않습니다. 중단 뒤 잠금이 남으면 실행 중인 작업이
   없는지 확인하고 복구를 판단해야 합니다. 잠금이 있다는 이유만으로 삭제하지 마세요.
 - 생성은 같은 filesystem의 임시 파일을 완성한 뒤 hard link로 공개합니다.
@@ -38,6 +40,20 @@ make check
   잠금을 무시하는 외부 편집기까지의 일관성을 보장하지 않습니다.
 - 생성 후 출력이나 정리 단계가 실패하면 카드가 이미 존재할 수 있습니다.
   재시도 전에 `list`와 대상 파일을 확인하세요. 실행 중에는 보드를 외부에서 편집하지 마세요.
+
+## 의존성과 ready
+
+`create --depends-on TASK-1 --depends-on TASK-2`처럼 선행 작업을 각각 지정합니다.
+파일에는 `depends-on: [TASK-1, TASK-2]`로 저장됩니다. 기존 단일 문자열도 읽지만
+숫자·객체·빈 문자열 항목은 오류입니다. 필드 없음/null/빈 목록은 의존성 없음입니다.
+
+`ready`는 바로 아래 `todo/`의 pending 카드 중 모든 선행 카드가 바로 아래 `done/`에
+있는 항목을 경로순으로 반환합니다. 없으면 `[]`입니다. 우선순위 정렬은 아직 없습니다.
+kind 디렉터리(plan/issue 등)·archive·중첩 카드의 상태 표기만으로 완료를 인정하지 않습니다.
+`ready`와 `create`는 전체 그래프의 누락 참조·중복 의존성·자기참조·순환을 거부합니다.
+별도의 순환이 있어도 일부 정상 후보만 반환하지 않습니다. `list`는 관계 오류를 진단하기
+위해 읽을 수 있지만 카드 자체가 잘못된 형식이면 실패합니다. 상태 변경 CLI는 아직 없으므로
+합성 예제 이외의 기존 도구를 이 기능만으로 대체하지 마세요.
 
 ## 출력 계약 (초기, 안정화 전)
 

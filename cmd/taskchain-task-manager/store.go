@@ -5,9 +5,15 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
 )
+
+type repeatedString []string
+
+func (r *repeatedString) String() string         { return strings.Join(*r, ",") }
+func (r *repeatedString) Set(value string) error { *r = append(*r, value); return nil }
 
 func runStore(args []string, out, errOut io.Writer) int {
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
@@ -15,9 +21,11 @@ func runStore(args []string, out, errOut io.Writer) int {
 	dir := flags.String("dir", "tasks", "task board directory")
 	asJSON := flags.Bool("json", false, "write JSON")
 	var title, id *string
+	var dependsOn repeatedString
 	if args[0] == "create" {
 		title = flags.String("title", "", "task title")
 		id = flags.String("id", "", "optional canonical task ID")
+		flags.Var(&dependsOn, "depends-on", "canonical prerequisite task ID (repeatable)")
 	}
 	if err := flags.Parse(args[1:]); err != nil {
 		return 2
@@ -36,12 +44,14 @@ func runStore(args []string, out, errOut io.Writer) int {
 		}{*dir}
 	case "list":
 		result, err = taskstore.List(*dir)
+	case "ready":
+		result, err = taskstore.Ready(*dir)
 	case "create":
 		if *title == "" {
 			fmt.Fprintln(errOut, "create requires --title")
 			return 2
 		}
-		result, err = taskstore.Create(*dir, taskstore.CreateRequest{ID: *id, Title: *title})
+		result, err = taskstore.Create(*dir, taskstore.CreateRequest{ID: *id, Title: *title, DependsOn: dependsOn})
 	}
 	if err != nil {
 		fmt.Fprintln(errOut, args[0]+":", err)

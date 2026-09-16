@@ -46,11 +46,15 @@ func Parse(raw []byte) (*Document, error) {
 	if err := yaml.Unmarshal(fm, &metadata); err != nil {
 		return nil, fmt.Errorf("decode card frontmatter: %w", err)
 	}
+	deps, err := fmStrings(metadata["depends-on"])
+	if err != nil {
+		return nil, fmt.Errorf("decode depends-on: %w", err)
+	}
 	d := &Document{raw: append([]byte(nil), raw...)}
 	d.view = View{
 		ID:    fmString(metadata["id"]),
 		Title: fmString(metadata["title"]), Status: fmString(metadata["status"]),
-		Priority: fmString(metadata["priority"]), DependsOn: fmStrings(metadata["depends-on"]),
+		Priority: fmString(metadata["priority"]), DependsOn: deps,
 	}
 	if d.view.Title == "" {
 		d.view.Title = bodyTitle(body)
@@ -171,21 +175,29 @@ func fmString(v any) string {
 	return strings.TrimSpace(fmt.Sprint(v))
 }
 
-func fmStrings(v any) []string {
+func fmStrings(v any) ([]string, error) {
 	var out []string
 	switch x := v.(type) {
+	case nil:
+		return nil, nil
 	case []any:
-		for _, item := range x {
-			if s := fmString(item); s != "" {
-				out = append(out, s)
+		for i, item := range x {
+			s, ok := item.(string)
+			if !ok || strings.TrimSpace(s) == "" {
+				return nil, fmt.Errorf("item %d must be a nonempty string", i)
 			}
+			out = append(out, strings.TrimSpace(s))
 		}
 	case string:
-		if s := strings.TrimSpace(x); s != "" {
-			out = []string{s}
+		s := strings.TrimSpace(x)
+		if s == "" {
+			return nil, errors.New("dependency must be a nonempty string")
 		}
+		out = []string{s}
+	default:
+		return nil, errors.New("expected a string or list of strings")
 	}
-	return out
+	return out, nil
 }
 
 func bodyTitle(body []byte) string {

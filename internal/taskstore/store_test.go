@@ -221,3 +221,171 @@ func TestConcurrentCreateProducesDistinctIDs(t *testing.T) {
 		t.Fatalf("file/id count mismatch: entries=%d ids=%d", len(entries), len(ids))
 	}
 }
+
+func TestReadyDAGDonePrerequisiteAndKindExclusion(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "tasks")
+	if err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(root, CreateRequest{ID: "TASK-1", Title: "done"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "done"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(root, "todo/TASK-1.md"), filepath.Join(root, "done/completed-card.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(root, CreateRequest{ID: "TASK-2", Title: "ready", DependsOn: []string{"TASK-1"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(root, CreateRequest{ID: "TASK-3", Title: "blocked", DependsOn: []string{"TASK-2"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "plan"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(root, "todo/TASK-3.md"), filepath.Join(root, "plan/TASK-3.md")); err != nil {
+		t.Fatal(err)
+	}
+	ready, err := Ready(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ready) != 1 || ready[0].Card.ID != "TASK-2" {
+		t.Fatalf("ready = %#v", ready)
+	}
+	// A done-status card in a non-actionable kind does not satisfy a dependency.
+	if _, err := Create(root, CreateRequest{ID: "TASK-4", Title: "kind prerequisite"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "plan"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(root, "todo/TASK-4.md"), filepath.Join(root, "plan/TASK-4.md")); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(root, "plan/TASK-4.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = append(raw, []byte("\n")...)
+	raw = []byte(strings.Replace(string(raw), "status: pending", "status: done", 1))
+	if err := os.WriteFile(filepath.Join(root, "plan/TASK-4.md"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(root, CreateRequest{ID: "TASK-5", Title: "blocked by kind", DependsOn: []string{"TASK-4"}}); err != nil {
+		t.Fatal(err)
+	}
+	ready, err = Ready(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range ready {
+		if entry.Card.ID == "TASK-5" {
+			t.Fatal("kind prerequisite incorrectly satisfied")
+		}
+	}
+}
+
+func TestDependencyValidationRejectsMissingSelfDuplicateAndCycle(t *testing.T) {
+	for name, deps := range map[string][]string{
+		"missing": {"TASK-99"}, "self": {"TASK-1"}, "duplicate": {"TASK-2", "TASK-2"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), "tasks")
+			if err := Init(root); err != nil {
+				t.Fatal(err)
+			}
+			if name == "duplicate" {
+				if _, err := Create(root, CreateRequest{ID: "TASK-2", Title: "reference"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := Create(root, CreateRequest{ID: "TASK-1", Title: "x", DependsOn: deps}); err == nil {
+				t.Fatal("invalid dependency accepted")
+			} else if name == "duplicate" && !strings.Contains(err.Error(), "duplicate") {
+				t.Fatalf("duplicate error = %v", err)
+			}
+		})
+	}
+	root := filepath.Join(t.TempDir(), "tasks")
+	if err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(root, CreateRequest{ID: "TASK-1", Title: "one", DependsOn: []string{"TASK-2"}}); err == nil {
+		t.Fatal("missing dependency accepted")
+	}
+	if _, err := Create(root, CreateRequest{ID: "TASK-1", Title: "one"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(root, CreateRequest{ID: "TASK-2", Title: "two", DependsOn: []string{"TASK-1"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(root, CreateRequest{ID: "TASK-3", Title: "independent ready"}); err != nil {
+		t.Fatal(err)
+	}
+	// Introduce a cycle through a hand-authored card; Ready must reject disconnected cycles too.
+	if err := os.WriteFile(filepath.Join(root, "todo/TASK-1.md"), []byte("---\nid: TASK-1\ntitle: one\ndepends-on: [TASK-2]\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Ready(root); err == nil {
+		t.Fatal("cycle accepted")
+	}
+}
+
+func TestCreateDependenciesRoundTripAndEmptyReady(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "tasks")
+	if err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if ready, err := Ready(root); err != nil || ready == nil {
+		t.Fatalf("empty ready = %#v err=%v", ready, err)
+	}
+	if _, err := Create(root, CreateRequest{ID: "TASK-1", Title: "one", DependsOn: []string{"TASK-9"}}); err == nil {
+		t.Fatal("unknown dependency accepted")
+	}
+	if _, err := Create(root, CreateRequest{ID: "TASK-1", Title: "one"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(root, CreateRequest{ID: "TASK-2", Title: "two", DependsOn: []string{"TASK-1"}}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := List(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 || len(entries[1].Card.DependsOn) != 1 {
+		t.Fatalf("entries = %#v", entries)
+	}
+}
+
+func TestCreateInvalidDependencyLeavesBoardUnchanged(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "tasks")
+	if err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadDir(filepath.Join(root, "todo"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(root, CreateRequest{ID: "TASK-1", Title: "invalid", DependsOn: []string{"TASK-99"}}); err == nil {
+		t.Fatal("missing dependency accepted")
+	}
+	after, err := os.ReadDir(filepath.Join(root, "todo"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) != len(before) {
+		t.Fatalf("invalid create changed todo: before=%d after=%d", len(before), len(after))
+	}
+	rootEntries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range rootEntries {
+		if strings.HasPrefix(entry.Name(), ".task-manager-stage-") {
+			t.Fatalf("invalid create leaked stage: %s", entry.Name())
+		}
+	}
+}
