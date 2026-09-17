@@ -84,12 +84,19 @@ func TestArchiveCompletionWorkflowBindingAndCurrentCard(t *testing.T) {
 func TestArchiveCompletionDecodeRejectsStrictWireShapes(t *testing.T) {
 	b, _, _, _ := archiveCompletionFixture(t)
 	valid := archiveCompletionJSON(t, b)
+	legacy := b
+	legacy.Provenance = "legacy-completion"
+	legacy.Source, legacy.Target = "_archive/TASK-001.md", "_archive/TASK-001.md"
+	legacy.Assertion = "operator attestation"
+	if _, err := archiveCompletionBytes(legacy); err != nil {
+		t.Fatal(err)
+	}
 	cases := map[string][]byte{
 		"unknown field":   append(append([]byte(nil), valid[:len(valid)-1]...), []byte(`,"extra":1}`)...),
 		"duplicate field": append(append([]byte(nil), valid[:len(valid)-1]...), []byte(`,"id":"TASK-001"}`)...),
 		"null canonical":  archiveCompletionFieldJSON(t, b, "policyCanonical", "null"),
-		"array canonical": archiveCompletionFieldJSON(t, b, "policyCanonical", "[]"),
-		"surrogate":       archiveCompletionFieldJSON(t, b, "assertion", `"\ud800"`),
+		"array canonical": archiveCompletionArrayJSON(t, b, "policyCanonical", b.PolicyCanonical),
+		"surrogate":       archiveCompletionFieldJSON(t, legacy, "assertion", `"\ud800"`),
 	}
 	for name, raw := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -98,6 +105,19 @@ func TestArchiveCompletionDecodeRejectsStrictWireShapes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func archiveCompletionArrayJSON(t *testing.T, b archiveCompletionBinding, field string, payload []byte) []byte {
+	t.Helper()
+	values := make([]int, len(payload))
+	for i, v := range payload {
+		values[i] = int(v)
+	}
+	raw, err := json.Marshal(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return archiveCompletionFieldJSON(t, b, field, string(raw))
 }
 
 func TestArchiveCompletionRejectsMalformedBindingsAndAdmissionLoss(t *testing.T) {

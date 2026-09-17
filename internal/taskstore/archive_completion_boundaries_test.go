@@ -83,12 +83,12 @@ func TestArchiveCompletionStrictWireBoundaries(t *testing.T) {
 	for _, raw := range [][]byte{
 		missing,
 		append(append([]byte(nil), valid...), []byte(" {}")...),
-		archiveCompletionFieldJSON(t, b, "rulesCanonical", `[]`),
+		archiveCompletionArrayJSON(t, b, "rulesCanonical", b.RulesCanonical),
 		archiveCompletionFieldJSON(t, b, "rulesCanonical", `"!invalid-base64!"`),
 		archiveCompletionFieldJSON(t, b, "schemaVersion", `"1"`),
 		archiveCompletionFieldJSON(t, b, "schemaVersion", `2`),
 		archiveCompletionFieldJSON(t, b, "identity", `"TASK-001"`),
-		[]byte(strings.Repeat(" ", archiveCompletionLimit+1)),
+		append(append([]byte(nil), valid...), []byte(strings.Repeat(" ", archiveCompletionLimit+1-len(valid)))...),
 	} {
 		if _, err := decodeArchiveCompletion(raw); err == nil {
 			t.Fatal("accepted invalid completion wire")
