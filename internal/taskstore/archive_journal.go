@@ -15,8 +15,12 @@ type archiveJournal struct {
 }
 
 func decodeArchiveJournal(raw []byte) (archiveJournal, error) {
+	return decodeArchiveJournalVersion(raw, 1)
+}
+
+func decodeArchiveJournalVersion(raw []byte, maxSchema int) (archiveJournal, error) {
 	var j archiveJournal
-	if len(raw) > maxRepairsBytes || !utf8.Valid(raw) {
+	if len(raw) > archiveJournalVersionLimit(maxSchema) || !utf8.Valid(raw) {
 		return j, fmt.Errorf("archive journal size or UTF-8 invalid")
 	}
 	if err := rejectJSONSurrogates(raw); err != nil {
@@ -30,6 +34,9 @@ func decodeArchiveJournal(raw []byte) (archiveJournal, error) {
 	}
 	if err := json.Unmarshal(raw, &j); err != nil {
 		return j, err
+	}
+	if j.SchemaVersion < 1 || j.SchemaVersion > maxSchema || len(raw) > archiveJournalVersionLimit(j.SchemaVersion) {
+		return j, fmt.Errorf("archive journal schema or version-specific size invalid")
 	}
 	var wire struct{ Records []json.RawMessage }
 	if err := json.Unmarshal(raw, &wire); err != nil {
@@ -60,11 +67,15 @@ func decodeArchiveJournal(raw []byte) (archiveJournal, error) {
 			}
 		}
 	}
-	return j, validateArchiveJournal(j)
+	return j, validateArchiveJournalVersion(j, maxSchema)
 }
 
 func validateArchiveJournal(j archiveJournal) error {
-	if j.SchemaVersion != 1 || !utf8.ValidString(j.BoardPath) || !canonicalBoardPath(j.BoardPath) || (j.Namespace != "" && !sharedHex32.MatchString(j.Namespace)) || j.Records == nil {
+	return validateArchiveJournalVersion(j, 1)
+}
+
+func validateArchiveJournalVersion(j archiveJournal, maxSchema int) error {
+	if j.SchemaVersion < 1 || j.SchemaVersion > maxSchema || archiveJournalVersionLimit(j.SchemaVersion) == 0 || !utf8.ValidString(j.BoardPath) || !canonicalBoardPath(j.BoardPath) || (j.Namespace != "" && !sharedHex32.MatchString(j.Namespace)) || j.Records == nil {
 		return fmt.Errorf("invalid archive journal scope or schema")
 	}
 	requests, identities := map[string]bool{}, map[string]bool{}
@@ -87,12 +98,16 @@ func validateArchiveJournal(j archiveJournal) error {
 }
 
 func archiveJournalBytes(j archiveJournal) ([]byte, error) {
+	return archiveJournalBytesVersion(j, 1)
+}
+
+func archiveJournalBytesVersion(j archiveJournal, maxSchema int) ([]byte, error) {
 	raw, err := json.Marshal(j)
 	if err != nil {
 		return nil, err
 	}
 	raw = append(raw, '\n')
-	if _, err := decodeArchiveJournal(raw); err != nil {
+	if _, err := decodeArchiveJournalVersion(raw, maxSchema); err != nil {
 		return nil, err
 	}
 	return raw, nil
