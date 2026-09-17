@@ -386,19 +386,18 @@ func readyLocked(entries []Entry, ledger claimsLedger) ([]Entry, error) {
 }
 
 func readyLockedWithPolicy(entries []Entry, ledger claimsLedger, policy boardpolicy.Policy) ([]Entry, error) {
-	if err := validateGraph(entries); err != nil {
+	completion, err := completionForJournal(entries, policy, nil, "", "", nil)
+	if err != nil {
 		return nil, err
 	}
+	return readyWithCompletion(entries, ledger, policy, completion), nil
+}
+
+func readyWithCompletion(entries []Entry, ledger claimsLedger, policy boardpolicy.Policy, completion completionIndex) []Entry {
 	held := map[string]bool{}
 	for _, record := range ledger.Records {
 		if record.Status == "held" {
 			held[identityKey(record.ID)] = true
-		}
-	}
-	byID := make(map[string]Entry, len(entries))
-	for _, entry := range entries {
-		if isWorkTask(entry.Card.ID) {
-			byID[identityKey(entry.Card.ID)] = entry
 		}
 	}
 	ready := make([]Entry, 0)
@@ -408,8 +407,7 @@ func readyLockedWithPolicy(entries []Entry, ledger claimsLedger, policy boardpol
 		}
 		ok := true
 		for _, dep := range entry.Card.DependsOn {
-			depEntry, exists := byID[identityKey(dep)]
-			if !isWorkTask(dep) || !exists || !entryInWorkflowZone(depEntry, policy.DoneZone(), policy) {
+			if !completion.done(dep) {
 				ok = false
 				break
 			}
@@ -418,5 +416,5 @@ func readyLockedWithPolicy(entries []Entry, ledger claimsLedger, policy boardpol
 			ready = append(ready, entry)
 		}
 	}
-	return ready, nil
+	return ready
 }

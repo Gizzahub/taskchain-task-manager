@@ -229,7 +229,8 @@ func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest, polic
 	if entry.Card.ID == "" || entryZone(entry.Path, policy) != req.From {
 		return transitionRecord{}, errors.New("source card does not match transition")
 	}
-	if err := validateGraph(entries); err != nil {
+	completion, err := completionForJournal(entries, policy, nil, "", "", nil)
+	if err != nil {
 		return transitionRecord{}, err
 	}
 	for _, e := range entries {
@@ -239,10 +240,8 @@ func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest, polic
 	}
 	if req.To == "doing" || req.To == policy.DoneZone() {
 		for _, dep := range entry.Card.DependsOn {
-			for _, e := range entries {
-				if sameIdentity(e.Card.ID, dep) && !entryInWorkflowZone(e, policy.DoneZone(), policy) {
-					return transitionRecord{}, errors.New("dependency is not done")
-				}
+			if !completion.done(dep) {
+				return transitionRecord{}, errors.New("dependency is not done")
 			}
 		}
 	}

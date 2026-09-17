@@ -68,7 +68,8 @@ func (s *relocationSession) prepareRelocation(req RelocationRequest) (relocation
 }
 
 func (s *relocationSession) validateRelocationAdmission(entries []Entry, req RelocationRequest) error {
-	if err := validateGraph(entries); err != nil {
+	completion, err := completionForJournal(entries, s.policy, nil, "", "", nil)
+	if err != nil {
 		return err
 	}
 	ledger, err := loadIDs(s.root)
@@ -104,10 +105,8 @@ func (s *relocationSession) validateRelocationAdmission(entries []Entry, req Rel
 				continue
 			}
 			for _, dep := range entry.Card.DependsOn {
-				for _, candidate := range entries {
-					if sameIdentity(candidate.Card.ID, dep) && !entryInWorkflowZone(candidate, s.policy.DoneZone(), s.policy) {
-						return errors.New("relocation dependency is not done")
-					}
+				if !completion.done(dep) {
+					return errors.New("relocation dependency is not done")
 				}
 			}
 		}
