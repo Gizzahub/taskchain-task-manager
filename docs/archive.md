@@ -48,6 +48,8 @@ preserves source bytes. Neither operation publishes dependency completion.
 Rules, request ID, source hash and all other request fields must be preserved
 for a retry, including after a stdout failure. JSON success has schemaVersion 1.
 
-Legacy archive adoption, clone rebinding and local-to-shared archive namespace
-migration are not yet supported. Scope-changing operations are rejected before
+Existing archives use the separate [legacy adoption command](legacy-archive.md),
+which requires explicit operator approval to publish dependency completion.
+Clone rebinding and local-to-shared archive namespace migration are not yet
+supported. Scope-changing operations are rejected before
 rewriting those bindings. Public release/cutover approval remains separate.
