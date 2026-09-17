@@ -64,6 +64,6 @@ func preparePolicyRevision(r *os.Root, policy boardpolicy.Policy, binding policy
 		return policyActivationState{}, errors.New("policy revision compare-and-swap binding mismatch")
 	}
 	rev := &policyRevision{PreviousAuthorityID: old.AuthorityID, PreviousDigest: old.Digest, PreviousCanonical: bytes.Clone(old.Canonical)}
-	state, _, err := preparePolicyChangeJournal(r, policy, binding, head, j, rev)
+	state, _, err := preparePolicyChangeWithModules(r, policy, binding, head, j, rev, options.AdoptModules)
 	return state, err
 }

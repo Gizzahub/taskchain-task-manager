@@ -11,11 +11,11 @@ import (
 )
 
 func runPolicyActivation(args []string, out, errOut io.Writer) int {
-	const usage = "activate-policy <file> --dir <board> [--all-worktrees] [--resume] --json"
+	const usage = "activate-policy <file> --dir <board> [--all-worktrees] [--adopt-modules] [--resume] --json"
 	if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
 		fmt.Fprintln(out, "Usage:", usage)
 		fmt.Fprintln(out, "Activate one immutable policy after upgrading and stopping all board writers.")
-		fmt.Fprintln(out, "Initial shared activation and its resume require --all-worktrees; join and completed replay do not.")
+		fmt.Fprintln(out, "Initial shared activation and its resume require --all-worktrees; module adoption requires --adopt-modules.")
 		return 0
 	}
 	if len(args) < 3 || args[1] == "" {
@@ -26,6 +26,7 @@ func runPolicyActivation(args []string, out, errOut io.Writer) int {
 	flags.SetOutput(errOut)
 	dir := flags.String("dir", "", "task board directory")
 	all := flags.Bool("all-worktrees", false, "acknowledge initial activation in every registered worktree")
+	adoptModules := flags.Bool("adopt-modules", false, "adopt declared module roots after verifying all writers are upgraded")
 	resume := flags.Bool("resume", false, "resume the same recorded activation or join")
 	asJSON := flags.Bool("json", false, "write JSON")
 	if err := flags.Parse(args[2:]); err != nil {
@@ -43,7 +44,7 @@ func runPolicyActivation(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "read policy:", err)
 		return 1
 	}
-	result, err := taskstore.ActivatePolicy(*dir, raw, taskstore.PolicyActivationOptions{Resume: *resume, AllWorktrees: *all})
+	result, err := taskstore.ActivatePolicy(*dir, raw, taskstore.PolicyActivationOptions{Resume: *resume, AllWorktrees: *all, AdoptModules: *adoptModules})
 	if err != nil {
 		fmt.Fprintln(errOut, "activate policy:", err)
 		return 1

@@ -28,7 +28,7 @@ func moduleTransitionFixture(t *testing.T) (string, TransitionRequest, []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ActivatePolicy(dir, rawPolicy, PolicyActivationOptions{}); err != nil {
+	if _, err := ActivatePolicy(dir, rawPolicy, PolicyActivationOptions{AdoptModules: true}); err != nil {
 		t.Fatal(err)
 	}
 	name := filepath.Join(dir, "backend/todo/auth/session/TASK-1.md")

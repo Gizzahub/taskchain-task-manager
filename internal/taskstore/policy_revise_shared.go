@@ -2,10 +2,12 @@ package taskstore
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
+	"github.com/Gizzahub/taskchain-task-manager/internal/githistory"
 )
 
 func reviseSharedPolicy(s *sharedSession, policy boardpolicy.Policy, options PolicyRevisionOptions, step func(string) error) (result PolicyActivationResult, err error) {
@@ -24,6 +26,11 @@ func reviseSharedPolicy(s *sharedSession, policy boardpolicy.Policy, options Pol
 			return result, errors.New("shared policy revision requires identical explicit resume")
 		}
 		plans = existing.Pending
+		for _, plan := range plans {
+			if (plan.ModuleAdoption != nil) != options.AdoptModules {
+				return result, errors.New("module revision resume requires original adopt-modules flag")
+			}
+		}
 	} else if existing.Phase != "active" {
 		return result, errors.New("initial policy activation or join must finish before revision")
 	} else if existing.AuthorityID != options.ExpectedAuthorityID || existing.Digest != options.ExpectedDigest {
@@ -49,6 +56,7 @@ func reviseSharedPolicy(s *sharedSession, policy boardpolicy.Policy, options Pol
 		}
 		next := *s.state
 		authority := sharedPolicyAuthority{AuthorityID: id, Phase: "revising", Canonical: canonical, Digest: bytesDigest(canonical), Pending: []policyActivationPlan{}, Revision: &policyRevision{PreviousAuthorityID: existing.AuthorityID, PreviousCanonical: bytes.Clone(existing.Canonical), PreviousDigest: existing.Digest}}
+		states := make([]policyActivationState, 0, len(boards))
 		for _, b := range boards {
 			j, err := loadTransitions(b.root)
 			if err != nil {
@@ -64,12 +72,42 @@ func reviseSharedPolicy(s *sharedSession, policy boardpolicy.Policy, options Pol
 			if _, _, err := inspectPolicyActivationPlan(b.root, state); err != nil {
 				return result, err
 			}
+			states = append(states, state)
+			if state.Plan.ModuleAdoption != nil {
+				ledger, err := decodeIDs(state.Plan.IDTarget)
+				if err != nil {
+					return result, err
+				}
+				next.Reserved = unionIDs(next.Reserved, ledger.Reserved)
+			}
+		}
+		if options.AdoptModules {
+			history, err := githistory.Scan(context.Background(), s.location.Repository, s.location.Board)
+			if err != nil {
+				return result, err
+			}
+			next.Reserved = unionIDs(next.Reserved, history.IDs)
+		}
+		for i, state := range states {
+			if state.Plan.ModuleAdoption != nil {
+				target, err := ledgerBytes(idLedger{SchemaVersion: 3, Namespace: next.NamespaceID, Reserved: next.Reserved})
+				if err != nil {
+					return result, err
+				}
+				state.Plan.IDTarget, state.Plan.TargetIDs = target, bytesDigest(target)
+			}
+			if _, _, err := inspectPolicyActivationPlan(boards[i].root, state); err != nil {
+				return result, err
+			}
 			authority.Pending = append(authority.Pending, state.Plan)
 		}
 		if err := verifySharedPolicyInventory(s, boards, "revising"); err != nil {
 			return result, err
 		}
 		next.Policy, next.PolicyRevisionProtocol = &authority, 1
+		if len(policy.Modules()) > 0 {
+			next.ModuleProtocol = 1
+		}
 		mayHavePublished = true
 		if err := publishSharedState(s.root, next, false); err != nil {
 			return result, err

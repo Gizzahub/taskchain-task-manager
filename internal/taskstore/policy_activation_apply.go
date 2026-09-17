@@ -10,11 +10,12 @@ import (
 )
 
 type policyActivationFiles struct {
-	journal    []byte
-	policy     []byte
-	activation []byte
-	ids        []byte
-	completed  bool
+	journal      []byte
+	policy       []byte
+	activation   []byte
+	ids          []byte
+	completed    bool
+	idsPublished bool
 }
 
 // The caller holds common -> board locks and the durable transaction plan.
@@ -34,7 +35,7 @@ func applyPolicyActivationPlan(r *os.Root, state policyActivationState, step fun
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(files.activation, pendingRaw) {
+	if !files.idsPublished && !bytes.Equal(files.activation, pendingRaw) {
 		if err := savePolicyActivation(r, pending, files.activation == nil); err != nil {
 			return err
 		}
@@ -64,7 +65,14 @@ func applyPolicyActivationPlan(r *os.Root, state policyActivationState, step fun
 		return err
 	}
 	if bytesDigest(files.ids) != state.Plan.TargetIDs {
-		if err := publishPolicyActivationFile(r, idsFile, state.Plan.IDTarget, false); err != nil {
+		if err := publishPolicyActivationFile(r, idsFile, state.Plan.IDTarget, files.ids == nil); err != nil {
+			return err
+		}
+	}
+	if state.Plan.ModuleAdoption != nil && !files.idsPublished {
+		published := state
+		published.Phase = "ids-published"
+		if err := savePolicyActivation(r, published, false); err != nil {
 			return err
 		}
 	}
@@ -107,12 +115,15 @@ func inspectPolicyActivationPlan(r *os.Root, state policyActivationState) (polic
 	if err != nil {
 		return files, nil, err
 	}
-	snapshot, err := policyActivationSnapshot(r, policy, j)
+	snapshot, err := policyActivationSnapshotForAdoption(r, policy, j, state.Plan.ModuleAdoption)
 	if err != nil {
 		return files, nil, err
 	}
 	if snapshot != state.Plan.Snapshot {
 		return files, nil, errors.New("policy activation board snapshot changed; preserve original plan")
+	}
+	if err := validateModuleInventory(r, policy, j, state.Plan); err != nil {
+		return files, nil, err
 	}
 	for _, item := range []struct {
 		name  string
@@ -121,7 +132,7 @@ func inspectPolicyActivationPlan(r *os.Root, state policyActivationState) (polic
 	}{
 		{transitionsFile, maxTransitionBytes, &files.journal},
 		{policyFile, 64 << 10, &files.policy},
-		{policyActivationFile, maxPolicyActivationBytes, &files.activation},
+		{policyActivationFile, maxModuleActivationBytes, &files.activation},
 		{idsFile, maxIDsBytes, &files.ids},
 	} {
 		raw, err := boundedSnapshotFile(r, item.name, item.limit)
@@ -146,10 +157,22 @@ func inspectPolicyActivationPlan(r *os.Root, state policyActivationState) (polic
 		return files, nil, err
 	}
 	files.completed = bytes.Equal(files.activation, completedRaw)
-	newReceipt := files.completed || bytes.Equal(files.activation, pendingRaw)
+	if state.Plan.ModuleAdoption != nil {
+		published := state
+		published.Phase = "ids-published"
+		publishedRaw, err := policyActivationBytes(published)
+		if err != nil {
+			return files, nil, err
+		}
+		files.idsPublished = bytes.Equal(files.activation, publishedRaw)
+	}
+	newReceipt := files.completed || files.idsPublished || bytes.Equal(files.activation, pendingRaw)
 	idsHash := optionalPolicyHash(files.ids)
 	if idsHash != state.Plan.OriginalIDs && idsHash != state.Plan.TargetIDs {
 		return files, nil, errors.New("policy activation ID ledger changed; restore exact original or target")
+	}
+	if files.idsPublished && idsHash != state.Plan.TargetIDs {
+		return files, nil, errors.New("published module ID ledger disappeared or changed; restore exact target")
 	}
 	if idsHash != state.Plan.OriginalIDs && !newReceipt {
 		return files, nil, errors.New("ID target was published without its activation receipt")
@@ -191,13 +214,17 @@ func publishPolicyActivationFile(r *os.Root, name string, raw []byte, initial bo
 	}
 	if name == idsFile {
 		info, err := r.Lstat(idsFile)
-		if err != nil {
+		mode := os.FileMode(0644)
+		if err != nil && !(initial && errors.Is(err, fs.ErrNotExist)) {
 			return errors.Join(err, r.Remove(staged))
 		}
-		if !info.Mode().IsRegular() || info.Mode()&^os.ModePerm != 0 {
-			return errors.Join(errors.New("unsafe ID ledger mode"), r.Remove(staged))
+		if err == nil {
+			if initial || !info.Mode().IsRegular() || info.Mode()&^os.ModePerm != 0 {
+				return errors.Join(errors.New("unsafe or unexpected ID ledger"), r.Remove(staged))
+			}
+			mode = info.Mode().Perm()
 		}
-		if err := r.Chmod(staged, info.Mode().Perm()); err != nil {
+		if err := r.Chmod(staged, mode); err != nil {
 			return errors.Join(err, r.Remove(staged))
 		}
 		file, err := r.Open(staged)

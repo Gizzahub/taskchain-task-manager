@@ -41,13 +41,22 @@ func validateActivationRevision(state policyActivationState) error {
 		}
 		return nil
 	}
+	if state.SchemaVersion == 3 && state.Revision == nil {
+		if state.Plan.OriginalPolicy != "" && state.Plan.OriginalPolicy != state.Digest {
+			return errors.New("module activation cannot replace a previous policy without revision binding")
+		}
+		return nil
+	}
 	if state.Revision == nil {
 		return errors.New("revision activation requires previous binding")
 	}
 	if err := validatePolicyRevision(*state.Revision, state.AuthorityID, state.Digest); err != nil {
 		return err
 	}
-	if state.Plan.OriginalPolicy != state.Revision.PreviousDigest || state.Plan.OriginalActivation == "" || state.Plan.OriginalJournal == "" || len(state.Plan.IDTarget) != 0 || state.Plan.OriginalIDs != state.Plan.TargetIDs {
+	if state.Plan.OriginalPolicy != state.Revision.PreviousDigest || state.Plan.OriginalActivation == "" || state.Plan.OriginalJournal == "" {
+		return errors.New("revision must bind previous activation and journal")
+	}
+	if state.SchemaVersion == 2 && (len(state.Plan.IDTarget) != 0 || state.Plan.OriginalIDs != state.Plan.TargetIDs) {
 		return errors.New("revision must preserve IDs and bind exact previous activation and journal")
 	}
 	return nil
@@ -69,7 +78,7 @@ func validateRevisionEnvelope(raw []byte, shared bool) error {
 		keys = []string{"authorityId", "phase", "canonical", "digest", "pending"}
 	}
 	if revision, exists := fields["revision"]; exists {
-		if !shared && string(fields["schemaVersion"]) != "2" {
+		if !shared && string(fields["schemaVersion"]) != "2" && string(fields["schemaVersion"]) != "3" {
 			return errors.New("initial activation cannot contain revision")
 		}
 		if err := validateObjectShape(revision, []string{"previousAuthorityId", "previousCanonical", "previousDigest"}, nil); err != nil {

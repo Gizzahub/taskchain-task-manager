@@ -70,7 +70,7 @@ func policyJournalForSharedAdoption(r *os.Root, s *sharedSession, canonical []by
 	return j, nil
 }
 
-func prepareSharedPolicy(s *sharedSession, boards []sharedPolicyBoard, policy boardpolicy.Policy, phase string) (sharedState, error) {
+func prepareSharedPolicy(s *sharedSession, boards []sharedPolicyBoard, policy boardpolicy.Policy, phase string, adopt bool) (sharedState, error) {
 	next := *s.state
 	canonical, err := policy.Canonical()
 	if err != nil {
@@ -102,12 +102,15 @@ func prepareSharedPolicy(s *sharedSession, boards []sharedPolicyBoard, policy bo
 		if j.SchemaVersion == 4 {
 			next.PolicyRevisionProtocol = 1
 		}
-		state, _, err := preparePolicyActivationJournal(b.root, policy, binding, b.head, j)
+		state, _, err := preparePolicyChangeWithModules(b.root, policy, binding, b.head, j, nil, adopt)
 		if err != nil {
 			return next, err
 		}
 		states[i] = state
 		ledger, err := loadIDs(b.root)
+		if errors.Is(err, fs.ErrNotExist) && state.Plan.ModuleAdoption != nil && len(state.Plan.ModuleAdoption.Original) == 0 {
+			ledger, err = decodeIDs(state.Plan.IDTarget)
+		}
 		if err != nil {
 			return next, err
 		}
@@ -135,7 +138,7 @@ func prepareSharedPolicy(s *sharedSession, boards []sharedPolicyBoard, policy bo
 	}
 	next.Reserved = unionIDs(next.Reserved, history.IDs)
 	for i, state := range states {
-		if ledgers[i].SchemaVersion != 3 {
+		if ledgers[i].SchemaVersion != 3 || state.Plan.ModuleAdoption != nil {
 			target, err := ledgerBytes(idLedger{SchemaVersion: 3, Namespace: s.state.NamespaceID, Reserved: next.Reserved})
 			if err != nil {
 				return next, err
@@ -152,6 +155,9 @@ func prepareSharedPolicy(s *sharedSession, boards []sharedPolicyBoard, policy bo
 		authority.Pending = append(authority.Pending, state.Plan)
 	}
 	next.SchemaVersion, next.Policy = 3, &authority
+	if len(policy.Modules()) > 0 {
+		next.ModuleProtocol = 1
+	}
 	if err := validateSharedState(next); err != nil {
 		return next, err
 	}
@@ -169,6 +175,9 @@ func sharedPolicyLocalState(s sharedState, plan policyActivationPlan) policyActi
 	state := policyActivationState{SchemaVersion: 1, Phase: "pending", AuthorityID: s.Policy.AuthorityID, Scope: "shared", Namespace: s.NamespaceID, Canonical: s.Policy.Canonical, Digest: s.Policy.Digest, Plan: plan}
 	if s.Policy.Phase == "revising" {
 		state.SchemaVersion, state.Revision = 2, s.Policy.Revision
+	}
+	if plan.ModuleAdoption != nil {
+		state.SchemaVersion = 3
 	}
 	return state
 }

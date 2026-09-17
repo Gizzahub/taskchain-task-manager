@@ -13,6 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
 )
 
@@ -37,6 +38,7 @@ type sharedState struct {
 	PendingRepair          *sharedRepairPending   `json:"pendingRepair,omitempty"`
 	PendingRelocation      *sharedRepairPending   `json:"pendingRelocation,omitempty"`
 	PolicyRevisionProtocol int                    `json:"policyRevisionProtocol,omitempty"`
+	ModuleProtocol         int                    `json:"moduleProtocol,omitempty"`
 }
 
 type sharedBundlePending struct {
@@ -139,6 +141,13 @@ func validateSharedShape(raw []byte) error {
 		return err
 	}
 	allowed := map[string]bool{"schemaVersion": true, "namespaceId": true, "boardPath": true, "phase": true, "reserved": true, "participants": true}
+	if raw, ok := root["moduleProtocol"]; ok {
+		var protocol int
+		if err := json.Unmarshal(raw, &protocol); err != nil || protocol != 1 {
+			return errors.New("unsupported shared module protocol")
+		}
+		allowed["moduleProtocol"] = true
+	}
 	if raw, ok := root["policyRevisionProtocol"]; ok {
 		var protocol int
 		if err := json.Unmarshal(raw, &protocol); err != nil || protocol != 1 {
@@ -237,6 +246,27 @@ func validateSharedShape(raw []byte) error {
 }
 
 func validateSharedState(s sharedState) error {
+	if s.ModuleProtocol != 0 && (s.ModuleProtocol != 1 || s.SchemaVersion != 3 || s.Policy == nil) {
+		return errors.New("module protocol requires shared policy authority")
+	}
+	if s.Policy != nil {
+		policy, err := boardpolicy.Parse(s.Policy.Canonical)
+		if err != nil {
+			return err
+		}
+		if len(policy.Modules()) > 0 && s.ModuleProtocol != 1 {
+			return errors.New("shared module scope requires permanent module protocol")
+		}
+		for _, plan := range s.Policy.Pending {
+			if plan.ModuleAdoption == nil {
+				continue
+			}
+			ledger, err := decodeIDs(plan.IDTarget)
+			if err != nil || ledger.Namespace != s.NamespaceID || !sameStringSlice(ledger.Reserved, s.Reserved) {
+				return errors.New("module adoption target must preserve exact frozen common reservations")
+			}
+		}
+	}
 	if s.PolicyRevisionProtocol != 0 && (s.PolicyRevisionProtocol != 1 || s.SchemaVersion != 3 || s.Policy == nil) {
 		return errors.New("policy revision protocol requires shared policy authority")
 	}

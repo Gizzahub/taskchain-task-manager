@@ -15,6 +15,7 @@ type PolicyRevisionOptions struct {
 	ExpectedDigest      string
 	Resume              bool
 	AllWorktrees        bool
+	AdoptModules        bool
 }
 
 // RevisePolicy is an explicit compare-and-swap of an already active policy.
@@ -53,7 +54,7 @@ func revisePolicyWithStep(dir string, raw []byte, options PolicyRevisionOptions,
 }
 
 func matchesPolicyRevision(state policyActivationState, canonical []byte, options PolicyRevisionOptions) bool {
-	return state.Revision != nil && state.Revision.PreviousAuthorityID == options.ExpectedAuthorityID && state.Revision.PreviousDigest == options.ExpectedDigest && bytes.Equal(state.Canonical, canonical)
+	return (state.Plan.ModuleAdoption != nil) == options.AdoptModules && state.Revision != nil && state.Revision.PreviousAuthorityID == options.ExpectedAuthorityID && state.Revision.PreviousDigest == options.ExpectedDigest && bytes.Equal(state.Canonical, canonical)
 }
 
 func reviseLocalPolicy(dir string, s *sharedSession, policy boardpolicy.Policy, options PolicyRevisionOptions, step func(string) error) (result PolicyActivationResult, err error) {

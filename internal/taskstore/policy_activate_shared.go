@@ -10,7 +10,8 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 )
 
-func activateSharedPolicy(s *sharedSession, policy boardpolicy.Policy, resume bool, step func(string) error) (result PolicyActivationResult, err error) {
+func activateSharedPolicy(s *sharedSession, policy boardpolicy.Policy, options PolicyActivationOptions, step func(string) error) (result PolicyActivationResult, err error) {
+	resume := options.Resume
 	canonical, err := policy.Canonical()
 	if err != nil {
 		return result, err
@@ -31,6 +32,11 @@ func activateSharedPolicy(s *sharedSession, policy boardpolicy.Policy, resume bo
 				return result, errors.New("shared policy activation interrupted; explicit resume required")
 			}
 			phase, plans = existing.Phase, existing.Pending
+			for _, plan := range plans {
+				if (plan.ModuleAdoption != nil) != options.AdoptModules {
+					return result, errors.New("pending module adoption requires original adopt-modules flag")
+				}
+			}
 			if phase == "joining" && plans[0].Root != filepath.Join(s.location.Repository, filepath.FromSlash(s.location.Board)) {
 				return result, errors.New("pending policy join must resume from its original board")
 			}
@@ -72,7 +78,7 @@ func activateSharedPolicy(s *sharedSession, policy boardpolicy.Policy, resume bo
 		}
 	}
 	if len(plans) == 0 {
-		next, err := prepareSharedPolicy(s, boards, policy, phase)
+		next, err := prepareSharedPolicy(s, boards, policy, phase, options.AdoptModules)
 		if err != nil {
 			return result, err
 		}

@@ -24,6 +24,10 @@ func preparePolicyActivationJournal(r *os.Root, policy boardpolicy.Policy, bindi
 }
 
 func preparePolicyChangeJournal(r *os.Root, policy boardpolicy.Policy, binding policyAuthorityBinding, head string, j transitionJournal, revision *policyRevision) (policyActivationState, []byte, error) {
+	return preparePolicyChangeWithModules(r, policy, binding, head, j, revision, false)
+}
+
+func preparePolicyChangeWithModules(r *os.Root, policy boardpolicy.Policy, binding policyAuthorityBinding, head string, j transitionJournal, revision *policyRevision, adopt bool) (policyActivationState, []byte, error) {
 	var state policyActivationState
 	if err := checkStorageGate(r, j); err != nil {
 		return state, nil, err
@@ -45,7 +49,27 @@ func preparePolicyChangeJournal(r *os.Root, policy boardpolicy.Policy, binding p
 			return state, nil, err
 		}
 	}
-	snapshot, err := policyActivationSnapshot(r, policy, j)
+	previous := boardpolicy.Default()
+	if revision != nil {
+		previous, err = boardpolicy.Parse(revision.PreviousCanonical)
+		if err != nil {
+			return state, nil, err
+		}
+	} else if j.PolicyAuthority != nil && j.PolicyDigest == digest {
+		previous = policy // joining an already declared scope, not expanding it
+	}
+	if err := validateModuleScopeChange(previous, policy, adopt); err != nil {
+		return state, nil, err
+	}
+	var adoption *moduleIDAdoption
+	var idTarget []byte
+	if adopt {
+		adoption, idTarget, err = prepareModuleIDs(r, policy, j, binding)
+		if err != nil {
+			return state, nil, err
+		}
+	}
+	snapshot, err := policyActivationSnapshotForAdoption(r, policy, j, adoption)
 	if err != nil {
 		return state, nil, err
 	}
@@ -61,10 +85,13 @@ func preparePolicyChangeJournal(r *os.Root, policy boardpolicy.Policy, binding p
 		return state, nil, err
 	}
 	ids, err := boundedSnapshotFile(r, idsFile, maxIDsBytes)
-	if err != nil {
+	if err != nil && !(errors.Is(err, fs.ErrNotExist) && adoption != nil && len(adoption.Original) == 0) {
 		return state, nil, err
 	}
-	plan := policyActivationPlan{Root: root, HEAD: head, Snapshot: snapshot, OriginalIDs: bytesDigest(ids), TargetIDs: bytesDigest(ids), IDTarget: []byte{}}
+	plan := policyActivationPlan{Root: root, HEAD: head, Snapshot: snapshot, OriginalIDs: optionalPolicyHash(ids), TargetIDs: optionalPolicyHash(ids), IDTarget: []byte{}}
+	if adoption != nil {
+		plan.ModuleAdoption, plan.IDTarget, plan.TargetIDs = adoption, idTarget, bytesDigest(idTarget)
+	}
 	for _, item := range []struct {
 		name   string
 		limit  int
@@ -72,7 +99,7 @@ func preparePolicyChangeJournal(r *os.Root, policy boardpolicy.Policy, binding p
 	}{
 		{transitionsFile, maxTransitionBytes, &plan.OriginalJournal},
 		{policyFile, 64 << 10, &plan.OriginalPolicy},
-		{policyActivationFile, maxPolicyActivationBytes, &plan.OriginalActivation},
+		{policyActivationFile, maxModuleActivationBytes, &plan.OriginalActivation},
 	} {
 		raw, err := boundedSnapshotFile(r, item.name, item.limit)
 		if errors.Is(err, fs.ErrNotExist) {
@@ -95,6 +122,9 @@ func preparePolicyChangeJournal(r *os.Root, policy boardpolicy.Policy, binding p
 	state = policyActivationState{SchemaVersion: 1, Phase: "pending", AuthorityID: binding.AuthorityID, Scope: binding.Scope, Namespace: binding.Namespace, Canonical: canonical, Digest: digest, Plan: plan}
 	if revision != nil {
 		state.SchemaVersion, state.Revision = 2, revision
+	}
+	if adoption != nil {
+		state.SchemaVersion = 3
 	}
 	if _, err := policyActivationBytes(state); err != nil {
 		return policyActivationState{}, nil, err

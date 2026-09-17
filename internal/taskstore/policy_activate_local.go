@@ -11,6 +11,11 @@ import (
 )
 
 func activateLocalPolicy(dir string, s *sharedSession, policy boardpolicy.Policy, resume bool, step func(string) error) (result PolicyActivationResult, err error) {
+	return activateLocalPolicyWithOptions(dir, s, policy, PolicyActivationOptions{Resume: resume}, step)
+}
+
+func activateLocalPolicyWithOptions(dir string, s *sharedSession, policy boardpolicy.Policy, options PolicyActivationOptions, step func(string) error) (result PolicyActivationResult, err error) {
+	resume := options.Resume
 	r, err := openBoard(dir)
 	if err != nil {
 		return result, err
@@ -39,7 +44,7 @@ func activateLocalPolicy(dir string, s *sharedSession, policy boardpolicy.Policy
 		return result, errors.Join(errors.New("policy activation binding unavailable; preserve activation state"), loadErr)
 	}
 	if loadErr == nil {
-		if activation.Revision != nil && activation.Phase == "pending" {
+		if activation.Revision != nil && activation.Phase != "completed" {
 			return result, errors.New("policy revision is pending; use explicit revision resume")
 		}
 		if activation.Scope != "local" || activation.Namespace != "" {
@@ -64,7 +69,10 @@ func activateLocalPolicy(dir string, s *sharedSession, policy boardpolicy.Policy
 				return result, err
 			}
 		}
-		if activation.Phase == "pending" {
+		if activation.Phase != "completed" {
+			if (activation.Plan.ModuleAdoption != nil) != options.AdoptModules {
+				return result, errors.New("pending module adoption requires the original adopt-modules flag")
+			}
 			if !resume {
 				return result, errors.New("policy activation is pending; explicit resume required")
 			}
@@ -89,7 +97,11 @@ func activateLocalPolicy(dir string, s *sharedSession, policy boardpolicy.Policy
 	if err != nil {
 		return result, err
 	}
-	state, _, err := preparePolicyActivation(r, policy, policyAuthorityBinding{AuthorityID: authorityID, Scope: "local"}, "")
+	j, err := loadTransitions(r)
+	if err != nil {
+		return result, err
+	}
+	state, _, err := preparePolicyChangeWithModules(r, policy, policyAuthorityBinding{AuthorityID: authorityID, Scope: "local"}, "", j, nil, options.AdoptModules)
 	if err != nil {
 		return result, err
 	}

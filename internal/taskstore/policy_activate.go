@@ -12,6 +12,7 @@ import (
 type PolicyActivationOptions struct {
 	Resume       bool
 	AllWorktrees bool
+	AdoptModules bool
 }
 
 type PolicyActivationResult struct {
@@ -25,8 +26,8 @@ type PolicyActivationResult struct {
 }
 
 // ActivatePolicy explicitly adopts an immutable policy. Shared-ID namespaces
-// adopt one common authority; other boards remain local. It never enables IDs,
-// invokes an agent, or changes Git topology.
+// adopt one common authority; other boards remain local. Explicit module adoption
+// may initialize the ID ledger. It never invokes an agent or changes Git topology.
 func ActivatePolicy(dir string, raw []byte, options PolicyActivationOptions) (PolicyActivationResult, error) {
 	return activatePolicyWithStep(dir, raw, options, nil)
 }
@@ -35,6 +36,9 @@ func activatePolicyWithStep(dir string, raw []byte, options PolicyActivationOpti
 	policy, err := boardpolicy.Parse(raw)
 	if err != nil {
 		return result, err
+	}
+	if options.AdoptModules && len(policy.Modules()) == 0 {
+		return result, errors.New("adopt-modules requires a declared module scope")
 	}
 	s, release, err := acquireSharedForPolicy(dir)
 	if err != nil {
@@ -45,9 +49,9 @@ func activatePolicyWithStep(dir string, raw []byte, options PolicyActivationOpti
 		if (s.state.Policy == nil || s.state.Policy.Phase == "initializing") && !options.AllWorktrees {
 			return result, errors.New("shared policy activation requires explicit all-worktrees acknowledgement; no board was changed")
 		}
-		return activateSharedPolicy(s, policy, options.Resume, step)
+		return activateSharedPolicy(s, policy, options, step)
 	}
-	return activateLocalPolicy(dir, s, policy, options.Resume, step)
+	return activateLocalPolicyWithOptions(dir, s, policy, options, step)
 }
 
 func finishPolicyActivation(result PolicyActivationResult, operationErr, cleanupErr error) error {

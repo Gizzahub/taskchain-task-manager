@@ -18,16 +18,17 @@ const policyActivationFile = ".task-manager-policy-activation.json"
 const maxPolicyActivationBytes = 2 << 20
 
 type policyActivationPlan struct {
-	Root               string `json:"root"`
-	HEAD               string `json:"head"`
-	Snapshot           string `json:"snapshot"`
-	OriginalJournal    string `json:"originalJournal"`
-	TargetJournal      string `json:"targetJournal"`
-	OriginalPolicy     string `json:"originalPolicy"`
-	OriginalActivation string `json:"originalActivation"`
-	OriginalIDs        string `json:"originalIds"`
-	TargetIDs          string `json:"targetIds"`
-	IDTarget           []byte `json:"idTarget"`
+	Root               string            `json:"root"`
+	HEAD               string            `json:"head"`
+	Snapshot           string            `json:"snapshot"`
+	OriginalJournal    string            `json:"originalJournal"`
+	TargetJournal      string            `json:"targetJournal"`
+	OriginalPolicy     string            `json:"originalPolicy"`
+	OriginalActivation string            `json:"originalActivation"`
+	OriginalIDs        string            `json:"originalIds"`
+	TargetIDs          string            `json:"targetIds"`
+	IDTarget           []byte            `json:"idTarget"`
+	ModuleAdoption     *moduleIDAdoption `json:"moduleAdoption,omitempty"`
 }
 
 type policyActivationState struct {
@@ -59,19 +60,19 @@ func loadPolicyActivation(r *os.Root) (policyActivationState, error) {
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
 		return policyActivationState{}, errors.New("policy activation is not a regular file")
 	}
-	if info.Size() > maxPolicyActivationBytes {
-		return policyActivationState{}, errors.New("policy activation exceeds 2 MiB")
+	if info.Size() > maxModuleActivationBytes {
+		return policyActivationState{}, errors.New("policy activation exceeds 4 MiB")
 	}
 	f, err := r.Open(policyActivationFile)
 	if err != nil {
 		return policyActivationState{}, err
 	}
 	defer f.Close()
-	raw, err := io.ReadAll(io.LimitReader(f, maxPolicyActivationBytes+1))
+	raw, err := io.ReadAll(io.LimitReader(f, maxModuleActivationBytes+1))
 	if err != nil {
 		return policyActivationState{}, err
 	}
-	if len(raw) > maxPolicyActivationBytes || !utf8.Valid(raw) {
+	if len(raw) > maxModuleActivationBytes || !utf8.Valid(raw) {
 		return policyActivationState{}, errors.New("invalid policy activation size or UTF-8")
 	}
 	if err := validatePolicyActivationShape(raw); err != nil {
@@ -80,6 +81,9 @@ func loadPolicyActivation(r *os.Root) (policyActivationState, error) {
 	var state policyActivationState
 	if err := decodeExact(raw, &state); err != nil {
 		return policyActivationState{}, err
+	}
+	if state.SchemaVersion < 3 && len(raw) > maxPolicyActivationBytes {
+		return policyActivationState{}, errors.New("legacy policy activation exceeds 2 MiB")
 	}
 	if err := validatePolicyActivationState(state); err != nil {
 		return policyActivationState{}, err
@@ -128,18 +132,25 @@ func policyActivationBytes(state policyActivationState) ([]byte, error) {
 		return nil, err
 	}
 	raw = append(raw, '\n')
-	if len(raw) > maxPolicyActivationBytes {
-		return nil, errors.New("policy activation exceeds 2 MiB")
+	limit := maxPolicyActivationBytes
+	if state.SchemaVersion == 3 {
+		limit = maxModuleActivationBytes
+	}
+	if len(raw) > limit {
+		return nil, errors.New("policy activation exceeds its schema byte limit")
 	}
 	return raw, nil
 }
 
 func validatePolicyActivationState(state policyActivationState) error {
-	if (state.SchemaVersion != 1 && state.SchemaVersion != 2) || (state.Phase != "pending" && state.Phase != "completed") {
+	if (state.SchemaVersion != 1 && state.SchemaVersion != 2 && state.SchemaVersion != 3) || (state.Phase != "pending" && state.Phase != "completed" && !(state.SchemaVersion == 3 && state.Phase == "ids-published")) {
 		return errors.New("invalid policy activation schema or phase")
 	}
 	if err := validateActivationRevision(state); err != nil {
 		return err
+	}
+	if (state.SchemaVersion == 3) != (state.Plan.ModuleAdoption != nil) {
+		return errors.New("module adoption plan requires activation schema 3")
 	}
 	if !sharedHex32.MatchString(state.AuthorityID) {
 		return errors.New("invalid policy activation authority ID")
@@ -159,6 +170,18 @@ func validatePolicyActivationState(state policyActivationState) error {
 	p, err := boardpolicy.Parse(state.Canonical)
 	if err != nil {
 		return fmt.Errorf("parse activation policy: %w", err)
+	}
+	if state.Plan.ModuleAdoption != nil && len(p.Modules()) == 0 {
+		return errors.New("module adoption requires declared modules")
+	}
+	if state.Revision != nil {
+		previous, err := boardpolicy.Parse(state.Revision.PreviousCanonical)
+		if err != nil {
+			return err
+		}
+		if err := validateModuleScopeChange(previous, p, state.Plan.ModuleAdoption != nil); err != nil {
+			return err
+		}
 	}
 	canonical, err := p.Canonical()
 	if err != nil || !bytes.Equal(canonical, state.Canonical) {
@@ -189,15 +212,22 @@ func validatePolicyActivationPlan(plan policyActivationPlan, shared bool) error 
 	if !shared && plan.HEAD != "" && !sharedHex40Or64.MatchString(plan.HEAD) {
 		return errors.New("invalid local policy activation HEAD")
 	}
-	for name, value := range map[string]string{"snapshot": plan.Snapshot, "targetJournal": plan.TargetJournal, "originalIds": plan.OriginalIDs, "targetIds": plan.TargetIDs} {
+	for name, value := range map[string]string{"snapshot": plan.Snapshot, "targetJournal": plan.TargetJournal, "targetIds": plan.TargetIDs} {
 		if !sharedHex64.MatchString(value) {
 			return fmt.Errorf("invalid policy activation %s", name)
 		}
 	}
+	if !sharedHex64.MatchString(plan.OriginalIDs) && !(plan.ModuleAdoption != nil && plan.OriginalIDs == "") {
+		return errors.New("invalid original ID ledger hash")
+	}
 	if plan.IDTarget == nil || len(plan.IDTarget) > maxIDsBytes {
 		return errors.New("policy activation ID target must be a bounded non-null byte string")
 	}
-	if len(plan.IDTarget) == 0 {
+	if plan.ModuleAdoption != nil {
+		if err := validateModuleIDPlan(plan, shared); err != nil {
+			return err
+		}
+	} else if len(plan.IDTarget) == 0 {
 		if plan.OriginalIDs != plan.TargetIDs {
 			return errors.New("changed ID target requires durable bytes")
 		}
@@ -420,7 +450,16 @@ func requireJSONString(raw json.RawMessage, field string) error {
 
 func validatePlanShape(raw []byte, keys []string) error {
 	var obj map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &obj); err != nil || len(obj) != len(keys) {
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return err
+	}
+	if adoption, exists := obj["moduleAdoption"]; exists {
+		if err := validateModuleAdoptionShape(adoption); err != nil {
+			return err
+		}
+		delete(obj, "moduleAdoption")
+	}
+	if len(obj) != len(keys) {
 		return errors.New("invalid policy activation plan shape")
 	}
 	allowed := map[string]bool{}

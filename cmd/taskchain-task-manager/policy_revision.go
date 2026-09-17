@@ -10,14 +10,14 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
 )
 
-const policyRevisionUsage = "revise-policy <file> --dir <board> --expected-authority <32hex> --expected-digest <64hex> [--all-worktrees] [--resume] --json"
+const policyRevisionUsage = "revise-policy <file> --dir <board> --expected-authority <32hex> --expected-digest <64hex> [--all-worktrees] [--adopt-modules] [--resume] --json"
 
 func runPolicyRevision(args []string, out, errOut io.Writer) int {
 	if len(args) == 2 && (args[1] == "--help" || args[1] == "-h") {
 		fmt.Fprintln(out, "Usage:", policyRevisionUsage)
 		fmt.Fprintln(out, "Replace the active policy with an explicit compare-and-swap revision.")
 		fmt.Fprintln(out, "The first request must identify the active policy. Resume and result confirmation retain those original expected values.")
-		fmt.Fprintln(out, "Shared namespaces require --all-worktrees; --resume never starts a new revision.")
+		fmt.Fprintln(out, "Shared namespaces require --all-worktrees; module adoption requires --adopt-modules; --resume never starts a new revision.")
 		return 0
 	}
 	if len(args) < 3 || args[1] == "" {
@@ -30,6 +30,7 @@ func runPolicyRevision(args []string, out, errOut io.Writer) int {
 	authority := flags.String("expected-authority", "", "current policy authority ID")
 	digest := flags.String("expected-digest", "", "current policy digest")
 	all := flags.Bool("all-worktrees", false, "acknowledge revision in every registered worktree")
+	adoptModules := flags.Bool("adopt-modules", false, "adopt declared module roots after verifying all writers are upgraded")
 	resume := flags.Bool("resume", false, "resume the exact recorded revision")
 	asJSON := flags.Bool("json", false, "write JSON")
 	if err := flags.Parse(args[2:]); err != nil {
@@ -52,6 +53,7 @@ func runPolicyRevision(args []string, out, errOut io.Writer) int {
 		ExpectedDigest:      *digest,
 		Resume:              *resume,
 		AllWorktrees:        *all,
+		AdoptModules:        *adoptModules,
 	})
 	if err != nil {
 		fmt.Fprintln(errOut, "revise policy:", err)

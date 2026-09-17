@@ -15,6 +15,10 @@ import (
 // validated journal so an interrupted activation is not re-read through the
 // ordinary policy/journal gate.
 func policyActivationSnapshot(r *os.Root, policy boardpolicy.Policy, journal transitionJournal) (string, error) {
+	return policyActivationSnapshotForAdoption(r, policy, journal, nil)
+}
+
+func policyActivationSnapshotForAdoption(r *os.Root, policy boardpolicy.Policy, journal transitionJournal, adoption *moduleIDAdoption) (string, error) {
 	if err := validateTransitionRecords(journal, policy); err != nil {
 		return "", err
 	}
@@ -36,7 +40,7 @@ func policyActivationSnapshot(r *os.Root, policy boardpolicy.Policy, journal tra
 	if err := validateGraph(entries); err != nil {
 		return "", err
 	}
-	ledger, err := loadIDs(r)
+	ledger, idsMode, err := moduleSnapshotLedger(r, adoption)
 	if err != nil {
 		return "", err
 	}
@@ -73,14 +77,7 @@ func policyActivationSnapshot(r *os.Root, policy boardpolicy.Policy, journal tra
 	}
 	// ID contents may be deliberately adopted by join. Their exact hashes are
 	// part of the durable plan; permission changes remain snapshot conflicts.
-	idsInfo, err := r.Lstat(idsFile)
-	if err != nil {
-		return "", err
-	}
-	if idsInfo.Mode()&^os.ModePerm != 0 {
-		return "", errors.New("unsafe ID ledger mode")
-	}
-	writeActivationFrame(h, "ids-mode", []byte(fmt.Sprintf("%o", idsInfo.Mode())))
+	writeActivationFrame(h, "ids-mode", []byte(fmt.Sprintf("%o", idsMode)))
 	for _, entry := range entries {
 		raw, mode, err := snapshotActivationFile(r, entry.Path, maxCardBytes, true)
 		if err != nil {
