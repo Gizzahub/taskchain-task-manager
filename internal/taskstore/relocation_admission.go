@@ -68,7 +68,7 @@ func (s *relocationSession) prepareRelocation(req RelocationRequest) (relocation
 }
 
 func (s *relocationSession) validateRelocationAdmission(entries []Entry, req RelocationRequest) error {
-	completion, err := completionForJournal(entries, s.policy, nil, "", "", nil)
+	completion, err := completionForBoard(s.root, entries, s.policy)
 	if err != nil {
 		return err
 	}

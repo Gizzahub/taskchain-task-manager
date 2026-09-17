@@ -229,7 +229,7 @@ func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest, polic
 	if entry.Card.ID == "" || entryZone(entry.Path, policy) != req.From {
 		return transitionRecord{}, errors.New("source card does not match transition")
 	}
-	completion, err := completionForJournal(entries, policy, nil, "", "", nil)
+	completion, err := completionForBoard(r, entries, policy)
 	if err != nil {
 		return transitionRecord{}, err
 	}

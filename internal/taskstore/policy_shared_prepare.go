@@ -99,6 +99,15 @@ func prepareSharedPolicy(s *sharedSession, boards []sharedPolicyBoard, policy bo
 		if err != nil {
 			return next, err
 		}
+		if j.StorageProtocol >= 3 {
+			archive, err := archiveForBoard(b.root, j)
+			if err != nil {
+				return next, err
+			}
+			if archive.Namespace != s.state.NamespaceID {
+				return next, errors.New("archive namespace migration requires explicit durable rebind before policy join")
+			}
+		}
 		if j.SchemaVersion == 4 {
 			next.PolicyRevisionProtocol = 1
 		}

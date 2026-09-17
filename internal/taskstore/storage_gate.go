@@ -26,6 +26,9 @@ func canonicalStorageBoard(r *os.Root) (string, error) {
 // This gate is also used by exceptional bundle/policy sessions. A storage
 // marker is persistent even after every repair has completed.
 func checkStorageGate(r *os.Root, transitions transitionJournal) error {
+	if err := checkArchiveGate(r, transitions); err != nil {
+		return err
+	}
 	if err := checkRelocationGate(r, transitions); err != nil {
 		return err
 	}
@@ -39,7 +42,7 @@ func checkStorageGate(r *os.Root, transitions transitionJournal) error {
 	if err != nil {
 		return err
 	}
-	if transitions.StorageProtocol != 1 && transitions.StorageProtocol != 2 {
+	if transitions.StorageProtocol < 1 || transitions.StorageProtocol > 3 {
 		return errors.New("storage adoption is incomplete; resume explicit adoption")
 	}
 	board, err := canonicalStorageBoard(r)
@@ -71,7 +74,7 @@ func checkRelocationGate(r *os.Root, transitions transitionJournal) error {
 	if err != nil {
 		return err
 	}
-	if transitions.StorageProtocol != 2 {
+	if transitions.StorageProtocol < 2 || transitions.StorageProtocol > 3 {
 		return errors.New("relocation adoption is incomplete; resume explicit adoption")
 	}
 	board, err := canonicalStorageBoard(r)

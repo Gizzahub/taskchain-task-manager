@@ -390,7 +390,7 @@ func Ready(dir string) (entries []Entry, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return readyLockedWithPolicy(all, ledger, policy)
+	return readyForBoard(r, all, ledger, policy)
 }
 
 func validateDependencies(deps []string, id string, entries []Entry) error {

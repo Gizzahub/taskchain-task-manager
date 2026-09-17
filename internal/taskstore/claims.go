@@ -80,7 +80,7 @@ func Claim(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 	if err != nil {
 		return ClaimRecord{}, err
 	}
-	ready, err := readyLockedWithPolicy(entries, ledger, policy)
+	ready, err := readyForBoard(r, entries, ledger, policy)
 	if err != nil {
 		return ClaimRecord{}, err
 	}

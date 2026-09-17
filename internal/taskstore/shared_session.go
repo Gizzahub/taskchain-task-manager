@@ -48,6 +48,13 @@ func acquireSharedStorageOptions(dir string, allowInitializing, allowPendingBund
 }
 
 func acquireSharedRelocationOptions(dir string, allowInitializing, allowPendingBundle, allowPendingPolicy, allowPendingRepair, allowPendingRelocation bool) (session *sharedSession, release func() error, err error) {
+	return acquireSharedArchiveOptions(dir, allowInitializing, allowPendingBundle, allowPendingPolicy, allowPendingRepair, allowPendingRelocation, false)
+}
+
+// Archive recovery may bypass only the archive pending gate. All existing
+// callers reach this wrapper through acquireSharedRelocationOptions and keep
+// the default false value.
+func acquireSharedArchiveOptions(dir string, allowInitializing, allowPendingBundle, allowPendingPolicy, allowPendingRepair, allowPendingRelocation, allowPendingArchive bool) (session *sharedSession, release func() error, err error) {
 	location, err := githistory.LocateBoard(context.Background(), dir)
 	if err != nil {
 		return nil, nil, err
@@ -119,6 +126,9 @@ func acquireSharedRelocationOptions(dir string, allowInitializing, allowPendingB
 	}
 	if state.PendingRelocation != nil && !allowPendingRelocation {
 		return nil, release, errors.New("shared namespace has a pending relocation; recover from its original board")
+	}
+	if state.PendingArchive != nil && !allowPendingArchive {
+		return nil, release, errors.New("shared namespace has a pending archive; recover from its original board")
 	}
 	if state.Policy != nil && state.Policy.Phase != "active" && !allowPendingPolicy {
 		return nil, release, errors.New("shared policy activation is pending; explicit policy recovery required")
@@ -218,6 +228,19 @@ func (s *sharedSession) verifyBoardIdentity(r *os.Root) error {
 // Readers and receipt replay must not bypass an existing shared identity.
 // This only checks identity; it never merges IDs, scans history or adopts a board.
 func (s *sharedSession) verifyLocalIDBinding(r *os.Root) error {
+	archive, archiveErr := loadArchiveJournal(r)
+	if archiveErr != nil && !errors.Is(archiveErr, fs.ErrNotExist) {
+		return archiveErr
+	}
+	if archiveErr == nil {
+		expectedNamespace := ""
+		if s != nil && s.state != nil {
+			expectedNamespace = s.state.NamespaceID
+		}
+		if archive.Namespace != expectedNamespace {
+			return errors.New("local archive journal namespace mismatch")
+		}
+	}
 	ledger, err := loadIDs(r)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil

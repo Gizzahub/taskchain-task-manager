@@ -72,6 +72,9 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 		if err != nil {
 			return result, err
 		}
+		if journal.StorageProtocol >= 3 && (s.state == nil || s.state.Phase != "active") {
+			return result, errors.New("archive namespace migration requires explicit durable rebind; shared activation is not supported yet")
+		}
 		if journal.StorageProtocol > storageProtocol {
 			storageProtocol = journal.StorageProtocol
 		}

@@ -24,7 +24,7 @@ func openRelocationSession(dir string, req RelocationRequest) (_ *relocationSess
 	}()
 	s.moves, err = loadRelocationJournal(s.root)
 	if errors.Is(err, fs.ErrNotExist) {
-		if s.transitions.StorageProtocol == 2 {
+		if s.transitions.StorageProtocol >= 2 {
 			return nil, errors.New("adopted relocation journal is missing; restore it")
 		}
 		s.moves = relocationJournal{SchemaVersion: 1, BoardPath: s.journal.BoardPath, Records: []relocationRecord{}}
@@ -42,7 +42,7 @@ func openRelocationSession(dir string, req RelocationRequest) (_ *relocationSess
 	}
 	if s.shared != nil && s.shared.state != nil {
 		if p := s.shared.state.PendingRelocation; p != nil {
-			if p.Owner != s.moves.BoardPath || p.RequestID != req.RequestID || s.transitions.StorageProtocol != 2 || !s.movesExist {
+			if p.Owner != s.moves.BoardPath || p.RequestID != req.RequestID || s.transitions.StorageProtocol < 2 || !s.movesExist {
 				return nil, errors.New("shared relocation owner, request or local binding mismatch")
 			}
 		}
@@ -51,8 +51,8 @@ func openRelocationSession(dir string, req RelocationRequest) (_ *relocationSess
 }
 
 func (s *relocationSession) adoptRelocation(explicit bool, step func(string) error) error {
-	commonNeeded := s.shared != nil && s.shared.state != nil && s.shared.state.StorageProtocol != 2
-	if (!s.movesExist || s.transitions.StorageProtocol != 2 || commonNeeded) && !explicit {
+	commonNeeded := s.shared != nil && s.shared.state != nil && s.shared.state.StorageProtocol < 2
+	if (!s.movesExist || s.transitions.StorageProtocol < 2 || commonNeeded) && !explicit {
 		return errors.New("relocation protocol adoption requires --adopt after upgrading all writers")
 	}
 	if err := s.repairSession.adopt(explicit, nil); err != nil {
@@ -77,7 +77,7 @@ func (s *relocationSession) adoptRelocation(explicit bool, step func(string) err
 	if err := storageStep(step, "after-relocation-common-protocol"); err != nil {
 		return err
 	}
-	if s.transitions.StorageProtocol != 2 {
+	if s.transitions.StorageProtocol < 2 {
 		s.transitions.StorageProtocol = 2
 		if err := publishTransitionJournal(s.root, s.transitions); err != nil {
 			return err

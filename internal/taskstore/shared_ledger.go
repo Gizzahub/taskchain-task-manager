@@ -37,6 +37,7 @@ type sharedState struct {
 	StorageProtocol        int                    `json:"storageProtocol,omitempty"`
 	PendingRepair          *sharedRepairPending   `json:"pendingRepair,omitempty"`
 	PendingRelocation      *sharedRepairPending   `json:"pendingRelocation,omitempty"`
+	PendingArchive         *sharedRepairPending   `json:"pendingArchive,omitempty"`
 	PolicyRevisionProtocol int                    `json:"policyRevisionProtocol,omitempty"`
 	ModuleProtocol         int                    `json:"moduleProtocol,omitempty"`
 }
@@ -157,7 +158,7 @@ func validateSharedShape(raw []byte) error {
 	}
 	if raw, ok := root["storageProtocol"]; ok {
 		var protocol int
-		if err := json.Unmarshal(raw, &protocol); err != nil || (protocol != 1 && protocol != 2) {
+		if err := json.Unmarshal(raw, &protocol); err != nil || (protocol != 1 && protocol != 2 && protocol != 3) {
 			return errors.New("unsupported shared storage protocol")
 		}
 		allowed["storageProtocol"] = true
@@ -173,6 +174,12 @@ func validateSharedShape(raw []byte) error {
 			return err
 		}
 		allowed["pendingRelocation"] = true
+	}
+	if raw, ok := root["pendingArchive"]; ok {
+		if err := validateSharedArchiveShape(raw); err != nil {
+			return err
+		}
+		allowed["pendingArchive"] = true
 	}
 	var version int
 	if err := json.Unmarshal(root["schemaVersion"], &version); err != nil {
@@ -274,6 +281,9 @@ func validateSharedState(s sharedState) error {
 		return errors.New("shared policy revision requires permanent protocol barrier")
 	}
 	if err := validateSharedStorage(s); err != nil {
+		return err
+	}
+	if err := validateSharedArchive(s); err != nil {
 		return err
 	}
 	if (s.SchemaVersion != 1 && s.SchemaVersion != 2 && s.SchemaVersion != 3) || !sharedHex32.MatchString(s.NamespaceID) || !validSharedBoardPath(s.BoardPath) || (s.Phase != "initializing" && s.Phase != "active") {

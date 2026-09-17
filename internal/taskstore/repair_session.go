@@ -50,6 +50,9 @@ func openStorageSession(dir string, req RepairRequest, relocation bool) (_ *repa
 	if err != nil {
 		return nil, err
 	}
+	if err := checkArchiveGate(r, s.transitions); err != nil {
+		return nil, err
+	}
 	if !relocation {
 		if err := checkRelocationGate(r, s.transitions); err != nil {
 			return nil, err
