@@ -4,6 +4,8 @@
 보드 최상위 workflow는 todo/doing/review/blocked/done이며 종류 영역은 plan/issue/backlog다.
 `archive`와 `_archive`는 모두 보관 영역이다. 이름을 자동 변경하거나 카드를 이동하지 않는다.
 양쪽 보관 영역의 카드도 목록·중복 identity 검사·ID 예약에 포함한다.
+[명시적으로 채택한 module](module-adoption.md)에서도 같은 zone을 발견하며,
+`module/zone/category/card.md` 경로의 module과 category를 유지한다.
 
 알려진 영역 아래 `.md` 파일을 재귀적으로 읽는다. 다음은 카드가 아니다.
 
@@ -20,7 +22,8 @@
 제외된 실제 디렉터리 내부는 검사하지 않는다. malformed YAML·중복 identity는 오류다.
 
 보관 카드의 상태가 done이어도 선행 작업 완료로 인정하지 않는다. 실행 가능한 workflow는
-여전히 top-level TASK 카드이며 kind/archive/nested 카드는 claim이나 transition 대상이 아니다.
+top-level 또는 선언된 module의 workflow TASK다. kind/archive와 legacy top-level 아래의
+임의 중첩 카드는 claim이나 transition 대상이 아니다. module의 category는 지원한다.
 
 Git 이력 스캔은 다른 목적으로 더 보수적으로 읽는다. 명시 비카드 이름은 같지만 `.ce` 이외의
 숨김 디렉터리·숨김 Markdown도 과거 ID 후보로 읽을 수 있다. 전체 CE configurable dialect,

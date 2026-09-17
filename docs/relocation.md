@@ -7,9 +7,9 @@
 ## 정책과 범위
 
 새 보드에서 다음과 같은 v2 정책을 `activate-policy`로 명시 채택할 수 있습니다.
-이미 활성화된 다른 정책은 자동 덮어쓰지 않습니다. 기존 v1 정책의 revision 전환과
-명시적 module discovery는 아직 지원하지 않습니다. 보드 바로 아래 kind/workflow 경로와
-그 아래 category 경로를 사용하세요. module 이름을 kind 경로로 바꾸어 우회하지 마세요.
+이미 활성화된 다른 정책은 자동 덮어쓰지 않습니다. 기존 정책 변경에는
+[명시적 revision](policy-revision.md)을 사용합니다. [module 채택](module-adoption.md) 후에는
+`module/zone/category/card.md`도 지원합니다. 미선언 module을 kind 경로로 바꾸어 우회하지 마세요.
 
 ```yaml
 schema-version: 2
@@ -47,6 +47,9 @@ shasum -a 256 ./tasks/todo/TASK-1.md
 카드 ID는 이미 영구 예약되어 있어야 합니다. held claim이 있으면 정확한 owner/token이
 필요하며, 없으면 token을 생략합니다. TASK의 doing/done 진입에는 기존 held claim과
 완료 의존성이 필요합니다. 명령은 claim을 만들거나 자동 해제하지 않습니다.
+done TASK를 kind로 이동하면 그 카드는 더 이상 후속 TASK의 완료 의존성을 충족하지 않습니다.
+본문이나 kind-status가 done이어도 workflow done을 대신하지 않습니다. pending 동안에는
+claim release도 차단되며, 이동 완료 후 정확한 owner/token으로 해제할 수 있습니다.
 최초 target이 존재하면 내용이 같아도 충돌입니다. 기존 파일을 덮어쓰지 않습니다.
 
 성공 JSON은 schemaVersion/requestId/id/source/target/status/changed를 포함합니다.

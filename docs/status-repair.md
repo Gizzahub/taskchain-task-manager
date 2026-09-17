@@ -6,8 +6,9 @@
 
 ## 요청 준비
 
-현재 보드 바로 아래의 `todo/doing/review/blocked/done`에 있는 TASK 카드만 지원합니다.
-kind 카드, archive, 중첩 모듈과 parking 경로는 이 명령의 대상이 아닙니다.
+보드 바로 아래 또는 [명시 채택한 module](module-adoption.md)의
+`todo/doing/review/blocked/done`에 있는 TASK 카드를 지원합니다. module의 category는 보존합니다.
+kind 카드, archive, 미선언 모듈과 parking 경로는 이 명령의 대상이 아닙니다.
 이미 올바르거나 Status cell이 없는 카드는 bytes를 바꾸지 않고 `changed: false`를 반환합니다.
 
 대상 원본 파일의 SHA-256을 구해 `--expected-sha256`에 전달합니다. 경로는 board-relative

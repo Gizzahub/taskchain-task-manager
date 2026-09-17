@@ -25,9 +25,10 @@ token은 예약 소유권, request-id는 전이 한 번의 재시도 식별자�
 | review | doing, done |
 | done | todo |
 
-전이는 현재 top-level workflow 경로와 from이 일치하고 정확한 held claim이 있어야 합니다.
-doing/done 진입 전에는 선행 작업이 여전히 top-level done인지 재검사합니다.
-동일 상태로의 새 전이나 kind/archive/nested 카드의 전이는 지원하지 않습니다.
+전이는 현재 workflow 경로와 from이 일치하고 정확한 held claim이 있어야 합니다.
+top-level TASK와 [명시 채택한 module](module-adoption.md)의 workflow TASK를 지원합니다.
+doing/done 진입 전에는 선행 TASK가 여전히 workflow done인지 재검사합니다.
+동일 상태로의 새 전이, kind/archive 카드, legacy top-level 아래 임의 중첩 경로는 지원하지 않습니다.
 release 후 doing/review/blocked/done에 남은 카드는 새 token의 `claim --resume`으로
 명시적으로 예약할 수 있습니다. 기존 held claim을 강제로 회수하지는 않습니다.
 
