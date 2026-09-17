@@ -14,6 +14,9 @@ import (
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, out, errOut io.Writer) int {
+	if len(args) > 0 && args[0] == "archive" {
+		return runArchive(args, out, errOut)
+	}
 	if len(args) > 0 && args[0] == "revise-policy" {
 		return runPolicyRevision(args, out, errOut)
 	}
@@ -88,6 +91,7 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "       taskchain-task-manager <transition|recover> --dir <board> --id TASK-N --owner <owner> --token <claim token> --request-id <32 lowercase hex> --from <zone> --to <zone> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager repair-status --dir <board> --id TASK-N --path <card> --owner <owner> [--token <claim token>] --request-id <32 lowercase hex> --expected-sha256 <64 lowercase hex> [--adopt | --resume] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager", relocationUsage)
+		fmt.Fprintln(out, "       taskchain-task-manager", archiveUsage)
 		return 0
 	}
 	if len(args) != 3 || args[2] != "--json" || args[0] != "show" {
