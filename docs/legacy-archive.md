@@ -25,7 +25,9 @@ No flag silently upgrades an earlier adoption: reusing a request ID with changed
 approval or mode is a conflict. Do not use this command to supersede or restore
 an existing archive operation.
 
-All writers must support storage protocol 3 before initial `--adopt`. A pending
+All writers must support storage protocol 4 before `--adopt`, including an
+upgrade from protocol 3. Existing protocol 3 pending requests retain their
+original recovery format and must finish before upgrade. A pending
 operation blocks ordinary board operations. Retry with exactly the same inputs;
 use `--resume` once the operation is recorded, or `--adopt` if initial protocol
 adoption stopped before recording it. Preserve journals and locks. Never remove

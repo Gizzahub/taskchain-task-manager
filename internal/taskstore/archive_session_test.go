@@ -37,7 +37,7 @@ func TestArchiveSessionExplicitAdoptionAndMissingJournal(t *testing.T) {
 	if err := s.adoptArchive(true, nil); err != nil {
 		t.Fatal(err)
 	}
-	if s.transitions.StorageProtocol != 3 {
+	if s.transitions.StorageProtocol != 4 {
 		t.Fatal("protocol not adopted")
 	}
 	if err := s.root.Remove(archivesFile); err != nil {
@@ -112,7 +112,7 @@ func TestArchiveSessionSharedAdoptionResume(t *testing.T) {
 			if err := s.adoptArchive(true, nil); err != nil {
 				t.Fatal(err)
 			}
-			if s.shared.state.StorageProtocol != 3 || s.archives.Namespace != s.shared.state.NamespaceID {
+			if s.shared.state.StorageProtocol != 4 || s.archives.Namespace != s.shared.state.NamespaceID {
 				t.Fatal("common archive binding not adopted")
 			}
 			if err := s.close(); err != nil {
@@ -145,6 +145,12 @@ func TestArchiveSessionRejectsOtherPendingStorage(t *testing.T) {
 }
 
 func TestArchiveSessionSharedReservationRecovery(t *testing.T) {
+	t.Run("legacy-full-target", func(t *testing.T) { archiveSessionReservationRecovery(t, 3) })
+	t.Run("delta", func(t *testing.T) { archiveSessionReservationRecovery(t, 4) })
+}
+
+func archiveSessionReservationRecovery(t *testing.T, protocol int) {
+	t.Helper()
 	_, board, other := sharedFixture(t)
 	if _, err := EnableShared(board, false); err != nil {
 		t.Fatal(err)
@@ -155,6 +161,17 @@ func TestArchiveSessionSharedReservationRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := s.adoptArchive(true, nil); err != nil {
+		t.Fatal(err)
+	}
+	// Construct the persisted pre-upgrade fixture without changing production's
+	// explicit upgrade contract. Both old and new pending formats must recover.
+	s.transitions.StorageProtocol = protocol
+	if err := publishTransitionJournal(s.root, s.transitions); err != nil {
+		t.Fatal(err)
+	}
+	state := *s.shared.state
+	state.StorageProtocol = protocol
+	if err := s.shared.saveStorageState(state); err != nil {
 		t.Fatal(err)
 	}
 	rec, err := prepareArchiveRecord(req, raw, 0644, policy, s.archives.BoardPath, s.archives.Namespace, nil)
@@ -195,7 +212,7 @@ func TestArchiveSessionSharedReservationRecovery(t *testing.T) {
 	if err := s.clearArchive(req); err == nil || !strings.Contains(err.Error(), "not durable") {
 		t.Fatalf("early clear=%v", err)
 	}
-	if s.shared.state.PendingArchive == nil {
+	if s.shared.state.PendingArchiveDelta == nil && s.shared.state.PendingArchive == nil {
 		t.Fatal("early clear erased reservation")
 	}
 	done := completedArchiveJournal(s.archives)
@@ -208,7 +225,7 @@ func TestArchiveSessionSharedReservationRecovery(t *testing.T) {
 	if err := s.clearArchive(req); err != nil {
 		t.Fatal(err)
 	}
-	if s.shared.state.PendingArchive != nil || s.shared.state.StorageProtocol != 3 {
+	if s.shared.state.PendingArchiveDelta != nil || s.shared.state.PendingArchive != nil || s.shared.state.StorageProtocol != protocol {
 		t.Fatal("completion lost permanent barrier")
 	}
 }

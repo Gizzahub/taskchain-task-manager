@@ -70,6 +70,9 @@ func legacyArchiveWithStep(dir string, req LegacyArchiveRequest, adopt, recoverO
 	if _, err := archiveJournalBytes(next); err != nil {
 		return result, err
 	}
+	if err := s.preflightArchiveDelta(next); err != nil {
+		return result, err
+	}
 	if err := s.adoptArchive(adopt, step); err != nil {
 		return result, err
 	}
@@ -153,6 +156,17 @@ func (s *archiveSession) verifyLegacyPending(req LegacyArchiveRequest) error {
 			}
 		}
 	}
+	if s.shared != nil && s.shared.state != nil && s.shared.state.PendingArchiveDelta != nil {
+		r, err := s.resolveSharedDelta(req.ArchiveRequest)
+		if err != nil {
+			return err
+		}
+		if !sameLegacyArchive(r.Pending, req) {
+			return errors.New("shared pending legacy archive request differs")
+		}
+		_, err = s.prepareLegacy(req, r.Pending)
+		return err
+	}
 	if s.shared == nil || s.shared.state == nil || s.shared.state.PendingArchive == nil {
 		return nil
 	}
@@ -215,9 +229,8 @@ func (s *archiveSession) verifyPendingLegacy(rec archiveRecord, req LegacyArchiv
 	namespace := ""
 	if s.shared != nil && s.shared.state != nil {
 		namespace = s.shared.state.NamespaceID
-		p := s.shared.state.PendingArchive
-		if p == nil || p.Owner != board || p.RequestID != req.RequestID {
-			return errors.New("pending legacy archive lost common reservation")
+		if err := s.verifyArchiveReservation(req.ArchiveRequest, board); err != nil {
+			return err
 		}
 	}
 	if rec.Namespace != namespace {
@@ -227,7 +240,7 @@ func (s *archiveSession) verifyPendingLegacy(rec archiveRecord, req LegacyArchiv
 	if err != nil {
 		return err
 	}
-	if j.StorageProtocol != 3 {
+	if j.StorageProtocol < 3 || j.StorageProtocol > 4 {
 		return errors.New("pending legacy archive lost protocol binding")
 	}
 	if err := s.shared.verifyPolicyAuthority(s.root, j); err != nil {

@@ -38,6 +38,7 @@ type sharedState struct {
 	PendingRepair          *sharedRepairPending   `json:"pendingRepair,omitempty"`
 	PendingRelocation      *sharedRepairPending   `json:"pendingRelocation,omitempty"`
 	PendingArchive         *sharedRepairPending   `json:"pendingArchive,omitempty"`
+	PendingArchiveDelta    *archivePendingDelta   `json:"pendingArchiveDelta,omitempty"`
 	PolicyRevisionProtocol int                    `json:"policyRevisionProtocol,omitempty"`
 	ModuleProtocol         int                    `json:"moduleProtocol,omitempty"`
 }
@@ -158,7 +159,7 @@ func validateSharedShape(raw []byte) error {
 	}
 	if raw, ok := root["storageProtocol"]; ok {
 		var protocol int
-		if err := json.Unmarshal(raw, &protocol); err != nil || (protocol != 1 && protocol != 2 && protocol != 3) {
+		if err := json.Unmarshal(raw, &protocol); err != nil || protocol < 1 || protocol > 4 {
 			return errors.New("unsupported shared storage protocol")
 		}
 		allowed["storageProtocol"] = true
@@ -180,6 +181,12 @@ func validateSharedShape(raw []byte) error {
 			return err
 		}
 		allowed["pendingArchive"] = true
+	}
+	if raw, ok := root["pendingArchiveDelta"]; ok {
+		if _, err := decodeArchivePendingDelta(raw); err != nil {
+			return err
+		}
+		allowed["pendingArchiveDelta"] = true
 	}
 	var version int
 	if err := json.Unmarshal(root["schemaVersion"], &version); err != nil {

@@ -26,7 +26,7 @@ func archiveForBoard(r *os.Root, transitions transitionJournal) (*archiveJournal
 	if err != nil {
 		return nil, err
 	}
-	if transitions.StorageProtocol != 3 {
+	if transitions.StorageProtocol < 3 || transitions.StorageProtocol > 4 {
 		return nil, errors.New("archive adoption is incomplete; resume explicit adoption")
 	}
 	board, err := canonicalStorageBoard(r)

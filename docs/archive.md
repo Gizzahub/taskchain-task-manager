@@ -29,7 +29,13 @@ taskchain-task-manager archive --dir tasks --id TASK-1 \
 ```
 
 The first operation requires `--adopt` after **all writers** have been upgraded.
-Protocol 3 is permanent; never delete its journals to downgrade a board.
+New operations adopt protocol 4, including boards previously using protocol 3.
+Finish any existing protocol 3 pending request before adopting protocol 4.
+These markers are permanent; never delete journals to downgrade a board.
+Shared protocol 4 reservations carry one pending record and exact journal hashes,
+not a second copy of the receipt history. Recovery requires the original local
+journal; missing history must be restored, not regenerated. The journal limit
+remains 8 MiB.
 Ordinary operations stop while an archive is pending. Retry exactly the same
 request with `--resume` after its operation was recorded. If adoption itself
 was interrupted before a request was recorded, retry with `--adopt` instead.

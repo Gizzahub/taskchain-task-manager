@@ -57,7 +57,7 @@ func archiveBoardFixture(t *testing.T) (string, *os.Root, archiveJournal) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tr.StorageProtocol = 3
+	tr.StorageProtocol = 4
 	if err := publishTransitionJournal(r, tr); err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestArchiveGatePreservesProtocolDuringRepair(t *testing.T) {
 		t.Fatal(err)
 	}
 	j, err := loadTransitions(r)
-	if err != nil || j.StorageProtocol != 3 {
+	if err != nil || j.StorageProtocol != 4 {
 		t.Fatalf("protocol=%d err=%v", j.StorageProtocol, err)
 	}
 }
@@ -150,7 +150,7 @@ func TestArchiveGateRelocationAndPolicySnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	j, err := loadTransitions(r)
-	if err != nil || j.StorageProtocol != 3 {
+	if err != nil || j.StorageProtocol != 4 {
 		t.Fatalf("relocation downgraded protocol=%d err=%v", j.StorageProtocol, err)
 	}
 	policy, err := policyForJournal(r, j)

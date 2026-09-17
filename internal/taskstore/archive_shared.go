@@ -26,11 +26,14 @@ func validateSharedArchiveShape(raw []byte) error {
 // reservations: it must be the final record and its original receipt history
 // must remain byte-for-byte identifiable by digest.
 func validateSharedArchive(s sharedState) error {
+	if err := validateSharedArchiveDelta(s); err != nil {
+		return err
+	}
 	p := s.PendingArchive
 	if p == nil {
 		return nil
 	}
-	if s.StorageProtocol != 3 || s.Phase != "active" || s.PendingRepair != nil || s.PendingRelocation != nil || s.PendingBundle != nil || (s.Policy != nil && s.Policy.Phase != "active") {
+	if s.StorageProtocol != 3 || s.PendingArchiveDelta != nil || s.Phase != "active" || s.PendingRepair != nil || s.PendingRelocation != nil || s.PendingBundle != nil || (s.Policy != nil && s.Policy.Phase != "active") {
 		return errors.New("conflicting shared archive reservation")
 	}
 	if !validSharedRoot(p.Owner) || !sharedHex32.MatchString(p.RequestID) || !sharedHex64.MatchString(p.OriginalJournalSHA256) {

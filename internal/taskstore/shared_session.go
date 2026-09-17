@@ -127,7 +127,7 @@ func acquireSharedArchiveOptions(dir string, allowInitializing, allowPendingBund
 	if state.PendingRelocation != nil && !allowPendingRelocation {
 		return nil, release, errors.New("shared namespace has a pending relocation; recover from its original board")
 	}
-	if state.PendingArchive != nil && !allowPendingArchive {
+	if (state.PendingArchive != nil || state.PendingArchiveDelta != nil) && !allowPendingArchive {
 		return nil, release, errors.New("shared namespace has a pending archive; recover from its original board")
 	}
 	if state.Policy != nil && state.Policy.Phase != "active" && !allowPendingPolicy {

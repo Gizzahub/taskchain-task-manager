@@ -23,9 +23,8 @@ func (s *archiveSession) verifyPendingArchive(rec archiveRecord, req ArchiveRequ
 	namespace := ""
 	if s.shared != nil && s.shared.state != nil {
 		namespace = s.shared.state.NamespaceID
-		p := s.shared.state.PendingArchive
-		if p == nil || p.Owner != board || p.RequestID != req.RequestID {
-			return errors.New("pending archive lost common reservation")
+		if err := s.verifyArchiveReservation(req, board); err != nil {
+			return err
 		}
 	}
 	if rec.Namespace != namespace {
@@ -35,7 +34,7 @@ func (s *archiveSession) verifyPendingArchive(rec archiveRecord, req ArchiveRequ
 	if err != nil {
 		return err
 	}
-	if j.StorageProtocol != 3 {
+	if j.StorageProtocol < 3 || j.StorageProtocol > 4 {
 		return errors.New("pending archive lost protocol binding")
 	}
 	if err := s.shared.verifyPolicyAuthority(s.root, j); err != nil {

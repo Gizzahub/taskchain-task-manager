@@ -70,6 +70,9 @@ func archiveWithStep(dir string, req ArchiveRequest, adopt, recoverOnly bool, st
 	if _, err := archiveJournalBytes(completedArchiveJournal(next)); err != nil {
 		return result, err
 	}
+	if err := s.preflightArchiveDelta(next); err != nil {
+		return result, err
+	}
 	if err := s.adoptArchive(adopt, step); err != nil {
 		return result, err
 	}

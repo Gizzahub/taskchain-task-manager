@@ -29,7 +29,7 @@ func validateSharedRepairShape(raw []byte) error {
 }
 
 func validateSharedStorage(s sharedState) error {
-	if s.StorageProtocol < 0 || s.StorageProtocol > 3 {
+	if s.StorageProtocol < 0 || s.StorageProtocol > 4 {
 		return errors.New("invalid shared storage protocol")
 	}
 	if err := validateSharedRelocation(s); err != nil {
@@ -39,7 +39,7 @@ func validateSharedStorage(s sharedState) error {
 	if p == nil {
 		return nil
 	}
-	if s.StorageProtocol < 1 || s.Phase != "active" || s.PendingBundle != nil || s.PendingRelocation != nil || s.PendingArchive != nil || (s.Policy != nil && s.Policy.Phase != "active") {
+	if s.StorageProtocol < 1 || s.Phase != "active" || s.PendingBundle != nil || s.PendingRelocation != nil || s.PendingArchive != nil || s.PendingArchiveDelta != nil || (s.Policy != nil && s.Policy.Phase != "active") {
 		return errors.New("conflicting shared storage reservation")
 	}
 	if !validSharedRoot(p.Owner) || !sharedHex32.MatchString(p.RequestID) || !sharedHex64.MatchString(p.OriginalJournalSHA256) {

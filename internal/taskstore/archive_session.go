@@ -79,13 +79,26 @@ func openArchiveSession(dir string, req ArchiveRequest) (_ *archiveSession, err 
 			return nil, errors.New("shared archive owner, request or local protocol mismatch")
 		}
 	}
+	if s.shared != nil && s.shared.state != nil && s.shared.state.PendingArchiveDelta != nil {
+		if _, err := s.resolveSharedDelta(req); err != nil {
+			return nil, err
+		}
+	}
 	return s, nil
 }
 
 func (s *archiveSession) adoptArchive(explicit bool, step func(string) error) error {
-	commonNeeded := s.shared != nil && s.shared.state != nil && s.shared.state.StorageProtocol < 3
-	if (!s.archivesExist || s.transitions.StorageProtocol < 3 || commonNeeded) && !explicit {
+	commonNeeded := s.shared != nil && s.shared.state != nil && s.shared.state.StorageProtocol < 4
+	if (!s.archivesExist || s.transitions.StorageProtocol < 4 || commonNeeded) && !explicit {
 		return errors.New("archive protocol adoption requires --adopt after upgrading all writers")
+	}
+	for _, rec := range s.archives.Records {
+		if rec.State == "pending" {
+			return errors.New("recover pending archive before protocol adoption")
+		}
+	}
+	if s.shared != nil && s.shared.state != nil && (s.shared.state.PendingArchive != nil || s.shared.state.PendingArchiveDelta != nil) {
+		return errors.New("recover shared archive before protocol adoption")
 	}
 	if err := s.relocationSession.adoptRelocation(explicit, step); err != nil {
 		return err
@@ -101,7 +114,7 @@ func (s *archiveSession) adoptArchive(explicit bool, step func(string) error) er
 	}
 	if commonNeeded {
 		next := *s.shared.state
-		next.StorageProtocol = 3
+		next.StorageProtocol = 4
 		if err := s.shared.saveStorageState(next); err != nil {
 			return err
 		}
@@ -109,8 +122,8 @@ func (s *archiveSession) adoptArchive(explicit bool, step func(string) error) er
 	if err := storageStep(step, "after-archive-common-protocol"); err != nil {
 		return err
 	}
-	if s.transitions.StorageProtocol < 3 {
-		s.transitions.StorageProtocol = 3
+	if s.transitions.StorageProtocol < 4 {
+		s.transitions.StorageProtocol = 4
 		if err := publishTransitionJournal(s.root, s.transitions); err != nil {
 			return err
 		}
@@ -132,6 +145,13 @@ func (s *archiveSession) reserveArchive(target archiveJournal, req ArchiveReques
 	if s.shared == nil || s.shared.state == nil {
 		return nil
 	}
+	if s.shared.state.StorageProtocol == 4 {
+		next, err := s.prepareSharedDelta(target)
+		if err != nil {
+			return err
+		}
+		return s.shared.saveStorageState(next)
+	}
 	if s.shared.state.PendingArchive != nil {
 		return errors.New("shared archive already reserved")
 	}
@@ -149,6 +169,9 @@ func (s *archiveSession) reserveArchive(target archiveJournal, req ArchiveReques
 }
 
 func (s *archiveSession) resumeArchive(req ArchiveRequest) error {
+	if s.shared != nil && s.shared.state != nil && s.shared.state.PendingArchiveDelta != nil {
+		return s.resumeArchiveDelta(req)
+	}
 	if s.shared == nil || s.shared.state == nil || s.shared.state.PendingArchive == nil {
 		return nil
 	}
@@ -188,6 +211,9 @@ func (s *archiveSession) resumeArchive(req ArchiveRequest) error {
 }
 
 func (s *archiveSession) clearArchive(req ArchiveRequest) error {
+	if s.shared != nil && s.shared.state != nil && s.shared.state.PendingArchiveDelta != nil {
+		return s.clearArchiveDelta(req)
+	}
 	if s.shared == nil || s.shared.state == nil || s.shared.state.PendingArchive == nil {
 		return nil
 	}

@@ -21,6 +21,24 @@ func TestLegacyAdoptionStorageV2BinaryBarrier(t *testing.T) {
 	archiveStorageV2BinaryBarrier(t, true)
 }
 
+func TestArchiveStorageV3BinaryBarrier(t *testing.T) {
+	archiveStorageV3BinaryBarrier(t, false)
+}
+
+func TestLegacyAdoptionStorageV3BinaryBarrier(t *testing.T) {
+	archiveStorageV3BinaryBarrier(t, true)
+}
+
+func archiveStorageV3BinaryBarrier(t *testing.T, legacy bool) {
+	t.Helper()
+	binary := os.Getenv("TASKCHAIN_ARCHIVE_V3_BINARY")
+	if binary == "" {
+		t.Skip("set TASKCHAIN_ARCHIVE_V3_BINARY to storage-v3 executable")
+	}
+	t.Setenv("TASKCHAIN_ARCHIVE_LEGACY_BINARY", binary)
+	archiveStorageV2BinaryBarrier(t, legacy)
+}
+
 func archiveStorageV2BinaryBarrier(t *testing.T, legacy bool) {
 	t.Helper()
 	binary := os.Getenv("TASKCHAIN_ARCHIVE_LEGACY_BINARY")
