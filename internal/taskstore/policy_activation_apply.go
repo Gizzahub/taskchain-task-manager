@@ -69,6 +69,9 @@ func applyPolicyActivationPlan(r *os.Root, state policyActivationState, step fun
 			return err
 		}
 	}
+	if err := publishArchiveActivationTarget(r, state.Plan.ArchiveActivationBinding); err != nil {
+		return err
+	}
 	if state.Plan.ModuleAdoption != nil && !files.idsPublished {
 		published := state
 		published.Phase = "ids-published"
@@ -115,7 +118,7 @@ func inspectPolicyActivationPlan(r *os.Root, state policyActivationState) (polic
 	if err != nil {
 		return files, nil, err
 	}
-	snapshot, err := policyActivationSnapshotForAdoption(r, policy, j, state.Plan.ModuleAdoption)
+	snapshot, err := policyActivationSnapshotForBinding(r, policy, j, state.Plan.ModuleAdoption, state.Plan.ArchiveActivationBinding)
 	if err != nil {
 		return files, nil, err
 	}
@@ -157,6 +160,9 @@ func inspectPolicyActivationPlan(r *os.Root, state policyActivationState) (polic
 		return files, nil, err
 	}
 	files.completed = bytes.Equal(files.activation, completedRaw)
+	if err := verifyArchiveActivationBinding(r, j, state.Namespace, state.Plan.ArchiveActivationBinding, files.completed); err != nil {
+		return files, nil, err
+	}
 	if state.Plan.ModuleAdoption != nil {
 		published := state
 		published.Phase = "ids-published"

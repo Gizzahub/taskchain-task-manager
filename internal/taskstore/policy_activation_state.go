@@ -18,17 +18,18 @@ const policyActivationFile = ".task-manager-policy-activation.json"
 const maxPolicyActivationBytes = 2 << 20
 
 type policyActivationPlan struct {
-	Root               string            `json:"root"`
-	HEAD               string            `json:"head"`
-	Snapshot           string            `json:"snapshot"`
-	OriginalJournal    string            `json:"originalJournal"`
-	TargetJournal      string            `json:"targetJournal"`
-	OriginalPolicy     string            `json:"originalPolicy"`
-	OriginalActivation string            `json:"originalActivation"`
-	OriginalIDs        string            `json:"originalIds"`
-	TargetIDs          string            `json:"targetIds"`
-	IDTarget           []byte            `json:"idTarget"`
-	ModuleAdoption     *moduleIDAdoption `json:"moduleAdoption,omitempty"`
+	Root                     string                    `json:"root"`
+	HEAD                     string                    `json:"head"`
+	Snapshot                 string                    `json:"snapshot"`
+	OriginalJournal          string                    `json:"originalJournal"`
+	TargetJournal            string                    `json:"targetJournal"`
+	OriginalPolicy           string                    `json:"originalPolicy"`
+	OriginalActivation       string                    `json:"originalActivation"`
+	OriginalIDs              string                    `json:"originalIds"`
+	TargetIDs                string                    `json:"targetIds"`
+	IDTarget                 []byte                    `json:"idTarget"`
+	ModuleAdoption           *moduleIDAdoption         `json:"moduleAdoption,omitempty"`
+	ArchiveActivationBinding *archiveActivationBinding `json:"archiveActivationBinding,omitempty"`
 }
 
 type policyActivationState struct {
@@ -203,6 +204,9 @@ func validatePolicyActivationState(state policyActivationState) error {
 }
 
 func validatePolicyActivationPlan(plan policyActivationPlan, shared bool) error {
+	if err := validateArchiveActivationBinding(plan.ArchiveActivationBinding); err != nil {
+		return err
+	}
 	if plan.Root == "" || !filepath.IsAbs(plan.Root) || filepath.Clean(plan.Root) != plan.Root || strings.ContainsRune(plan.Root, '\x00') || !utf8.ValidString(plan.Root) {
 		return errors.New("invalid policy activation root")
 	}
@@ -458,6 +462,16 @@ func validatePlanShape(raw []byte, keys []string) error {
 			return err
 		}
 		delete(obj, "moduleAdoption")
+	}
+	if binding, exists := obj["archiveActivationBinding"]; exists {
+		if string(binding) == "null" {
+			return errors.New("archive activation binding cannot be null")
+		}
+		var decoded archiveActivationBinding
+		if err := decodeExact(binding, &decoded); err != nil || validateArchiveActivationBinding(&decoded) != nil {
+			return errors.New("invalid archive activation binding shape")
+		}
+		delete(obj, "archiveActivationBinding")
 	}
 	if len(obj) != len(keys) {
 		return errors.New("invalid policy activation plan shape")

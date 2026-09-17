@@ -41,7 +41,7 @@ type ArchiveNamespaceRebindPlan struct {
 // archive journal. It does not publish, activate, or inspect the filesystem.
 func PlanArchiveNamespaceRebind(original []byte, expectedSHA256, expectedBoard, sourceNamespace, targetNamespace string, journalMode uint32) (ArchiveNamespaceRebindPlan, error) {
 	var plan ArchiveNamespaceRebindPlan
-	if len(original) == 0 || len(original) > maxRepairsBytes || !utf8.Valid(original) || bytesDigest(original) != expectedSHA256 {
+	if len(original) == 0 || len(original) > maxArchiveCapacityBytes || !utf8.Valid(original) || bytesDigest(original) != expectedSHA256 {
 		return plan, fmt.Errorf("archive rebind original journal hash mismatch")
 	}
 	if !validSharedRoot(expectedBoard) || !sharedHex32.MatchString(targetNamespace) || (sourceNamespace != "" && !sharedHex32.MatchString(sourceNamespace)) {
@@ -53,7 +53,7 @@ func PlanArchiveNamespaceRebind(original []byte, expectedSHA256, expectedBoard, 
 	if journalMode == 0 || journalMode&^0777 != 0 {
 		return plan, fmt.Errorf("invalid archive rebind journal mode")
 	}
-	j, err := decodeArchiveJournal(original)
+	j, err := decodeArchiveCapacityJournal(original)
 	if err != nil {
 		return plan, err
 	}
@@ -87,7 +87,7 @@ func PlanArchiveNamespaceRebind(original []byte, expectedSHA256, expectedBoard, 
 		target.Records[i].PolicyCanonical = append([]byte(nil), rec.PolicyCanonical...)
 		target.Records[i].RulesCanonical = append([]byte(nil), rec.RulesCanonical...)
 	}
-	targetRaw, err := archiveJournalBytes(target)
+	targetRaw, err := archiveJournalWire(target)
 	if err != nil {
 		return ArchiveNamespaceRebindPlan{}, err
 	}
@@ -129,7 +129,7 @@ func VerifyArchiveNamespaceRebindInventory(plan ArchiveNamespaceRebindPlan, card
 	if len(cards) != len(plan.Cards) {
 		return fmt.Errorf("archive rebind current inventory differs")
 	}
-	journal, err := decodeArchiveJournal(plan.TargetJournal)
+	journal, err := decodeArchiveCapacityJournal(plan.TargetJournal)
 	if err != nil {
 		return err
 	}

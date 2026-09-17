@@ -8,6 +8,63 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 )
 
+type completedArchiveCapacity struct {
+	adoption   archiveCapacityAdoption
+	receiptRaw []byte
+	original   []byte
+	target     []byte
+	mode       uint32
+	live       []byte
+	journal    archiveJournal
+	board      string
+}
+
+// validateCompletedArchiveCapacity proves the permanent protocol-5 barrier,
+// the exact receipt and its payload cross-binding, and the current live
+// schema-2 archive. The payload describes historical conversion bytes only;
+// later valid archive writes need not equal its target or retain its mode.
+func validateCompletedArchiveCapacity(r *os.Root, transitions transitionJournal) (completedArchiveCapacity, error) {
+	var out completedArchiveCapacity
+	if transitions.StorageProtocol != 5 {
+		return out, errors.New("completed archive capacity requires permanent protocol 5 barrier")
+	}
+	receiptRaw, err := boundedSnapshotFile(r, archiveCapacityFile, 4096)
+	if err != nil {
+		return out, errors.New("capacity-adopted archive journal is missing its adoption receipt; restore it")
+	}
+	a, err := loadArchiveCapacityAdoption(r)
+	if err != nil || a.Phase != "completed" || a.StorageProtocol != 5 {
+		return out, errors.New("archive capacity receipt is not completed protocol 5")
+	}
+	original, target, mode, err := loadArchiveCapacityPayload(r, a.PayloadSHA256)
+	if err != nil || validateCapacityPayloadBinding(a, original, target, mode) != nil {
+		return out, errors.New("archive capacity payload does not cross-bind receipt")
+	}
+	board, err := canonicalStorageBoard(r)
+	if err != nil || a.BoardPath != board {
+		return out, errors.New("archive capacity receipt belongs to another board")
+	}
+	info, err := r.Lstat(archivesFile)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() == 0 {
+		return out, errors.New("live archive type or mode invalid")
+	}
+	live, err := boundedSnapshotFile(r, archivesFile, maxArchiveCapacityBytes)
+	if err != nil {
+		return out, err
+	}
+	j, err := decodeArchiveCapacityJournal(live)
+	if err != nil || j.SchemaVersion != 2 || j.BoardPath != board {
+		return out, errors.New("capacity-adopted live archive is not scoped schema 2")
+	}
+	for _, rec := range j.Records {
+		if rec.State != "completed" {
+			return out, errors.New("capacity-adopted live archive has pending record")
+		}
+	}
+	out = completedArchiveCapacity{adoption: a, receiptRaw: receiptRaw, original: original, target: target, mode: mode, live: live, journal: j, board: board}
+	return out, nil
+}
+
 func checkArchiveGate(r *os.Root, transitions transitionJournal) error {
 	_, err := archiveForBoard(r, transitions)
 	return err
@@ -21,12 +78,19 @@ func archiveForBoard(r *os.Root, transitions transitionJournal) (*archiveJournal
 		if adoption.Phase != "completed" {
 			return nil, errors.New("pending archive capacity adoption requires exact recovery")
 		}
-		if transitions.StorageProtocol != 5 {
-			return nil, errors.New("completed archive capacity adoption lost its protocol barrier; restore it")
+		capacity, err := validateCompletedArchiveCapacity(r, transitions)
+		if err != nil {
+			return nil, err
 		}
-		if _, _, _, err := loadArchiveCapacityPayload(r, adoption.PayloadSHA256); err != nil {
-			return nil, errors.New("archive capacity payload missing or invalid; restore it")
+		j := capacity.journal
+		ids, err := loadIDs(r)
+		if err != nil {
+			return nil, err
 		}
+		if _, err := archiveCompletedBindings(j, capacity.board, ids.Namespace); err != nil {
+			return nil, err
+		}
+		return &j, nil
 	} else if !errors.Is(adoptionErr, fs.ErrNotExist) {
 		return nil, adoptionErr
 	} else if transitions.StorageProtocol >= 5 {
@@ -48,9 +112,6 @@ func archiveForBoard(r *os.Root, transitions transitionJournal) (*archiveJournal
 	board, err := canonicalStorageBoard(r)
 	if err != nil {
 		return nil, err
-	}
-	if transitions.StorageProtocol >= 5 && j.SchemaVersion != 2 {
-		return nil, errors.New("capacity-adopted archive journal is not schema 2; restore it")
 	}
 	ids, err := loadIDs(r)
 	if err != nil {

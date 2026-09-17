@@ -29,6 +29,10 @@ func checkStorageGate(r *os.Root, transitions transitionJournal) error {
 	if err := checkArchiveGate(r, transitions); err != nil {
 		return err
 	}
+	return checkStorageGateWithoutArchive(r, transitions)
+}
+
+func checkStorageGateWithoutArchive(r *os.Root, transitions transitionJournal) error {
 	if err := checkRelocationGate(r, transitions); err != nil {
 		return err
 	}

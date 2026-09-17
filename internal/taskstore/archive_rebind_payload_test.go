@@ -3,6 +3,7 @@ package taskstore
 import (
 	"bytes"
 	"encoding/binary"
+	"os"
 	"strings"
 	"testing"
 )
@@ -22,6 +23,54 @@ func archiveRebindPayloadFixture(t *testing.T) ArchiveNamespaceRebindPlan {
 		t.Fatal(err)
 	}
 	return plan
+}
+
+func TestArchiveRebindPayloadV2RoundTripAndArtifactRecoveryAboveLegacyLimit(t *testing.T) {
+	base := archiveRebindPayloadFixture(t)
+	j, err := decodeArchiveJournal(base.OriginalJournal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j.SchemaVersion = 2
+	original, err := archiveCapacityJournalBytes(j)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original = append(original, bytes.Repeat([]byte{' '}, maxRepairsBytes+1-len(original))...)
+	if len(original) <= maxRepairsBytes {
+		t.Fatal("schema-2 fixture did not exceed legacy limit")
+	}
+	plan, err := PlanArchiveNamespaceRebind(original, bytesDigest(original), j.BoardPath, j.Namespace, base.TargetNamespace, base.JournalMode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := archiveRebindPayloadBytes(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := decodeArchiveRebindPayload(payload, bytesDigest(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(decoded.OriginalJournal, original) || decoded.TargetJournalSHA256 != plan.TargetJournalSHA256 {
+		t.Fatal("schema-2 payload round trip changed bytes")
+	}
+	r, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	digest, err := publishArchiveRebindArtifact(r, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := loadArchiveRebindArtifact(r, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(recovered.OriginalJournal, original) || !bytes.Equal(recovered.TargetJournal, plan.TargetJournal) {
+		t.Fatal("schema-2 artifact recovery changed bytes")
+	}
 }
 
 func TestArchiveRebindPayloadRoundTripExactBytesAndScope(t *testing.T) {

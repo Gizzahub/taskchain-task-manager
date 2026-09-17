@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 
@@ -31,6 +32,25 @@ func policyJournalForSharedAdoption(r *os.Root, s *sharedSession, canonical []by
 		return j, err
 	}
 	if j.SchemaVersion != 3 && j.SchemaVersion != 4 {
+		if j.StorageProtocol == 5 {
+			policy, err := boardpolicy.Parse(canonical)
+			if err != nil {
+				return j, err
+			}
+			if err := validateTransitionRecords(j, policy); err != nil {
+				return j, err
+			}
+			if err := checkBundleGate(r, j); err != nil {
+				return j, err
+			}
+			if _, err := validateCompletedArchiveCapacity(r, j); err != nil {
+				return j, err
+			}
+			if err := checkStorageGateWithoutArchive(r, j); err != nil {
+				return j, err
+			}
+			return j, nil
+		}
 		return loadTransitions(r)
 	}
 	state, err := loadPolicyActivation(r)
@@ -64,7 +84,14 @@ func policyJournalForSharedAdoption(r *os.Root, s *sharedSession, canonical []by
 	if err := checkBundleGate(r, j); err != nil {
 		return j, err
 	}
-	if err := checkStorageGate(r, j); err != nil {
+	if j.StorageProtocol == 5 {
+		if _, err := validateCompletedArchiveCapacity(r, j); err != nil {
+			return j, err
+		}
+		if err := checkStorageGateWithoutArchive(r, j); err != nil {
+			return j, err
+		}
+	} else if err := checkStorageGate(r, j); err != nil {
 		return j, err
 	}
 	return j, nil
@@ -97,15 +124,11 @@ func prepareSharedPolicy(s *sharedSession, boards []sharedPolicyBoard, policy bo
 	for i, b := range boards {
 		j, err := policyJournalForSharedAdoption(b.root, s, canonical)
 		if err != nil {
-			return next, err
+			return next, fmt.Errorf("prepare shared policy journal: %w", err)
 		}
-		if j.StorageProtocol >= 3 {
-			archive, err := archiveForBoard(b.root, j)
-			if err != nil {
+		if j.StorageProtocol >= 3 && j.StorageProtocol != 5 {
+			if _, err := archiveForBoard(b.root, j); err != nil {
 				return next, err
-			}
-			if archive.Namespace != s.state.NamespaceID {
-				return next, errors.New("archive namespace migration requires explicit durable rebind before policy join")
 			}
 		}
 		if j.SchemaVersion == 4 {
@@ -113,7 +136,7 @@ func prepareSharedPolicy(s *sharedSession, boards []sharedPolicyBoard, policy bo
 		}
 		state, _, err := preparePolicyChangeWithModules(b.root, policy, binding, b.head, j, nil, adopt)
 		if err != nil {
-			return next, err
+			return next, fmt.Errorf("prepare shared policy change: %w", err)
 		}
 		states[i] = state
 		ledger, err := loadIDs(b.root)

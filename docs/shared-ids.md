@@ -42,7 +42,11 @@ worktree, 누락 보드, pending transition, 잘못된 카드·원장은 오류�
 
 ## 중단과 복구
 
-활성화는 initializing → 모든 local v3 게시 → inventory/snapshot 재검증 → active 순서다.
+protocol 5 archive가 있으면 활성화는 capacity 영수증·payload·live schema-2 archive를 먼저
+검증하고, 필요한 namespace rebind artifact를 먼저 내구적으로 게시한다. common initializing에는
+participant별 original/target archive hash·mode·artifact digest가 포함되며 raw archive는 포함되지 않는다.
+그 뒤 initializing → 모든 local v3 및 정확한 archive target 게시 → inventory/snapshot 재검증 → active
+순서다. pending 재개는 original 또는 target만 허용한다.
 initializing 동안 일반 보드 조회·claim·전이·복구·ID writer는 오류로 중단한다.
 단일 파일 inspect/validate와 Git 이력 preview는 보드 실행권 조회가 아니므로 이 잠금에
 참여하지 않는다. 원래 기록과 현재 상태가 맞을 때만

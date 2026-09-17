@@ -72,9 +72,6 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 		if err != nil {
 			return result, err
 		}
-		if journal.StorageProtocol >= 3 && (s.state == nil || s.state.Phase != "active") {
-			return result, errors.New("archive namespace migration requires explicit durable rebind; shared activation is not supported yet")
-		}
 		if journal.StorageProtocol > storageProtocol {
 			storageProtocol = journal.StorageProtocol
 		}
@@ -82,7 +79,7 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 			return result, err
 		}
 		b := &boards[len(boards)-1]
-		b.participant.Snapshot, b.ledger, b.participant.OriginalLedger, err = activationSnapshot(r)
+		b.participant.Snapshot, b.ledger, b.participant.OriginalLedger, err = activationSnapshotWithArchive(r, journal.StorageProtocol != 5)
 		if err != nil {
 			return result, err
 		}
@@ -121,6 +118,19 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 		for _, b := range boards {
 			p := b.participant
 			p.TargetLedger = bytesDigest(target)
+			journal, err := loadTransitions(b.root)
+			if err != nil {
+				return result, err
+			}
+			if p.ArchiveActivationBinding, err = prepareArchiveActivationBinding(b.root, journal, state.NamespaceID); err != nil {
+				return result, err
+			}
+			if p.ArchiveActivationBinding != nil {
+				p.Snapshot, _, _, err = activationSnapshotWithArchive(b.root, false)
+				if err != nil {
+					return result, err
+				}
+			}
 			state.Participants = append(state.Participants, p)
 		}
 		if err := s.verify(); err != nil {
@@ -151,6 +161,9 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 		if err := publishIDs(b.root, target, false); err != nil {
 			return result, err
 		}
+		if err := publishArchiveActivationTarget(b.root, state.Participants[i].ArchiveActivationBinding); err != nil {
+			return result, err
+		}
 		if step != nil {
 			if err := step(fmt.Sprintf("after-local-%d", i)); err != nil {
 				return result, err
@@ -172,7 +185,7 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 	}
 	// Re-read under all locks, catching non-cooperating edits before activation.
 	for i := range boards {
-		boards[i].participant.Snapshot, boards[i].ledger, boards[i].participant.OriginalLedger, err = activationSnapshot(boards[i].root)
+		boards[i].participant.Snapshot, boards[i].ledger, boards[i].participant.OriginalLedger, err = activationSnapshotWithArchive(boards[i].root, state.Participants[i].ArchiveActivationBinding == nil)
 		if err != nil {
 			return result, err
 		}
@@ -226,6 +239,13 @@ func verifyActivationBoards(boards []activationBoard, state sharedState) error {
 		}
 		if b.participant.OriginalLedger != p.OriginalLedger && b.participant.OriginalLedger != p.TargetLedger {
 			return errors.New("activation local ledger changed")
+		}
+		journal, err := loadTransitions(b.root)
+		if err != nil {
+			return err
+		}
+		if err := verifyArchiveActivationBinding(b.root, journal, state.NamespaceID, p.ArchiveActivationBinding, false); err != nil {
+			return err
 		}
 		if b.ledger.SchemaVersion == 3 && b.ledger.Namespace != state.NamespaceID {
 			return errors.New("activation local namespace mismatch")

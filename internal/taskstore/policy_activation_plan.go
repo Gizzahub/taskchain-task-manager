@@ -29,7 +29,14 @@ func preparePolicyChangeJournal(r *os.Root, policy boardpolicy.Policy, binding p
 
 func preparePolicyChangeWithModules(r *os.Root, policy boardpolicy.Policy, binding policyAuthorityBinding, head string, j transitionJournal, revision *policyRevision, adopt bool) (policyActivationState, []byte, error) {
 	var state policyActivationState
-	if err := checkStorageGate(r, j); err != nil {
+	if j.StorageProtocol == 5 {
+		if _, err := validateCompletedArchiveCapacity(r, j); err != nil {
+			return state, nil, err
+		}
+		if err := checkStorageGateWithoutArchive(r, j); err != nil {
+			return state, nil, err
+		}
+	} else if err := checkStorageGate(r, j); err != nil {
 		return state, nil, err
 	}
 	if err := validatePolicyAuthority(binding); err != nil {
@@ -69,7 +76,11 @@ func preparePolicyChangeWithModules(r *os.Root, policy boardpolicy.Policy, bindi
 			return state, nil, err
 		}
 	}
-	snapshot, err := policyActivationSnapshotForAdoption(r, policy, j, adoption)
+	archiveBinding, err := prepareArchiveActivationBinding(r, j, binding.Namespace)
+	if err != nil {
+		return state, nil, err
+	}
+	snapshot, err := policyActivationSnapshotForBinding(r, policy, j, adoption, archiveBinding)
 	if err != nil {
 		return state, nil, err
 	}
@@ -88,7 +99,7 @@ func preparePolicyChangeWithModules(r *os.Root, policy boardpolicy.Policy, bindi
 	if err != nil && !(errors.Is(err, fs.ErrNotExist) && adoption != nil && len(adoption.Original) == 0) {
 		return state, nil, err
 	}
-	plan := policyActivationPlan{Root: root, HEAD: head, Snapshot: snapshot, OriginalIDs: optionalPolicyHash(ids), TargetIDs: optionalPolicyHash(ids), IDTarget: []byte{}}
+	plan := policyActivationPlan{Root: root, HEAD: head, Snapshot: snapshot, OriginalIDs: optionalPolicyHash(ids), TargetIDs: optionalPolicyHash(ids), IDTarget: []byte{}, ArchiveActivationBinding: archiveBinding}
 	if adoption != nil {
 		plan.ModuleAdoption, plan.IDTarget, plan.TargetIDs = adoption, idTarget, bytesDigest(idTarget)
 	}
@@ -166,6 +177,9 @@ func reconstructPolicyTarget(r *os.Root, state policyActivationState) (transitio
 			return transitionJournal{}, nil, err
 		}
 	}
+	if j.StorageProtocol == 5 && state.Phase != "completed" && state.Plan.ArchiveActivationBinding == nil {
+		return transitionJournal{}, nil, errors.New("protocol 5 pending policy activation lacks archive binding")
+	}
 	if state.Revision != nil {
 		j, err = revisedPolicyJournal(j, policy, policyAuthorityBinding{AuthorityID: state.AuthorityID, Scope: state.Scope, Namespace: state.Namespace}, *state.Revision)
 		if err != nil {
@@ -174,7 +188,11 @@ func reconstructPolicyTarget(r *os.Root, state policyActivationState) (transitio
 	} else if j.SchemaVersion >= 2 && j.PolicyDigest != state.Digest {
 		return transitionJournal{}, nil, errors.New("policy activation original journal binds another policy")
 	}
-	if err := checkStorageGate(r, j); err != nil {
+	if state.Plan.ArchiveActivationBinding != nil {
+		if err := checkStorageGateWithoutArchive(r, j); err != nil {
+			return transitionJournal{}, nil, err
+		}
+	} else if err := checkStorageGate(r, j); err != nil {
 		return transitionJournal{}, nil, err
 	}
 	if err := validateTransitionRecords(j, policy); err != nil {

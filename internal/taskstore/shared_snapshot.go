@@ -70,6 +70,10 @@ func ledgerBytes(ledger idLedger) ([]byte, error) {
 // Snapshot only task-owned semantic inputs, with framing to avoid ambiguous
 // concatenation. All board locks are held by the caller through activation.
 func activationSnapshot(r *os.Root) (string, idLedger, string, error) {
+	return activationSnapshotWithArchive(r, true)
+}
+
+func activationSnapshotWithArchive(r *os.Root, includeArchive bool) (string, idLedger, string, error) {
 	if err := rejectPendingTransitions(r); err != nil {
 		return "", idLedger{}, "", err
 	}
@@ -112,7 +116,7 @@ func activationSnapshot(r *os.Root) (string, idLedger, string, error) {
 	if journal.StorageProtocol >= 2 {
 		names = append(names, relocationsFile)
 	}
-	if journal.StorageProtocol >= 3 {
+	if journal.StorageProtocol >= 3 && includeArchive {
 		raw, mode, err := snapshotActivationFile(r, archivesFile, maxRepairsBytes, true)
 		if err != nil {
 			return "", ledger, "", err

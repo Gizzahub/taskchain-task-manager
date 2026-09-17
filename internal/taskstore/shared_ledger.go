@@ -53,11 +53,12 @@ type sharedBundlePending struct {
 }
 
 type sharedParticipant struct {
-	Root           string `json:"root"`
-	HEAD           string `json:"head"`
-	Snapshot       string `json:"snapshot"`
-	OriginalLedger string `json:"originalLedger"`
-	TargetLedger   string `json:"targetLedger"`
+	Root                     string                    `json:"root"`
+	HEAD                     string                    `json:"head"`
+	Snapshot                 string                    `json:"snapshot"`
+	OriginalLedger           string                    `json:"originalLedger"`
+	TargetLedger             string                    `json:"targetLedger"`
+	ArchiveActivationBinding *archiveActivationBinding `json:"archiveActivationBinding,omitempty"`
 }
 
 func loadSharedState(r *os.Root) (sharedState, error) {
@@ -252,15 +253,18 @@ func validateSharedShape(raw []byte) error {
 	if err := json.Unmarshal(root["participants"], &parts); err != nil || parts == nil {
 		return errors.New("participants must be a non-null array")
 	}
-	pallowed := map[string]bool{"root": true, "head": true, "snapshot": true, "originalLedger": true, "targetLedger": true}
+	pallowed := map[string]bool{"root": true, "head": true, "snapshot": true, "originalLedger": true, "targetLedger": true, "archiveActivationBinding": true}
 	for _, part := range parts {
-		if len(part) != len(pallowed) {
+		if len(part) != len(pallowed) && len(part) != len(pallowed)-1 {
 			return errors.New("participant requires all fields")
 		}
 		for key := range part {
 			if !pallowed[key] {
 				return fmt.Errorf("unknown participant field %q", key)
 			}
+		}
+		if raw, ok := part["archiveActivationBinding"]; ok && string(raw) == "null" {
+			return errors.New("archive activation binding cannot be null")
 		}
 	}
 	return nil
@@ -370,7 +374,7 @@ func validateSharedState(s sharedState) error {
 	}
 	last := ""
 	for _, p := range s.Participants {
-		if !validSharedRoot(p.Root) || p.Root <= last || !sharedHex40Or64.MatchString(p.HEAD) || !sharedHex64.MatchString(p.Snapshot) || !sharedHex64.MatchString(p.OriginalLedger) || !sharedHex64.MatchString(p.TargetLedger) {
+		if !validSharedRoot(p.Root) || p.Root <= last || !sharedHex40Or64.MatchString(p.HEAD) || !sharedHex64.MatchString(p.Snapshot) || !sharedHex64.MatchString(p.OriginalLedger) || !sharedHex64.MatchString(p.TargetLedger) || validateArchiveActivationBinding(p.ArchiveActivationBinding) != nil {
 			return errors.New("invalid shared participant")
 		}
 		last = p.Root

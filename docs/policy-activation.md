@@ -43,6 +43,11 @@ taskchain-task-manager activate-policy policy.yaml --dir ./tasks --all-worktrees
 게시·정리·출력 오류가 나도 일부 또는 전체 변경이 완료됐을 수 있다. 상태를 보존하고
 기록이 pending이면 `--resume`, 기록이 없으면 최초 명령, 완료됐으면 같은 정책으로 재확인한다.
 
+protocol 5 archive가 있는 initial/join은 같은 hash-only archive binding을 common pending과
+local receipt에 기록한다. empty archive namespace는 shared namespace로 한 번만 rebind할 수 있고,
+이미 같은 namespace인 archive는 rewrite하지 않는다. receipt/payload는 capacity provenance일 뿐
+policy activation 권한이 아니다.
+
 ## 호환성과 출력
 
 local journal v3와 common state v3는 B024/B023 writer가 정책을 무시한 채 계속 쓰지

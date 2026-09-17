@@ -19,6 +19,10 @@ func policyActivationSnapshot(r *os.Root, policy boardpolicy.Policy, journal tra
 }
 
 func policyActivationSnapshotForAdoption(r *os.Root, policy boardpolicy.Policy, journal transitionJournal, adoption *moduleIDAdoption) (string, error) {
+	return policyActivationSnapshotForBinding(r, policy, journal, adoption, nil)
+}
+
+func policyActivationSnapshotForBinding(r *os.Root, policy boardpolicy.Policy, journal transitionJournal, adoption *moduleIDAdoption, binding *archiveActivationBinding) (string, error) {
 	if err := validateTransitionRecords(journal, policy); err != nil {
 		return "", err
 	}
@@ -30,7 +34,11 @@ func policyActivationSnapshotForAdoption(r *os.Root, policy boardpolicy.Policy, 
 	if err := checkBundleGate(r, journal); err != nil {
 		return "", err
 	}
-	if err := checkStorageGate(r, journal); err != nil {
+	if binding != nil {
+		if err := checkStorageGateWithoutArchive(r, journal); err != nil {
+			return "", err
+		}
+	} else if err := checkStorageGate(r, journal); err != nil {
 		return "", err
 	}
 	entries, err := listLockedWithPolicy(r, "", policy)
@@ -75,7 +83,7 @@ func policyActivationSnapshotForAdoption(r *os.Root, policy boardpolicy.Policy, 
 		writeActivationFrame(h, "relocation-receipts", raw)
 		writeActivationFrame(h, "relocation-mode", []byte(fmt.Sprintf("%o", mode)))
 	}
-	if journal.StorageProtocol >= 3 {
+	if journal.StorageProtocol >= 3 && binding == nil {
 		raw, mode, err := snapshotActivationFile(r, archivesFile, maxRepairsBytes, true)
 		if err != nil {
 			return "", err

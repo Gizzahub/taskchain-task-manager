@@ -26,6 +26,10 @@ authority에 명시적으로 join된 상태여야 하며, 어느 하나라도 �
 않으므로 오래된 변경 요청을 다시 실행할 수 없다. v1에서 v2 relocation 정책으로의 변경도
 이 명령으로 수행하며, 실제 카드 이동은 별도의 `relocate` 요청이다.
 
+Protocol 5 archive는 revision 계획에도 schema-2 archive hash/mode binding을 남긴다. 이미
+shared namespace인 archive의 original과 target은 같아 rewrite하지 않으며, PolicyHistory와
+과거 archive policy/rules는 그대로 보존한다.
+
 ## 중단·재개·결과 확인
 
 중단 후에는 **원래 target 정책과 이전 authority/digest 값을 그대로** 유지한다.

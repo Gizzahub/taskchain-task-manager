@@ -56,6 +56,11 @@ for a retry, including after a stdout failure. JSON success has schemaVersion 1.
 
 Existing archives use the separate [legacy adoption command](legacy-archive.md),
 which requires explicit operator approval to publish dependency completion.
-Clone rebinding and local-to-shared archive namespace migration are not yet
-supported. Scope-changing operations are rejected before
-rewriting those bindings. Public release/cutover approval remains separate.
+Protocol 5 boards use a completed capacity receipt and a schema-2 archive.
+Local-to-shared activation may bind a one-time namespace-only rebind: its
+common/policy plan records only exact hashes and an inert artifact digest, not
+archive contents. The capacity receipt and payload are provenance, never
+activation authority. A pending plan accepts only its saved original or target
+archive bytes and mode; once completed, later valid archival writes are normal.
+Foreign nonempty namespaces remain refused. Public release/cutover approval
+remains separate.
