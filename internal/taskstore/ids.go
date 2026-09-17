@@ -17,9 +17,10 @@ const idsFile = ".task-manager-ids.json"
 const maxIDsBytes = 1 << 20
 
 type idLedger struct {
-	SchemaVersion int      `json:"schemaVersion"`
-	Reserved      []string `json:"reserved"`
-	Namespace     string   `json:"namespace,omitempty"`
+	SchemaVersion     int                `json:"schemaVersion"`
+	Reserved          []string           `json:"reserved"`
+	Namespace         string             `json:"namespace,omitempty"`
+	ReservationFloors []ReservationFloor `json:"reservationFloors,omitempty"`
 }
 
 type ReservationResult struct {
@@ -62,21 +63,28 @@ func decodeIDs(raw []byte) (idLedger, error) {
 	if err := json.Unmarshal(raw, &shape); err != nil {
 		return idLedger{}, err
 	}
-	if (len(shape) != 2 && len(shape) != 3) || shape["schemaVersion"] == nil || shape["reserved"] == nil || (len(shape) == 3 && shape["namespace"] == nil) {
+	if (len(shape) != 2 && len(shape) != 3 && len(shape) != 4) || shape["schemaVersion"] == nil || shape["reserved"] == nil {
 		return idLedger{}, errors.New("ID ledger requires exactly schemaVersion and reserved")
 	}
 	var ledger idLedger
 	if err := json.Unmarshal(raw, &ledger); err != nil {
 		return idLedger{}, err
 	}
-	if (ledger.SchemaVersion != 1 && ledger.SchemaVersion != 2 && ledger.SchemaVersion != 3) || ledger.Reserved == nil {
+	if (ledger.SchemaVersion != 1 && ledger.SchemaVersion != 2 && ledger.SchemaVersion != 3 && ledger.SchemaVersion != 4) || ledger.Reserved == nil {
 		return idLedger{}, errors.New("invalid ID ledger schema")
 	}
 	if ledger.SchemaVersion == 3 {
 		if len(shape) != 3 || !sharedHex32.MatchString(ledger.Namespace) {
 			return idLedger{}, errors.New("invalid shared ID namespace binding")
 		}
-	} else if len(shape) != 2 || ledger.Namespace != "" {
+	} else if ledger.SchemaVersion == 4 {
+		if len(shape) != 4 || shape["namespace"] == nil || shape["reservationFloors"] == nil || !sharedHex32.MatchString(ledger.Namespace) || ledger.ReservationFloors == nil {
+			return idLedger{}, errors.New("invalid owner-rejoin ID ledger binding")
+		}
+		if err := validateReservationFloors(ledger.ReservationFloors); err != nil {
+			return idLedger{}, err
+		}
+	} else if len(shape) != 2 || ledger.Namespace != "" || ledger.ReservationFloors != nil {
 		return idLedger{}, errors.New("unexpected local ID namespace binding")
 	}
 	for i, id := range ledger.Reserved {
@@ -116,7 +124,7 @@ func publishValidatedIDs(r *os.Root, ledger idLedger, initial bool) error {
 	} else if err := r.Rename(name, idsFile); err != nil {
 		return errors.Join(err, r.Remove(name))
 	}
-	if ledger.SchemaVersion == 3 {
+	if ledger.SchemaVersion == 3 || ledger.SchemaVersion == 4 {
 		dir, err := r.Open(".")
 		if err != nil {
 			return err
@@ -164,7 +172,7 @@ func observedIDsWithRecords(entries []Entry, ledger idLedger, extra []string, cl
 		ledger.Reserved = append(ledger.Reserved, id)
 	}
 	sort.Strings(ledger.Reserved)
-	if ledger.SchemaVersion != 3 {
+	if ledger.SchemaVersion != 3 && ledger.SchemaVersion != 4 {
 		ledger.SchemaVersion = 2
 	}
 	return ledger, nil
@@ -172,6 +180,13 @@ func observedIDsWithRecords(entries []Entry, ledger idLedger, extra []string, cl
 
 func allocateID(ledger idLedger, requested, prefix string) (string, error) {
 	var max uint64
+	var floorMax uint64
+	for _, floor := range ledger.ReservationFloors {
+		if floor.Prefix == prefix && floor.Through > max {
+			max = floor.Through
+			floorMax = floor.Through
+		}
+	}
 	for _, id := range ledger.Reserved {
 		if sameIdentity(id, requested) {
 			return "", fmt.Errorf("task ID already reserved: %s", id)
@@ -185,8 +200,12 @@ func allocateID(ledger idLedger, requested, prefix string) (string, error) {
 		}
 	}
 	if requested != "" {
-		if identityKey(requested) == "" {
+		parsed, err := cardid.Parse(requested)
+		if err != nil || identityKey(requested) == "" {
 			return "", fmt.Errorf("invalid task ID %q", requested)
+		}
+		if parsed.Prefix == prefix && parsed.Number <= floorMax {
+			return "", fmt.Errorf("task ID is covered by reservation floor: %s", requested)
 		}
 		return requested, nil
 	}
@@ -194,6 +213,40 @@ func allocateID(ledger idLedger, requested, prefix string) (string, error) {
 		return "", errors.New("task ID allocation overflow")
 	}
 	return fmt.Sprintf("%s-%d", prefix, max+1), nil
+}
+
+func cardIDForFloor(floor ReservationFloor) (cardid.ID, error) {
+	if floor.Through == 0 {
+		return cardid.ID{}, errors.New("reservation floor bound must be positive")
+	}
+	return cardid.Parse(fmt.Sprintf("%s-%d", floor.Prefix, floor.Through))
+}
+
+// unionReservationFloors is monotonic: an incoming lower floor never reduces
+// an established allocation boundary. It is intentionally not used by legacy
+// writers; schema 4 is created only by the owner-rejoin target preparation.
+func unionReservationFloors(current, incoming []ReservationFloor) ([]ReservationFloor, error) {
+	all := append(append([]ReservationFloor(nil), current...), incoming...)
+	if err := validateReservationFloors(current); err != nil {
+		return nil, err
+	}
+	for _, f := range incoming {
+		if _, err := cardIDForFloor(f); err != nil {
+			return nil, err
+		}
+	}
+	byPrefix := map[string]uint64{}
+	for _, f := range all {
+		if f.Through > byPrefix[f.Prefix] {
+			byPrefix[f.Prefix] = f.Through
+		}
+	}
+	out := make([]ReservationFloor, 0, len(byPrefix))
+	for prefix, through := range byPrefix {
+		out = append(out, ReservationFloor{Prefix: prefix, Through: through})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Prefix < out[j].Prefix })
+	return out, nil
 }
 
 // ReserveIDs is a monotonic union, including when explicitly adopting a legacy board.

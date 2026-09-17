@@ -30,6 +30,7 @@ type sharedState struct {
 	BoardPath              string                  `json:"boardPath"`
 	Phase                  string                  `json:"phase"`
 	Reserved               []string                `json:"reserved"`
+	ReservationFloors      []ReservationFloor      `json:"reservationFloors,omitempty"`
 	Participants           []sharedParticipant     `json:"participants"`
 	BundleProtocol         int                     `json:"bundleProtocol,omitempty"`
 	PendingBundle          *sharedBundlePending    `json:"pendingBundle,omitempty"`
@@ -161,7 +162,7 @@ func validateSharedShape(raw []byte) error {
 	}
 	if raw, ok := root["storageProtocol"]; ok {
 		var protocol int
-		if err := json.Unmarshal(raw, &protocol); err != nil || protocol < 1 || protocol > 5 {
+		if err := json.Unmarshal(raw, &protocol); err != nil || protocol < 1 || protocol > 6 {
 			return errors.New("unsupported shared storage protocol")
 		}
 		allowed["storageProtocol"] = true
@@ -200,7 +201,7 @@ func validateSharedShape(raw []byte) error {
 	if err := json.Unmarshal(root["schemaVersion"], &version); err != nil {
 		return err
 	}
-	if version == 2 || version == 3 {
+	if version == 2 || version == 3 || version == 4 {
 		if version == 2 {
 			allowed["bundleProtocol"] = true
 		} else if _, present := root["bundleProtocol"]; present {
@@ -214,8 +215,8 @@ func validateSharedShape(raw []byte) error {
 			if err := json.Unmarshal(protocolRaw, &protocol); err != nil {
 				return errors.New("bundle protocol must be an integer")
 			}
-			if version == 3 && protocol != 1 {
-				return errors.New("schema 3 bundle protocol must be 1 when present")
+			if version >= 3 && protocol != 1 {
+				return errors.New("shared bundle protocol must be 1 when present")
 			}
 		}
 		if pending, ok := root["pendingBundle"]; ok {
@@ -239,6 +240,19 @@ func validateSharedShape(raw []byte) error {
 		}
 		if err := validateSharedPolicyShape(policy); err != nil {
 			return err
+		}
+	}
+	if version == 4 {
+		floors, ok := root["reservationFloors"]
+		if !ok || string(floors) == "null" {
+			return errors.New("schema 4 shared state requires reservation floors")
+		}
+		allowed["reservationFloors"] = true
+		if _, ok := root["policy"]; ok {
+			allowed["policy"] = true
+			if err := validateSharedPolicyShape(root["policy"]); err != nil {
+				return err
+			}
 		}
 	}
 	if len(root) != len(allowed) {
@@ -271,7 +285,7 @@ func validateSharedShape(raw []byte) error {
 }
 
 func validateSharedState(s sharedState) error {
-	if s.ModuleProtocol != 0 && (s.ModuleProtocol != 1 || s.SchemaVersion != 3 || s.Policy == nil) {
+	if s.ModuleProtocol != 0 && (s.ModuleProtocol != 1 || (s.SchemaVersion != 3 && s.SchemaVersion != 4) || s.Policy == nil) {
 		return errors.New("module protocol requires shared policy authority")
 	}
 	if s.Policy != nil {
@@ -292,7 +306,7 @@ func validateSharedState(s sharedState) error {
 			}
 		}
 	}
-	if s.PolicyRevisionProtocol != 0 && (s.PolicyRevisionProtocol != 1 || s.SchemaVersion != 3 || s.Policy == nil) {
+	if s.PolicyRevisionProtocol != 0 && (s.PolicyRevisionProtocol != 1 || (s.SchemaVersion != 3 && s.SchemaVersion != 4) || s.Policy == nil) {
 		return errors.New("policy revision protocol requires shared policy authority")
 	}
 	if s.Policy != nil && s.Policy.Revision != nil && s.PolicyRevisionProtocol != 1 {
@@ -307,7 +321,7 @@ func validateSharedState(s sharedState) error {
 	if err := validateSharedArchive(s); err != nil {
 		return err
 	}
-	if (s.SchemaVersion != 1 && s.SchemaVersion != 2 && s.SchemaVersion != 3) || !sharedHex32.MatchString(s.NamespaceID) || !validSharedBoardPath(s.BoardPath) || (s.Phase != "initializing" && s.Phase != "active") {
+	if (s.SchemaVersion != 1 && s.SchemaVersion != 2 && s.SchemaVersion != 3 && s.SchemaVersion != 4) || !sharedHex32.MatchString(s.NamespaceID) || !validSharedBoardPath(s.BoardPath) || (s.Phase != "initializing" && s.Phase != "active") {
 		return errors.New("invalid shared state header")
 	}
 	if s.SchemaVersion == 1 && (s.BundleProtocol != 0 || s.PendingBundle != nil || s.Policy != nil) {
@@ -316,18 +330,24 @@ func validateSharedState(s sharedState) error {
 	if s.SchemaVersion == 2 && (s.BundleProtocol != 1 || s.Phase != "active" || s.Policy != nil) {
 		return errors.New("invalid shared bundle protocol")
 	}
-	if s.SchemaVersion == 3 {
-		if s.Phase != "active" || (s.BundleProtocol != 0 && s.BundleProtocol != 1) || s.Policy == nil {
+	if s.SchemaVersion == 3 || s.SchemaVersion == 4 {
+		if s.Phase != "active" || (s.BundleProtocol != 0 && s.BundleProtocol != 1) || (s.SchemaVersion == 3 && s.Policy == nil) {
 			return errors.New("invalid schema 3 shared state")
 		}
-		if err := validateSharedPolicyAuthority(*s.Policy); err != nil {
-			return fmt.Errorf("invalid shared policy authority: %w", err)
+		if s.Policy != nil {
+			if err := validateSharedPolicyAuthority(*s.Policy); err != nil {
+				return fmt.Errorf("invalid shared policy authority: %w", err)
+			}
 		}
 		reserved := map[string]bool{}
 		for _, id := range s.Reserved {
 			reserved[id] = true
 		}
-		for _, plan := range s.Policy.Pending {
+		var pendingPlans []policyActivationPlan
+		if s.Policy != nil {
+			pendingPlans = s.Policy.Pending
+		}
+		for _, plan := range pendingPlans {
 			if len(plan.IDTarget) == 0 {
 				continue
 			}
@@ -341,11 +361,22 @@ func validateSharedState(s sharedState) error {
 				}
 			}
 		}
-		if s.PendingBundle != nil && len(s.Policy.Pending) != 0 {
+		if s.PendingBundle != nil && len(pendingPlans) != 0 {
 			return errors.New("shared policy and bundle reservations cannot both be pending")
 		}
 		if s.PendingBundle != nil && s.BundleProtocol != 1 {
 			return errors.New("shared pending bundle requires bundle protocol 1")
+		}
+	}
+	if s.SchemaVersion == 4 {
+		if s.Phase != "active" || s.ReservationFloors == nil || len(s.ReservationFloors) == 0 {
+			return errors.New("invalid schema 4 owner-rejoin shared state")
+		}
+		if err := validateReservationFloors(s.ReservationFloors); err != nil {
+			return err
+		}
+		if s.StorageProtocol != 6 {
+			return errors.New("schema 4 shared state requires protocol 6")
 		}
 	}
 	if s.Reserved == nil || s.Participants == nil || len(s.Participants) == 0 || len(s.Participants) > 256 {

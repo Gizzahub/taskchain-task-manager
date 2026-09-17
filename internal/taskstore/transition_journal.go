@@ -73,6 +73,9 @@ func loadTransitionsForStorage(r *os.Root) (transitionJournal, error) {
 	if err != nil {
 		return transitionJournal{}, err
 	}
+	if j.StorageProtocol == 6 {
+		return transitionJournal{}, errors.New("protocol 6 requires completed owner-rejoin receipt; runtime support is unavailable")
+	}
 	policy, err := policyForJournal(r, j)
 	if err != nil {
 		return transitionJournal{}, err
@@ -190,7 +193,7 @@ func validateTransitionShape(raw []byte) error {
 	}
 	if raw, ok := root["storageProtocol"]; ok {
 		var protocol int
-		if err := json.Unmarshal(raw, &protocol); err != nil || protocol < 1 || protocol > 5 {
+		if err := json.Unmarshal(raw, &protocol); err != nil || protocol < 1 || protocol > 6 {
 			return errors.New("unsupported storage protocol")
 		}
 		extra++

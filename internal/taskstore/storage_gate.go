@@ -33,6 +33,9 @@ func checkStorageGate(r *os.Root, transitions transitionJournal) error {
 }
 
 func checkStorageGateWithoutArchive(r *os.Root, transitions transitionJournal) error {
+	if transitions.StorageProtocol == 6 {
+		return errors.New("protocol 6 requires completed owner-rejoin receipt; runtime support is unavailable")
+	}
 	if err := checkRelocationGate(r, transitions); err != nil {
 		return err
 	}
