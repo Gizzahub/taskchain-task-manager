@@ -62,3 +62,36 @@ func archiveDestination(source string, policy boardpolicy.Policy) (zone, target 
 	}
 	return zone, target, nil
 }
+
+func validateArchivedBindingPath(name string, policy boardpolicy.Policy) error {
+	if !utf8.ValidString(name) || len(name) > 1023 || path.IsAbs(name) || path.Clean(name) != name || strings.ContainsAny(name, "\\\x00") {
+		return fmt.Errorf("invalid archived binding path")
+	}
+	parts := strings.Split(name, "/")
+	if len(parts) < 2 {
+		return fmt.Errorf("archived binding requires a storage zone")
+	}
+	index := 0
+	if policy.IsModule(parts[0]) {
+		if _, err := classifyModulePath(name, policy); err != nil {
+			return err
+		}
+		index = 1
+	}
+	if parts[index] != "archive" && parts[index] != "_archive" {
+		return fmt.Errorf("binding target is not archived")
+	}
+	for i, part := range parts {
+		if len(part) > 255 || strings.HasPrefix(part, ".") || cardpath.IsExcludedDirectory(part) {
+			return fmt.Errorf("invalid archived binding path component")
+		}
+		if i != index && (part == "archive" || part == "_archive") {
+			return fmt.Errorf("nested archive binding is ambiguous")
+		}
+	}
+	name = parts[len(parts)-1]
+	if path.Ext(name) != ".md" || cardpath.IsDocumentation(name) {
+		return fmt.Errorf("archive binding requires a card filename")
+	}
+	return nil
+}
