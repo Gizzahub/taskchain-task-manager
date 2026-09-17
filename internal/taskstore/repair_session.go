@@ -22,7 +22,11 @@ func openRepairSession(dir string, req RepairRequest) (_ *repairSession, err err
 }
 
 func openStorageSession(dir string, req RepairRequest, relocation bool) (_ *repairSession, err error) {
-	shared, release, err := acquireSharedRelocationOptions(dir, false, false, false, !relocation, relocation)
+	return openStorageSessionOptions(dir, req, relocation, false)
+}
+
+func openStorageSessionOptions(dir string, req RepairRequest, relocation, archive bool) (_ *repairSession, err error) {
+	shared, release, err := acquireSharedArchiveOptions(dir, false, false, false, !relocation && !archive, relocation && !archive, archive)
 	if err != nil {
 		return nil, err
 	}
@@ -50,10 +54,12 @@ func openStorageSession(dir string, req RepairRequest, relocation bool) (_ *repa
 	if err != nil {
 		return nil, err
 	}
-	if err := checkArchiveGate(r, s.transitions); err != nil {
-		return nil, err
+	if !archive {
+		if err := checkArchiveGate(r, s.transitions); err != nil {
+			return nil, err
+		}
 	}
-	if !relocation {
+	if !relocation && !archive {
 		if err := checkRelocationGate(r, s.transitions); err != nil {
 			return nil, err
 		}
@@ -98,7 +104,7 @@ func openStorageSession(dir string, req RepairRequest, relocation bool) (_ *repa
 	if s.transitions.StorageProtocol == 0 && len(s.journal.Records) != 0 {
 		return nil, errors.New("orphan storage journal; restore its protocol marker")
 	}
-	if relocation {
+	if relocation || archive {
 		for _, rec := range s.journal.Records {
 			if rec.Kind == "pending" {
 				return nil, errors.New("recover pending status repair before relocation")
