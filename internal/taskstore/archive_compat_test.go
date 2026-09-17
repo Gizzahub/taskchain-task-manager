@@ -14,6 +14,15 @@ import (
 // built by the integration harness; the test must prove the old writer stops
 // at the storage-protocol barrier rather than merely rejecting the request.
 func TestArchiveStorageV2BinaryBarrier(t *testing.T) {
+	archiveStorageV2BinaryBarrier(t, false)
+}
+
+func TestLegacyAdoptionStorageV2BinaryBarrier(t *testing.T) {
+	archiveStorageV2BinaryBarrier(t, true)
+}
+
+func archiveStorageV2BinaryBarrier(t *testing.T, legacy bool) {
+	t.Helper()
 	binary := os.Getenv("TASKCHAIN_ARCHIVE_LEGACY_BINARY")
 	if binary == "" {
 		t.Skip("set TASKCHAIN_ARCHIVE_LEGACY_BINARY to storage-v2 executable")
@@ -26,6 +35,22 @@ func TestArchiveStorageV2BinaryBarrier(t *testing.T) {
 		for _, point := range points {
 			t.Run(strings.Join([]string{map[bool]string{true: "shared", false: "local"}[shared], point}, "/"), func(t *testing.T) {
 				board, other, req := archiveProcessFixture(t, shared)
+				var legacyReq LegacyArchiveRequest
+				if legacy {
+					target := filepath.Join(board, "_archive", "done", "TASK-1.md")
+					if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.Rename(filepath.Join(board, req.Source), target); err != nil {
+						t.Fatal(err)
+					}
+					info, err := os.Stat(target)
+					if err != nil {
+						t.Fatal(err)
+					}
+					req.Source, req.Operation, req.Assertion = "_archive/done/TASK-1.md", "legacy-adoption", "synthetic legacy verification"
+					legacyReq = LegacyArchiveRequest{ArchiveRequest: req, ExpectedMode: uint32(info.Mode().Perm()), ApproveCompletion: true}
+				}
 				commonPath := ""
 				if shared {
 					s, release, err := acquireShared(board, false)
@@ -43,8 +68,14 @@ func TestArchiveStorageV2BinaryBarrier(t *testing.T) {
 						t.Fatalf("legacy baseline read failed for %s: %s: %v", target, out, err)
 					}
 				}
-				if _, err := archiveWithStep(board, req, true, false, repairStopAt(point)); err == nil || !strings.Contains(err.Error(), "stop at "+point) {
-					t.Fatalf("archive boundary: %v", err)
+				var boundaryErr error
+				if legacy {
+					_, boundaryErr = legacyArchiveWithStep(board, legacyReq, true, false, repairStopAt(point))
+				} else {
+					_, boundaryErr = archiveWithStep(board, req, true, false, repairStopAt(point))
+				}
+				if boundaryErr == nil || !strings.Contains(boundaryErr.Error(), "stop at "+point) {
+					t.Fatalf("archive boundary: %v", boundaryErr)
 				}
 
 				commonBefore := []byte(nil)
