@@ -4,6 +4,7 @@ package archivepolicy
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
 )
@@ -42,7 +43,7 @@ func EvaluateNormal(r Rules, f Facts, complete func(string) (bool, error)) (Deci
 	accepted := map[string]bool{}
 	for _, value := range r.AcceptedReviews {
 		key := strings.ToLower(value)
-		if value == "" || strings.TrimSpace(value) != value || strings.ContainsAny(value, "\r\n\x00") || accepted[key] {
+		if value == "" || !utf8.ValidString(value) || strings.TrimSpace(value) != value || strings.ContainsAny(value, "\r\n\x00") || accepted[key] {
 			return out, fmt.Errorf("invalid or duplicate archive review value %q", value)
 		}
 		accepted[key] = true
