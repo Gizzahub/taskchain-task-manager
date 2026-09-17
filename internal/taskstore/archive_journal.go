@@ -117,7 +117,7 @@ func archiveJournalBytesVersion(j archiveJournal, maxSchema int) ([]byte, error)
 // The expected scope comes from the acquired board/common session, not from
 // this journal. This function does not discover or verify the current cards.
 func archiveCompletedBindings(j archiveJournal, board, namespace string) (map[string]archiveCompletionBinding, error) {
-	if err := validateArchiveJournal(j); err != nil {
+	if err := validateArchiveJournalVersion(j, j.SchemaVersion); err != nil {
 		return nil, err
 	}
 	if j.BoardPath != board || j.Namespace != namespace {

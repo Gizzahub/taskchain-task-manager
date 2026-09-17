@@ -25,6 +25,29 @@ func TestArchiveStorageV3BinaryBarrier(t *testing.T) {
 	archiveStorageV3BinaryBarrier(t, false)
 }
 
+func TestArchiveStorageV4BinaryBarrierAfterCapacityAdoption(t *testing.T) {
+	binary := os.Getenv("TASKCHAIN_ARCHIVE_V4_BINARY")
+	if binary == "" {
+		t.Skip("set TASKCHAIN_ARCHIVE_V4_BINARY to storage-v4 executable")
+	}
+	dir, req, _ := archiveWriterFixture(t)
+	if _, err := Archive(dir, req, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := AdoptArchiveCapacity(dir, strings.Repeat("f", 32)); err != nil {
+		t.Fatal(err)
+	}
+	before := boardBytes(t, dir)
+	out, err := runLegacyPolicyCommand(binary, "list", "--dir", dir, "--json")
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(string(out), "storage protocol") {
+		t.Fatalf("protocol4 binary accepted capacity board: output=%s err=%v", out, err)
+	}
+	if !reflectEqualBoard(before, boardBytes(t, dir)) {
+		t.Fatal("protocol4 binary changed capacity board")
+	}
+}
+
 func TestLegacyAdoptionStorageV3BinaryBarrier(t *testing.T) {
 	archiveStorageV3BinaryBarrier(t, true)
 }

@@ -64,10 +64,10 @@ func archiveWithStep(dir string, req ArchiveRequest, adopt, recoverOnly bool, st
 	}
 	next := s.archives
 	next.Records = append(append([]archiveRecord{}, next.Records...), rec)
-	if _, err := archiveJournalBytes(next); err != nil {
+	if _, err := archiveJournalWire(next); err != nil {
 		return result, err
 	}
-	if _, err := archiveJournalBytes(completedArchiveJournal(next)); err != nil {
+	if _, err := archiveJournalWire(completedArchiveJournal(next)); err != nil {
 		return result, err
 	}
 	if err := s.preflightArchiveDelta(next); err != nil {
@@ -82,7 +82,7 @@ func archiveWithStep(dir string, req ArchiveRequest, adopt, recoverOnly bool, st
 	if err := storageStep(step, "after-archive-common-pending"); err != nil {
 		return result, err
 	}
-	if err := saveArchiveJournal(s.root, next, false); err != nil {
+	if err := saveArchiveJournalForProtocol(s.root, next, false, s.transitions.StorageProtocol); err != nil {
 		return result, err
 	}
 	s.archives = next
@@ -114,7 +114,7 @@ func (s *archiveSession) finishArchive(rec archiveRecord, req ArchiveRequest, st
 		return ArchiveResult{}, errors.New("archive source reappeared before receipt")
 	}
 	completed := completedArchiveJournal(s.archives)
-	if err := saveArchiveJournal(s.root, completed, false); err != nil {
+	if err := saveArchiveJournalForProtocol(s.root, completed, false, s.transitions.StorageProtocol); err != nil {
 		return ArchiveResult{}, err
 	}
 	s.archives = completed

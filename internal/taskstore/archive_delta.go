@@ -7,9 +7,8 @@ import (
 	"unicode/utf8"
 )
 
-// archivePendingDelta is preparation data for a future shared protocol. It is
-// not accepted by current shared-state readers or writers. All journal hashes
-// identify canonical bytes, matching the existing archive reservation contract.
+// archivePendingDelta is the protocol 4/5 shared transport. JournalSchema binds
+// all three states to one canonical archive schema version.
 type archivePendingDelta struct {
 	SchemaVersion          int    `json:"schemaVersion"`
 	JournalSchema          int    `json:"journalSchema"`
@@ -41,17 +40,17 @@ func prepareArchivePendingDelta(original archiveJournal, pending archiveRecord) 
 			return zero, errors.New("archive delta original contains pending record")
 		}
 	}
-	originalRaw, err := archiveJournalBytes(original)
+	originalRaw, err := archiveJournalWire(original)
 	if err != nil {
 		return zero, err
 	}
 	target := original
 	target.Records = append(append([]archiveRecord{}, original.Records...), pending)
-	targetRaw, err := archiveJournalBytes(target)
+	targetRaw, err := archiveJournalWire(target)
 	if err != nil {
 		return zero, err
 	}
-	completedRaw, err := archiveJournalBytes(completedArchiveJournal(target))
+	completedRaw, err := archiveJournalWire(completedArchiveJournal(target))
 	if err != nil {
 		return zero, err
 	}
@@ -74,7 +73,7 @@ func prepareArchivePendingDelta(original archiveJournal, pending archiveRecord) 
 
 func archiveDeltaRecord(d archivePendingDelta) (archiveRecord, error) {
 	var zero archiveRecord
-	if d.SchemaVersion != 1 || d.JournalSchema != 1 || !validSharedRoot(d.BoardPath) || !sharedHex32.MatchString(d.Namespace) || !sharedHex32.MatchString(d.RequestID) || !sharedHex64.MatchString(d.OriginalJournalSHA256) || !sharedHex64.MatchString(d.TargetJournalSHA256) || !sharedHex64.MatchString(d.CompletedJournalSHA256) {
+	if d.SchemaVersion != 1 || (d.JournalSchema != 1 && d.JournalSchema != 2) || !validSharedRoot(d.BoardPath) || !sharedHex32.MatchString(d.Namespace) || !sharedHex32.MatchString(d.RequestID) || !sharedHex64.MatchString(d.OriginalJournalSHA256) || !sharedHex64.MatchString(d.TargetJournalSHA256) || !sharedHex64.MatchString(d.CompletedJournalSHA256) {
 		return zero, errors.New("invalid archive delta version, scope or hash")
 	}
 	if len(d.PendingRecord) == 0 || len(d.PendingRecord) > maxRepairsBytes || !utf8.Valid(d.PendingRecord) {
@@ -90,7 +89,7 @@ func archiveDeltaRecord(d archivePendingDelta) (archiveRecord, error) {
 	if err != nil {
 		return zero, err
 	}
-	j, err := decodeArchiveJournal(wrapper)
+	j, err := decodeArchiveJournalWire(wrapper, d.JournalSchema)
 	if err != nil {
 		return zero, err
 	}
@@ -165,14 +164,14 @@ func resolveArchivePendingDelta(d archivePendingDelta, currentRaw []byte, board,
 	if !found {
 		return zero, errors.New("archive delta ID is not reserved")
 	}
-	current, err := decodeArchiveJournal(currentRaw)
+	current, err := decodeArchiveJournalWire(currentRaw, d.JournalSchema)
 	if err != nil {
 		return zero, err
 	}
 	if current.SchemaVersion != d.JournalSchema || current.BoardPath != board || current.Namespace != namespace {
 		return zero, errors.New("archive delta current journal scope or schema differs")
 	}
-	canonical, err := archiveJournalBytes(current)
+	canonical, err := archiveJournalWire(current)
 	if err != nil {
 		return zero, err
 	}
@@ -203,11 +202,11 @@ func resolveArchivePendingDelta(d archivePendingDelta, currentRaw []byte, board,
 	}
 	target := base
 	target.Records = append(append([]archiveRecord{}, base.Records...), pending)
-	targetRaw, err := archiveJournalBytes(target)
+	targetRaw, err := archiveJournalWire(target)
 	if err != nil {
 		return zero, err
 	}
-	completedRaw, err := archiveJournalBytes(completedArchiveJournal(target))
+	completedRaw, err := archiveJournalWire(completedArchiveJournal(target))
 	if err != nil {
 		return zero, err
 	}

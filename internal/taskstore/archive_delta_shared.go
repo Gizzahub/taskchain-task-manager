@@ -10,7 +10,7 @@ func validateSharedArchiveDelta(s sharedState) error {
 	if d == nil {
 		return nil
 	}
-	if s.StorageProtocol != 4 || s.Phase != "active" || s.PendingArchive != nil || s.PendingRepair != nil || s.PendingRelocation != nil || s.PendingBundle != nil || (s.Policy != nil && s.Policy.Phase != "active") {
+	if (s.StorageProtocol != 4 && s.StorageProtocol != 5) || s.Phase != "active" || s.PendingArchive != nil || s.PendingRepair != nil || s.PendingRelocation != nil || s.PendingBundle != nil || s.PendingArchiveCapacity != nil || (s.Policy != nil && s.Policy.Phase != "active") {
 		return errors.New("conflicting shared archive delta reservation")
 	}
 	rec, err := archiveDeltaRecord(*d)
@@ -19,6 +19,9 @@ func validateSharedArchiveDelta(s sharedState) error {
 	}
 	if d.Namespace != s.NamespaceID {
 		return errors.New("shared archive delta namespace mismatch")
+	}
+	if (s.StorageProtocol == 4 && d.JournalSchema != 1) || (s.StorageProtocol == 5 && d.JournalSchema != 2) {
+		return errors.New("shared archive delta schema differs from storage protocol")
 	}
 	for _, id := range s.Reserved {
 		if sameIdentity(id, rec.ID) {
@@ -38,7 +41,7 @@ func (s *archiveSession) prepareSharedDelta(target archiveJournal) (sharedState,
 	if err != nil {
 		return zero, err
 	}
-	raw, err := archiveJournalBytes(target)
+	raw, err := archiveJournalWire(target)
 	if err != nil {
 		return zero, err
 	}
@@ -49,7 +52,12 @@ func (s *archiveSession) prepareSharedDelta(target archiveJournal) (sharedState,
 	if next.PendingArchive != nil || next.PendingArchiveDelta != nil {
 		return zero, errors.New("shared archive already reserved")
 	}
-	next.StorageProtocol, next.PendingArchiveDelta = 4, &d
+	next.PendingArchiveDelta = &d
+	if target.SchemaVersion == 2 {
+		next.StorageProtocol = 5
+	} else {
+		next.StorageProtocol = 4
+	}
 	if err := validateSharedState(next); err != nil {
 		return zero, err
 	}
@@ -73,14 +81,14 @@ func (s *archiveSession) preflightArchiveDelta(target archiveJournal) error {
 
 func (s *archiveSession) resolveSharedDelta(req ArchiveRequest) (archiveDeltaResolution, error) {
 	d := s.shared.state.PendingArchiveDelta
-	if d == nil || d.RequestID != req.RequestID || d.BoardPath != s.archives.BoardPath || s.transitions.StorageProtocol != 4 || !s.archivesExist {
+	if d == nil || d.RequestID != req.RequestID || d.BoardPath != s.archives.BoardPath || s.transitions.StorageProtocol < 4 || !s.archivesExist {
 		return archiveDeltaResolution{}, errors.New("shared archive delta owner, request or local protocol mismatch")
 	}
-	current, err := loadArchiveJournal(s.root)
+	current, err := loadArchiveJournalForProtocol(s.root, s.transitions.StorageProtocol)
 	if err != nil {
 		return archiveDeltaResolution{}, err
 	}
-	raw, err := archiveJournalBytes(current)
+	raw, err := archiveJournalWire(current)
 	if err != nil {
 		return archiveDeltaResolution{}, err
 	}
@@ -102,11 +110,11 @@ func (s *archiveSession) resumeArchiveDelta(req ArchiveRequest) error {
 	if r.State != "original" {
 		return nil
 	}
-	target, err := decodeArchiveJournal(r.Target)
+	target, err := decodeArchiveJournalWire(r.Target, s.archives.SchemaVersion)
 	if err != nil {
 		return err
 	}
-	if err := saveArchiveJournal(s.root, target, false); err != nil {
+	if err := saveArchiveJournalForProtocol(s.root, target, false, s.transitions.StorageProtocol); err != nil {
 		return err
 	}
 	s.archives = target

@@ -55,6 +55,10 @@ func acquireSharedRelocationOptions(dir string, allowInitializing, allowPendingB
 // callers reach this wrapper through acquireSharedRelocationOptions and keep
 // the default false value.
 func acquireSharedArchiveOptions(dir string, allowInitializing, allowPendingBundle, allowPendingPolicy, allowPendingRepair, allowPendingRelocation, allowPendingArchive bool) (session *sharedSession, release func() error, err error) {
+	return acquireSharedCapacityOptions(dir, allowInitializing, allowPendingBundle, allowPendingPolicy, allowPendingRepair, allowPendingRelocation, allowPendingArchive, false)
+}
+
+func acquireSharedCapacityOptions(dir string, allowInitializing, allowPendingBundle, allowPendingPolicy, allowPendingRepair, allowPendingRelocation, allowPendingArchive, allowPendingCapacity bool) (session *sharedSession, release func() error, err error) {
 	location, err := githistory.LocateBoard(context.Background(), dir)
 	if err != nil {
 		return nil, nil, err
@@ -129,6 +133,9 @@ func acquireSharedArchiveOptions(dir string, allowInitializing, allowPendingBund
 	}
 	if (state.PendingArchive != nil || state.PendingArchiveDelta != nil) && !allowPendingArchive {
 		return nil, release, errors.New("shared namespace has a pending archive; recover from its original board")
+	}
+	if state.PendingArchiveCapacity != nil && !allowPendingCapacity {
+		return nil, release, errors.New("shared namespace has a pending archive capacity adoption; recover from its original board")
 	}
 	if state.Policy != nil && state.Policy.Phase != "active" && !allowPendingPolicy {
 		return nil, release, errors.New("shared policy activation is pending; explicit policy recovery required")
@@ -228,7 +235,11 @@ func (s *sharedSession) verifyBoardIdentity(r *os.Root) error {
 // Readers and receipt replay must not bypass an existing shared identity.
 // This only checks identity; it never merges IDs, scans history or adopts a board.
 func (s *sharedSession) verifyLocalIDBinding(r *os.Root) error {
-	archive, archiveErr := loadArchiveJournal(r)
+	// Identity validation also runs while a policy activation is pending, so it
+	// must not load transitions through policyForJournal and recurse into the
+	// pending-policy gate. Capacity recovery resolves its exact original/target
+	// state from the immutable payload rather than guessing from the protocol.
+	archive, archiveErr := loadArchiveJournalForIdentityBinding(r)
 	if archiveErr != nil && !errors.Is(archiveErr, fs.ErrNotExist) {
 		return archiveErr
 	}

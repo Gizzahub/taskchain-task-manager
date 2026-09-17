@@ -67,7 +67,7 @@ func legacyArchiveWithStep(dir string, req LegacyArchiveRequest, adopt, recoverO
 	}
 	next := s.archives
 	next.Records = append(append([]archiveRecord{}, next.Records...), rec)
-	if _, err := archiveJournalBytes(next); err != nil {
+	if _, err := archiveJournalWire(next); err != nil {
 		return result, err
 	}
 	if err := s.preflightArchiveDelta(next); err != nil {
@@ -82,7 +82,7 @@ func legacyArchiveWithStep(dir string, req LegacyArchiveRequest, adopt, recoverO
 	if err := storageStep(step, "after-archive-common-pending"); err != nil {
 		return result, err
 	}
-	if err := saveArchiveJournal(s.root, next, false); err != nil {
+	if err := saveArchiveJournalForProtocol(s.root, next, false, s.transitions.StorageProtocol); err != nil {
 		return result, err
 	}
 	s.archives = next
@@ -197,7 +197,7 @@ func (s *archiveSession) finishLegacy(rec archiveRecord, req LegacyArchiveReques
 		return ArchiveResult{}, err
 	}
 	completed := completedArchiveJournal(s.archives)
-	if err := saveArchiveJournal(s.root, completed, false); err != nil {
+	if err := saveArchiveJournalForProtocol(s.root, completed, false, s.transitions.StorageProtocol); err != nil {
 		return ArchiveResult{}, err
 	}
 	s.archives = completed
@@ -240,7 +240,7 @@ func (s *archiveSession) verifyPendingLegacy(rec archiveRecord, req LegacyArchiv
 	if err != nil {
 		return err
 	}
-	if j.StorageProtocol < 3 || j.StorageProtocol > 4 {
+	if j.StorageProtocol < 3 || j.StorageProtocol > 5 {
 		return errors.New("pending legacy archive lost protocol binding")
 	}
 	if err := s.shared.verifyPolicyAuthority(s.root, j); err != nil {
@@ -280,15 +280,15 @@ func (s *archiveSession) verifyPendingLegacy(rec archiveRecord, req LegacyArchiv
 	if !bytes.Equal(canonical, rec.PolicyCanonical) || bytesDigest(canonical) != rec.PolicyDigest {
 		return errors.New("pending legacy archive policy changed")
 	}
-	currentJournal, err := loadArchiveJournal(s.root)
+	currentJournal, err := loadArchiveJournalForProtocol(s.root, j.StorageProtocol)
 	if err != nil {
 		return err
 	}
-	currentRaw, err := archiveJournalBytes(currentJournal)
+	currentRaw, err := archiveJournalWire(currentJournal)
 	if err != nil {
 		return err
 	}
-	wantRaw, err := archiveJournalBytes(s.archives)
+	wantRaw, err := archiveJournalWire(s.archives)
 	if err != nil || !bytes.Equal(currentRaw, wantRaw) {
 		return errors.New("pending legacy archive journal changed")
 	}

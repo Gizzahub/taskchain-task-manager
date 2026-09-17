@@ -26,3 +26,17 @@ func decodeArchiveCapacityJournal(raw []byte) (archiveJournal, error) {
 func archiveCapacityJournalBytes(j archiveJournal) ([]byte, error) {
 	return archiveJournalBytesVersion(j, 2)
 }
+
+func archiveJournalWire(j archiveJournal) ([]byte, error) {
+	if j.SchemaVersion == 2 {
+		return archiveCapacityJournalBytes(j)
+	}
+	return archiveJournalBytes(j)
+}
+
+func decodeArchiveJournalWire(raw []byte, schema int) (archiveJournal, error) {
+	if schema == 2 {
+		return decodeArchiveCapacityJournal(raw)
+	}
+	return decodeArchiveJournal(raw)
+}

@@ -51,7 +51,7 @@ func openArchiveSession(dir string, req ArchiveRequest) (_ *archiveSession, err 
 	if s.shared != nil && s.shared.state != nil {
 		namespace = s.shared.state.NamespaceID
 	}
-	s.archives, err = loadArchiveJournal(s.root)
+	s.archives, err = loadArchiveJournalForProtocol(s.root, s.transitions.StorageProtocol)
 	if errors.Is(err, fs.ErrNotExist) {
 		if s.transitions.StorageProtocol >= 3 {
 			return nil, errors.New("adopted archive journal is missing; restore it")
@@ -64,6 +64,14 @@ func openArchiveSession(dir string, req ArchiveRequest) (_ *archiveSession, err 
 	}
 	if s.archives.BoardPath != s.journal.BoardPath || s.archives.Namespace != namespace {
 		return nil, errors.New("archive journal scope differs from current session")
+	}
+	if adoption, loadErr := loadArchiveCapacityAdoption(s.root); loadErr == nil && adoption.Phase == "pending" {
+		return nil, errors.New("pending archive capacity adoption requires exact recovery")
+	} else if loadErr != nil && !errors.Is(loadErr, fs.ErrNotExist) {
+		return nil, loadErr
+	}
+	if s.transitions.StorageProtocol >= 5 && s.archives.SchemaVersion != 2 {
+		return nil, errors.New("capacity-adopted archive journal is not schema 2; restore it")
 	}
 	if s.transitions.StorageProtocol < 3 && len(s.archives.Records) != 0 {
 		return nil, errors.New("archive journal lost its protocol marker")
@@ -145,7 +153,7 @@ func (s *archiveSession) reserveArchive(target archiveJournal, req ArchiveReques
 	if s.shared == nil || s.shared.state == nil {
 		return nil
 	}
-	if s.shared.state.StorageProtocol == 4 {
+	if s.shared.state.StorageProtocol >= 4 {
 		next, err := s.prepareSharedDelta(target)
 		if err != nil {
 			return err
@@ -155,11 +163,11 @@ func (s *archiveSession) reserveArchive(target archiveJournal, req ArchiveReques
 	if s.shared.state.PendingArchive != nil {
 		return errors.New("shared archive already reserved")
 	}
-	original, err := archiveJournalBytes(s.archives)
+	original, err := archiveJournalWire(s.archives)
 	if err != nil {
 		return err
 	}
-	raw, err := archiveJournalBytes(target)
+	raw, err := archiveJournalWire(target)
 	if err != nil {
 		return err
 	}
@@ -176,7 +184,7 @@ func (s *archiveSession) resumeArchive(req ArchiveRequest) error {
 		return nil
 	}
 	p := s.shared.state.PendingArchive
-	target, err := decodeArchiveJournal(p.TargetJournal)
+	target, err := decodeArchiveJournalWire(p.TargetJournal, s.archives.SchemaVersion)
 	if err != nil {
 		return err
 	}
@@ -189,11 +197,11 @@ func (s *archiveSession) resumeArchive(req ArchiveRequest) error {
 	if !matched {
 		return errors.New("shared archive request differs from recorded request")
 	}
-	raw, err := archiveJournalBytes(s.archives)
+	raw, err := archiveJournalWire(s.archives)
 	if err != nil {
 		return err
 	}
-	done, err := archiveJournalBytes(completedArchiveJournal(target))
+	done, err := archiveJournalWire(completedArchiveJournal(target))
 	if err != nil {
 		return err
 	}
@@ -203,7 +211,7 @@ func (s *archiveSession) resumeArchive(req ArchiveRequest) error {
 	if bytesDigest(raw) != p.OriginalJournalSHA256 {
 		return errors.New("local archive journal differs from shared reservation")
 	}
-	if err := saveArchiveJournal(s.root, target, false); err != nil {
+	if err := saveArchiveJournalForProtocol(s.root, target, false, s.transitions.StorageProtocol); err != nil {
 		return err
 	}
 	s.archives = target
@@ -221,7 +229,7 @@ func (s *archiveSession) clearArchive(req ArchiveRequest) error {
 	if next.PendingArchive.RequestID != req.RequestID || next.PendingArchive.Owner != s.archives.BoardPath {
 		return errors.New("shared archive owner mismatch")
 	}
-	target, err := decodeArchiveJournal(next.PendingArchive.TargetJournal)
+	target, err := decodeArchiveJournalWire(next.PendingArchive.TargetJournal, s.archives.SchemaVersion)
 	if err != nil {
 		return err
 	}
@@ -234,15 +242,15 @@ func (s *archiveSession) clearArchive(req ArchiveRequest) error {
 	if !matched {
 		return errors.New("archive completion request mismatch")
 	}
-	want, err := archiveJournalBytes(completedArchiveJournal(target))
+	want, err := archiveJournalWire(completedArchiveJournal(target))
 	if err != nil {
 		return err
 	}
-	current, err := loadArchiveJournal(s.root)
+	current, err := loadArchiveJournalForProtocol(s.root, s.transitions.StorageProtocol)
 	if err != nil {
 		return err
 	}
-	got, err := archiveJournalBytes(current)
+	got, err := archiveJournalWire(current)
 	if err != nil {
 		return err
 	}

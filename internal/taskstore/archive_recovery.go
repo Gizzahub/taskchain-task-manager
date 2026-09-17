@@ -34,7 +34,7 @@ func (s *archiveSession) verifyPendingArchive(rec archiveRecord, req ArchiveRequ
 	if err != nil {
 		return err
 	}
-	if j.StorageProtocol < 3 || j.StorageProtocol > 4 {
+	if j.StorageProtocol < 3 || j.StorageProtocol > 5 {
 		return errors.New("pending archive lost protocol binding")
 	}
 	if err := s.shared.verifyPolicyAuthority(s.root, j); err != nil {
@@ -74,15 +74,15 @@ func (s *archiveSession) verifyPendingArchive(rec archiveRecord, req ArchiveRequ
 	if !bytes.Equal(canonical, rec.PolicyCanonical) || bytesDigest(canonical) != rec.PolicyDigest {
 		return errors.New("archive policy changed")
 	}
-	current, err := loadArchiveJournal(s.root)
+	current, err := loadArchiveJournalForProtocol(s.root, j.StorageProtocol)
 	if err != nil {
 		return err
 	}
-	got, err := archiveJournalBytes(current)
+	got, err := archiveJournalWire(current)
 	if err != nil {
 		return err
 	}
-	want, err := archiveJournalBytes(s.archives)
+	want, err := archiveJournalWire(s.archives)
 	if err != nil {
 		return err
 	}

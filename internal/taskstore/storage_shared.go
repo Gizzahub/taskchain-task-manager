@@ -29,7 +29,7 @@ func validateSharedRepairShape(raw []byte) error {
 }
 
 func validateSharedStorage(s sharedState) error {
-	if s.StorageProtocol < 0 || s.StorageProtocol > 4 {
+	if s.StorageProtocol < 0 || s.StorageProtocol > 5 {
 		return errors.New("invalid shared storage protocol")
 	}
 	if err := validateSharedRelocation(s); err != nil {
@@ -39,7 +39,7 @@ func validateSharedStorage(s sharedState) error {
 	if p == nil {
 		return nil
 	}
-	if s.StorageProtocol < 1 || s.Phase != "active" || s.PendingBundle != nil || s.PendingRelocation != nil || s.PendingArchive != nil || s.PendingArchiveDelta != nil || (s.Policy != nil && s.Policy.Phase != "active") {
+	if s.StorageProtocol < 1 || s.Phase != "active" || s.PendingBundle != nil || s.PendingRelocation != nil || s.PendingArchive != nil || s.PendingArchiveDelta != nil || s.PendingArchiveCapacity != nil || (s.Policy != nil && s.Policy.Phase != "active") {
 		return errors.New("conflicting shared storage reservation")
 	}
 	if !validSharedRoot(p.Owner) || !sharedHex32.MatchString(p.RequestID) || !sharedHex64.MatchString(p.OriginalJournalSHA256) {
@@ -90,6 +90,20 @@ func validateSharedStorage(s sharedState) error {
 	}
 	if bytesDigest(original) != p.OriginalJournalSHA256 {
 		return errors.New("shared repair target does not preserve the original receipts")
+	}
+	return nil
+}
+
+func validateSharedArchiveCapacity(s sharedState) error {
+	p := s.PendingArchiveCapacity
+	if p == nil {
+		return nil
+	}
+	if s.StorageProtocol != 5 || s.Phase != "active" || s.PendingBundle != nil || s.PendingRepair != nil || s.PendingRelocation != nil || s.PendingArchive != nil || s.PendingArchiveDelta != nil || (s.Policy != nil && s.Policy.Phase != "active") {
+		return errors.New("conflicting shared archive capacity reservation")
+	}
+	if !validSharedRoot(p.Owner) || !sharedHex32.MatchString(p.UpgradeID) {
+		return errors.New("invalid shared archive capacity marker")
 	}
 	return nil
 }

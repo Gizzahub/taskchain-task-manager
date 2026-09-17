@@ -32,7 +32,7 @@ func (s *relocationSession) verifyPendingRelocation(rec relocationRecord, req Re
 	if err != nil {
 		return err
 	}
-	if j.StorageProtocol < 2 || j.StorageProtocol > 4 {
+	if j.StorageProtocol < 2 || j.StorageProtocol > 5 {
 		return errors.New("pending relocation lost protocol binding")
 	}
 	if err := checkArchiveGate(s.root, j); err != nil {

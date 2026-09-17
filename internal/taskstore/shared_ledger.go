@@ -25,22 +25,23 @@ var sharedHex40Or64 = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 var sharedHex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type sharedState struct {
-	SchemaVersion          int                    `json:"schemaVersion"`
-	NamespaceID            string                 `json:"namespaceId"`
-	BoardPath              string                 `json:"boardPath"`
-	Phase                  string                 `json:"phase"`
-	Reserved               []string               `json:"reserved"`
-	Participants           []sharedParticipant    `json:"participants"`
-	BundleProtocol         int                    `json:"bundleProtocol,omitempty"`
-	PendingBundle          *sharedBundlePending   `json:"pendingBundle,omitempty"`
-	Policy                 *sharedPolicyAuthority `json:"policy,omitempty"`
-	StorageProtocol        int                    `json:"storageProtocol,omitempty"`
-	PendingRepair          *sharedRepairPending   `json:"pendingRepair,omitempty"`
-	PendingRelocation      *sharedRepairPending   `json:"pendingRelocation,omitempty"`
-	PendingArchive         *sharedRepairPending   `json:"pendingArchive,omitempty"`
-	PendingArchiveDelta    *archivePendingDelta   `json:"pendingArchiveDelta,omitempty"`
-	PolicyRevisionProtocol int                    `json:"policyRevisionProtocol,omitempty"`
-	ModuleProtocol         int                    `json:"moduleProtocol,omitempty"`
+	SchemaVersion          int                     `json:"schemaVersion"`
+	NamespaceID            string                  `json:"namespaceId"`
+	BoardPath              string                  `json:"boardPath"`
+	Phase                  string                  `json:"phase"`
+	Reserved               []string                `json:"reserved"`
+	Participants           []sharedParticipant     `json:"participants"`
+	BundleProtocol         int                     `json:"bundleProtocol,omitempty"`
+	PendingBundle          *sharedBundlePending    `json:"pendingBundle,omitempty"`
+	Policy                 *sharedPolicyAuthority  `json:"policy,omitempty"`
+	StorageProtocol        int                     `json:"storageProtocol,omitempty"`
+	PendingRepair          *sharedRepairPending    `json:"pendingRepair,omitempty"`
+	PendingRelocation      *sharedRepairPending    `json:"pendingRelocation,omitempty"`
+	PendingArchive         *sharedRepairPending    `json:"pendingArchive,omitempty"`
+	PendingArchiveDelta    *archivePendingDelta    `json:"pendingArchiveDelta,omitempty"`
+	PendingArchiveCapacity *archiveCapacityPending `json:"pendingArchiveCapacity,omitempty"`
+	PolicyRevisionProtocol int                     `json:"policyRevisionProtocol,omitempty"`
+	ModuleProtocol         int                     `json:"moduleProtocol,omitempty"`
 }
 
 type sharedBundlePending struct {
@@ -159,7 +160,7 @@ func validateSharedShape(raw []byte) error {
 	}
 	if raw, ok := root["storageProtocol"]; ok {
 		var protocol int
-		if err := json.Unmarshal(raw, &protocol); err != nil || protocol < 1 || protocol > 4 {
+		if err := json.Unmarshal(raw, &protocol); err != nil || protocol < 1 || protocol > 5 {
 			return errors.New("unsupported shared storage protocol")
 		}
 		allowed["storageProtocol"] = true
@@ -187,6 +188,12 @@ func validateSharedShape(raw []byte) error {
 			return err
 		}
 		allowed["pendingArchiveDelta"] = true
+	}
+	if raw, ok := root["pendingArchiveCapacity"]; ok {
+		if err := validateArchiveCapacityPendingShape(raw); err != nil {
+			return err
+		}
+		allowed["pendingArchiveCapacity"] = true
 	}
 	var version int
 	if err := json.Unmarshal(root["schemaVersion"], &version); err != nil {
@@ -288,6 +295,9 @@ func validateSharedState(s sharedState) error {
 		return errors.New("shared policy revision requires permanent protocol barrier")
 	}
 	if err := validateSharedStorage(s); err != nil {
+		return err
+	}
+	if err := validateSharedArchiveCapacity(s); err != nil {
 		return err
 	}
 	if err := validateSharedArchive(s); err != nil {

@@ -27,6 +27,105 @@ func protocol4DeltaFixture(t *testing.T) (sharedState, archivePendingDelta) {
 	return state, delta
 }
 
+func TestArchiveDeltaTransportProtocol5Schema2AllRecoveryStates(t *testing.T) {
+	original, pending, _ := archiveDeltaFixture(t)
+	original.SchemaVersion = 2
+	delta, err := prepareArchivePendingDelta(original, pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := original
+	target.Records = []archiveRecord{pending}
+	states := []archiveJournal{original, target, completedArchiveJournal(target)}
+	state := validSharedV3Fixture(t)
+	state.NamespaceID, state.StorageProtocol = original.Namespace, 5
+	state.Reserved = unionIDs(state.Reserved, []string{identityKey(pending.ID)})
+	state.PendingArchiveDelta = &delta
+	if err := validateSharedState(state); err != nil {
+		t.Fatalf("schema2 shared delta rejected: %v", err)
+	}
+	for i, want := range []string{"original", "pending", "completed"} {
+		raw, err := archiveJournalWire(states[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := resolveArchivePendingDelta(delta, raw, original.BoardPath, original.Namespace, state.Reserved)
+		if err != nil || got.State != want {
+			t.Fatalf("state=%s got=%+v err=%v", want, got, err)
+		}
+		decodedTarget, err := decodeArchiveCapacityJournal(got.Target)
+		if err != nil || decodedTarget.SchemaVersion != 2 {
+			t.Fatalf("target schema2 err=%v", err)
+		}
+		decodedCompleted, err := decodeArchiveCapacityJournal(got.Completed)
+		if err != nil || decodedCompleted.SchemaVersion != 2 {
+			t.Fatalf("completed schema2 err=%v", err)
+		}
+	}
+}
+
+func TestArchiveDeltaTransportProtocol5SharedSessionResolvesAllStates(t *testing.T) {
+	board, _, first := archiveProcessFixture(t, true)
+	if _, err := Archive(board, first, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := AdoptArchiveCapacity(board, strings.Repeat("6", 32)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(board, CreateRequest{ID: "TASK-2", Title: "schema2 shared"}); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(board, "todo/TASK-2.md")
+	raw, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = bytes.Replace(raw, []byte("---\n"), []byte("---\nreview-result: pass\nreview-proof: checked\n"), 1)
+	if err := os.WriteFile(source, raw, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(source, filepath.Join(board, "done/TASK-2.md")); err != nil {
+		t.Fatal(err)
+	}
+	req := ArchiveRequest{ID: "TASK-2", Owner: "worker", RequestID: strings.Repeat("7", 32), Source: "done/TASK-2.md", ExpectedSHA256: bytesDigest(raw), Operation: "archive", Rules: []byte(archiveCompletionRulesFixture)}
+	if _, err := archiveWithStep(board, req, false, false, repairStopAt("after-archive-common-pending")); err == nil || !strings.Contains(err.Error(), "stop at after-archive-common-pending") {
+		t.Fatalf("pending boundary err=%v", err)
+	}
+	s, err := openArchiveSession(board, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.ReadFile(filepath.Join(board, archivesFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolution, err := s.resolveSharedDelta(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.close(); err != nil {
+		t.Fatal(err)
+	}
+	states := []struct {
+		name string
+		raw  []byte
+	}{{"original", original}, {"pending", resolution.Target}, {"completed", resolution.Completed}}
+	for _, state := range states {
+		if err := os.WriteFile(filepath.Join(board, archivesFile), state.raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+		s, err := openArchiveSession(board, req)
+		if err != nil {
+			t.Fatalf("%s open: %v", state.name, err)
+		}
+		got, resolveErr := s.resolveSharedDelta(req)
+		closeErr := s.close()
+		if resolveErr != nil || closeErr != nil || got.State != state.name {
+			t.Fatalf("%s got=%+v resolve=%v close=%v", state.name, got, resolveErr, closeErr)
+		}
+	}
+}
+
 func TestArchiveDeltaTransportProtocol4WireAndGuards(t *testing.T) {
 	state, delta := protocol4DeltaFixture(t)
 	if err := validateSharedState(state); err != nil {

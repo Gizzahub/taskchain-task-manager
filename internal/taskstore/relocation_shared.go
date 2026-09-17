@@ -12,7 +12,7 @@ func validateSharedRelocation(s sharedState) error {
 	if p == nil {
 		return nil
 	}
-	if (s.StorageProtocol < 2 || s.StorageProtocol > 4) || s.Phase != "active" || s.PendingRepair != nil || s.PendingBundle != nil || s.PendingArchive != nil || s.PendingArchiveDelta != nil || (s.Policy != nil && s.Policy.Phase != "active") {
+	if (s.StorageProtocol < 2 || s.StorageProtocol > 5) || s.Phase != "active" || s.PendingRepair != nil || s.PendingBundle != nil || s.PendingArchive != nil || s.PendingArchiveDelta != nil || s.PendingArchiveCapacity != nil || (s.Policy != nil && s.Policy.Phase != "active") {
 		return errors.New("conflicting shared relocation reservation")
 	}
 	if !validSharedRoot(p.Owner) || !sharedHex32.MatchString(p.RequestID) || !sharedHex64.MatchString(p.OriginalJournalSHA256) {
