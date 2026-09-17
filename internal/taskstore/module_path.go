@@ -21,7 +21,7 @@ type modulePath struct {
 
 func classifyModulePath(name string, policy boardpolicy.Policy) (modulePath, error) {
 	var result modulePath
-	if name == "" || path.IsAbs(name) || path.Clean(name) != name || strings.ContainsAny(name, "\\\x00") {
+	if name == "" || len(name) > 1023 || path.IsAbs(name) || path.Clean(name) != name || strings.ContainsAny(name, "\\\x00") {
 		return result, errors.New("invalid module card path")
 	}
 	parts := strings.Split(name, "/")
@@ -29,6 +29,9 @@ func classifyModulePath(name string, policy boardpolicy.Policy) (modulePath, err
 		return result, errors.New("card path requires a declared module and zone")
 	}
 	for _, part := range parts {
+		if len(part) > 255 {
+			return result, errors.New("module path component exceeds 255 bytes")
+		}
 		if strings.HasPrefix(part, ".") || cardpath.IsExcludedDirectory(part) {
 			return result, errors.New("module card path contains a hidden or excluded segment")
 		}
@@ -68,7 +71,11 @@ func transitionTargetPath(source, from, to string, policy boardpolicy.Policy) (s
 		if err != nil || classified.Zone != from {
 			return "", errors.New("module source does not match transition zone")
 		}
-		return classified.inZone(to), nil
+		target := classified.inZone(to)
+		if _, err := classifyModulePath(target, policy); err != nil {
+			return "", err
+		}
+		return target, nil
 	}
 	if filepath.Dir(source) != from {
 		return "", errors.New("source card does not match transition")

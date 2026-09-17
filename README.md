@@ -57,6 +57,8 @@ SHA-256 digest를 출력합니다. 보드 등록, TASK 존재 확인, 권한 부
 모든 writer 업그레이드·중지, 최초 shared 채택의 `--all-worktrees` 확인,
 중단 재개·새 worktree join 절차는 [정책 활성화](docs/policy-activation.md)를 따릅니다.
 기존 정책 변경은 이전 authority/digest를 확인하는 [정책 revision](docs/policy-revision.md)을 사용합니다.
+기존 module 카드의 명시 채택과 module/category별 단일·일괄 생성은
+[모듈 경로 채택](docs/module-adoption.md)을 따릅니다.
 
 ## 생성·목록의 안전 경계
 

@@ -24,6 +24,8 @@ type Entry struct {
 }
 
 type CreateRequest struct {
+	Module    string          `json:"module,omitempty"`
+	Category  string          `json:"category,omitempty"`
 	Kind      string          `json:"kind,omitempty"`
 	ID        string          `json:"id"`
 	Title     string          `json:"title"`
@@ -226,6 +228,19 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 	if err != nil {
 		return Entry{}, err
 	}
+	if req.Module != "" || req.Category != "" {
+		policy, err := policyForBoard(r)
+		if err != nil {
+			return Entry{}, err
+		}
+		prepared, err = scopeCreatedCard(prepared, req, policy)
+		if err != nil {
+			return Entry{}, err
+		}
+		if err := relocationParents(r, prepared.Entry.Path, false); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return Entry{}, err
+		}
+	}
 	name, err := stage(r, prepared.Raw)
 	if err != nil {
 		return Entry{}, err
@@ -257,15 +272,30 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 		}
 	}
 	zone := filepath.Dir(prepared.Entry.Path)
-	if err := ensureTransitionDir(r, zone); err != nil {
+	if req.Module != "" {
+		err = relocationParents(r, prepared.Entry.Path, true)
+	} else {
+		err = ensureTransitionDir(r, zone)
+	}
+	if err != nil {
 		return Entry{}, err
 	}
 	dest := prepared.Entry.Path
 	if err := shared.verifyBoard(r); err != nil {
 		return Entry{}, err
 	}
+	if req.Module != "" {
+		if err := relocationParents(r, dest, false); err != nil {
+			return Entry{}, err
+		}
+	}
 	if err = r.Link(name, dest); err != nil {
 		return Entry{}, fmt.Errorf("publish %s: %w", dest, err)
+	}
+	if req.Module != "" {
+		if err := syncRelocationDirectory(r, zone); err != nil {
+			return Entry{}, err
+		}
 	}
 	return prepared.Entry, nil
 }

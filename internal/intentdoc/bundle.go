@@ -34,6 +34,8 @@ type TaskDraft struct {
 	Title     string          `json:"title"`
 	DependsOn []TaskReference `json:"dependsOn"`
 	Template  *DraftTemplate  `json:"template,omitempty"`
+	Module    *string         `json:"module,omitempty"`
+	Category  *string         `json:"category,omitempty"`
 }
 
 type TaskReference struct {

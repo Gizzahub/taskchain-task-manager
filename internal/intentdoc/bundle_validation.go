@@ -9,9 +9,11 @@ import (
 	"unicode/utf8"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
+	"github.com/Gizzahub/taskchain-task-manager/internal/cardpath"
 )
 
 var bundleRequestID = regexp.MustCompile(`^[0-9a-f]{32}$`)
+var bundleModuleName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 
 func validateBundle(request BundleRequest) error {
 	if request.SchemaVersion != 1 || request.Kind != "task-bundle" || !bundleRequestID.MatchString(request.RequestID) {
@@ -56,6 +58,16 @@ func validateBundle(request BundleRequest) error {
 		}
 		if err := text(task.Title, 256, false); err != nil {
 			return fmt.Errorf("task %s title: %w", task.Key, err)
+		}
+		var module, category string
+		if task.Module != nil {
+			module = *task.Module
+		}
+		if task.Category != nil {
+			category = *task.Category
+		}
+		if err := validateDraftScope(module, category); err != nil {
+			return fmt.Errorf("task %s scope: %w", task.Key, err)
 		}
 		if len(task.DependsOn) > 128 {
 			return fmt.Errorf("task %s dependencies exceed 128", task.Key)
@@ -103,6 +115,34 @@ func validateBundle(request BundleRequest) error {
 		}
 	}
 	return validateDraftCycles(request.Tasks)
+}
+
+func validateDraftScope(module, category string) error {
+	if module == "" && category == "" {
+		return nil
+	}
+	if module == "" {
+		return errors.New("category requires module")
+	}
+	if len(module) > 255 || !bundleModuleName.MatchString(module) {
+		return errors.New("module must be a lowercase board scope name")
+	}
+	if category == "" {
+		return nil
+	}
+	if strings.HasPrefix(category, "/") || strings.HasSuffix(category, "/") || strings.Contains(category, "\\") {
+		return errors.New("category must be a relative slash-separated path")
+	}
+	parts := strings.Split(category, "/")
+	for _, part := range parts {
+		if len(part) > 255 {
+			return errors.New("category component exceeds 255 bytes")
+		}
+		if part == "" || part == "." || part == ".." || strings.HasPrefix(part, ".") || cardpath.IsExcludedDirectory(part) || strings.IndexFunc(part, unicode.IsControl) >= 0 {
+			return errors.New("category contains an empty, traversal, or hidden segment")
+		}
+	}
+	return nil
 }
 
 func validateDraftTemplate(template *DraftTemplate) error {

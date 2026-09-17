@@ -34,6 +34,7 @@ type repairRecord struct {
 	Original        []byte `json:"original,omitempty"`
 	Patched         []byte `json:"patched,omitempty"`
 	PolicyDigest    string `json:"policyDigest"`
+	PolicyCanonical []byte `json:"policyCanonical,omitempty"`
 	BoardPath       string `json:"boardPath"`
 	Namespace       string `json:"namespace,omitempty"`
 	CanonicalStatus string `json:"canonicalStatus"`
@@ -138,6 +139,13 @@ func validateRepairRecordShape(raw json.RawMessage, pending bool) error {
 		return errors.New("repair record must be an object")
 	}
 	allowed := map[string]bool{"kind": true, "requestId": true, "id": true, "owner": true, "token": true, "path": true, "expectedSha256": true, "mode": true, "policyDigest": true, "boardPath": true, "namespace": true, "canonicalStatus": true, "changed": true, "original": true, "patched": true}
+	allowed["policyCanonical"] = true
+	if raw, ok := m["policyCanonical"]; ok {
+		var canonical []byte
+		if len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '"' || json.Unmarshal(raw, &canonical) != nil || len(canonical) == 0 {
+			return errors.New("repair policyCanonical must be a nonempty base64 string")
+		}
+	}
 	for k := range m {
 		if !allowed[k] {
 			return fmt.Errorf("unknown repair record field %q", k)
@@ -180,10 +188,19 @@ func validateRepairRecord(rec repairRecord) error {
 	if !sharedHex64.MatchString(rec.ExpectedSHA256) || !sharedHex64.MatchString(rec.PolicyDigest) || rec.CanonicalStatus == "" {
 		return errors.New("invalid repair digest")
 	}
-	if !isTopLevelWorkflowPath(rec.Path, boardpolicy.Default()) {
-		return errors.New("invalid repair path")
+	policy := boardpolicy.Default()
+	if len(rec.PolicyCanonical) != 0 {
+		var err error
+		policy, err = boardpolicy.Parse(rec.PolicyCanonical)
+		if err != nil {
+			return err
+		}
+		canonical, err := policy.Canonical()
+		if err != nil || !bytes.Equal(canonical, rec.PolicyCanonical) || bytesDigest(canonical) != rec.PolicyDigest {
+			return errors.New("repair policy is not the exact canonical binding")
+		}
 	}
-	status, ok := boardpolicy.Default().Status(filepath.Dir(rec.Path))
+	status, ok := repairPathStatus(rec.Path, policy)
 	if !ok || rec.CanonicalStatus != status {
 		return errors.New("repair status does not match workflow path")
 	}

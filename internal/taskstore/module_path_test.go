@@ -1,10 +1,28 @@
 package taskstore
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 )
+
+func TestModuleTransitionRejectsOverlongTarget(t *testing.T) {
+	policy, err := boardpolicy.New(boardpolicy.Declaration{Modules: []string{"backend"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := "backend/todo/" + strings.Repeat("a", 250) + "/" + strings.Repeat("b", 250) + "/" + strings.Repeat("c", 250) + "/" + strings.Repeat("d", 247) + "/TASK-1.md"
+	if len(source) != 1023 {
+		t.Fatalf("fixture length=%d", len(source))
+	}
+	if _, err := classifyModulePath(source, policy); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := transitionTargetPath(source, "todo", "doing", policy); err == nil {
+		t.Fatal("transition accepted a destination beyond the reader path limit")
+	}
+}
 
 func TestModulePathUsesDeclaredScopeAndExactZone(t *testing.T) {
 	policy, err := boardpolicy.New(boardpolicy.Declaration{Modules: []string{"backend"}, Zones: []string{"manual"}})

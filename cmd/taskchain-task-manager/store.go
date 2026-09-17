@@ -21,13 +21,15 @@ func runStore(args []string, out, errOut io.Writer) int {
 	flags.SetOutput(errOut)
 	dir := flags.String("dir", "tasks", "task board directory")
 	asJSON := flags.Bool("json", false, "write JSON")
-	var title, id, kind *string
+	var title, id, kind, module, category *string
 	var dependsOn repeatedString
 	var profile createProfileFlags
 	if args[0] == "create" {
 		title = flags.String("title", "", "task title")
 		id = flags.String("id", "", "optional canonical task ID")
 		kind = flags.String("kind", "", "card kind: task, plan, issue, backlog (default task or explicit ID kind)")
+		module = flags.String("module", "", "explicitly declared board module")
+		category = flags.String("category", "", "relative category inside module zone (requires --module)")
 		flags.Var(&dependsOn, "depends-on", "canonical prerequisite task ID (repeatable)")
 		profile.register(flags)
 	}
@@ -67,7 +69,7 @@ func runStore(args []string, out, errOut io.Writer) int {
 			fmt.Fprintln(errOut, "create config:", loadErr)
 			return 1
 		}
-		result, err = taskstore.Create(*dir, taskstore.CreateRequest{ID: *id, Title: *title, DependsOn: dependsOn, Kind: *kind, Template: template})
+		result, err = taskstore.Create(*dir, taskstore.CreateRequest{ID: *id, Title: *title, DependsOn: dependsOn, Kind: *kind, Template: template, Module: *module, Category: *category})
 	}
 	if err != nil {
 		fmt.Fprintln(errOut, args[0]+":", err)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/intentdoc"
 )
@@ -151,10 +152,16 @@ func (s *bundleSession) publishRecord(index int, step func(string) error) error 
 		return err
 	}
 	for i, card := range record.Cards {
-		if err := ensureTransitionDir(s.root, "todo"); err != nil {
+		if err := relocationParents(s.root, card.Path, true); err != nil {
+			return err
+		}
+		if err := validateBundleDestination(s.root, card.Path, s.policy); err != nil {
 			return err
 		}
 		if err := publishBundleFile(s.root, card.Path, card.Raw); err != nil {
+			return err
+		}
+		if err := syncRelocationDirectory(s.root, path.Dir(card.Path)); err != nil {
 			return err
 		}
 		if err := bundleStep(step, fmt.Sprintf("after-card-%d", i)); err != nil {

@@ -76,6 +76,9 @@ func (s *bundleSession) validateResume(record bundleRecord) error {
 	}
 	planned := map[string]bundleCard{}
 	for _, item := range record.Cards {
+		if err := validateBundleDestination(s.root, item.Path, s.policy); err != nil {
+			return err
+		}
 		if _, err := bundleFileMatches(s.root, item.Path, item.Raw); err != nil {
 			return err
 		}

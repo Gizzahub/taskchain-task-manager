@@ -1,7 +1,7 @@
 package boardpolicy
 
 func validModuleName(module string) bool {
-	if module == "" || module[0] < 'a' || module[0] > 'z' {
+	if module == "" || len(module) > 255 || module[0] < 'a' || module[0] > 'z' {
 		return false
 	}
 	for _, c := range module[1:] {

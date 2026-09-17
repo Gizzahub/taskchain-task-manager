@@ -28,6 +28,27 @@ func relocationZones(source, target string, policy boardpolicy.Policy) (string, 
 		return "", "", errors.New("invalid relocation path")
 	}
 	a, b := strings.Split(source, "/"), strings.Split(target, "/")
+	// Declared modules have an explicit path grammar. Do not infer a module
+	// relocation by scanning arbitrary path segments: a category may happen to
+	// have the same spelling as a workflow zone. Legacy top-level paths retain
+	// the historical zone-only contract below.
+	if (len(a) > 0 && policy.IsModule(a[0])) || (len(b) > 0 && policy.IsModule(b[0])) {
+		from, err := classifyModulePath(source, policy)
+		if err != nil {
+			return "", "", err
+		}
+		to, err := classifyModulePath(target, policy)
+		if err != nil {
+			return "", "", err
+		}
+		if from.Module != to.Module || from.Filename != to.Filename || strings.Join(from.Category, "/") != strings.Join(to.Category, "/") {
+			return "", "", errors.New("relocation must preserve module, category and filename")
+		}
+		if !policy.AllowsRelocation(from.Zone, to.Zone) {
+			return "", "", errors.New("relocation edge is not explicitly allowed")
+		}
+		return from.Zone, to.Zone, nil
+	}
 	if len(a) != len(b) {
 		return "", "", errors.New("relocation must preserve module and category path")
 	}

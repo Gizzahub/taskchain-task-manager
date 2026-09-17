@@ -95,6 +95,9 @@ func (s *bundleSession) prepareRecord(document intentdoc.BundleDocument) (bundle
 		return bundleRecord{}, err
 	}
 	for i, item := range prepared.Cards {
+		if err := validateBundleDestination(s.root, item.Entry.Path, s.policy); err != nil {
+			return bundleRecord{}, err
+		}
 		if _, err := s.root.Lstat(item.Entry.Path); !errors.Is(err, fs.ErrNotExist) {
 			if err != nil {
 				return bundleRecord{}, err

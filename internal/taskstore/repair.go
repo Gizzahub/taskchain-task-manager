@@ -107,8 +107,9 @@ func prepareRepair(s *repairSession, req RepairRequest) (repairRecord, error) {
 			break
 		}
 	}
-	if !sameIdentity(entry.Card.ID, req.ID) || !isWorkTask(entry.Card.ID) || !isTopLevelWorkflowPath(req.Path, s.policy) {
-		return zero, errors.New("repair source is not the requested top-level workflow TASK")
+	status, ok := repairPathStatus(req.Path, s.policy)
+	if !sameIdentity(entry.Card.ID, req.ID) || !isWorkTask(entry.Card.ID) || !ok {
+		return zero, errors.New("repair source is not the requested workflow TASK")
 	}
 	ledger, err := loadIDs(s.root)
 	if err != nil {
@@ -130,6 +131,9 @@ func prepareRepair(s *repairSession, req RepairRequest) (repairRecord, error) {
 	if err := validateRepairClaim(claims, req); err != nil {
 		return zero, err
 	}
+	if err := relocationParents(s.root, req.Path, false); err != nil {
+		return zero, err
+	}
 	info, err := s.root.Lstat(req.Path)
 	if err != nil {
 		return zero, err
@@ -148,10 +152,6 @@ func prepareRepair(s *repairSession, req RepairRequest) (repairRecord, error) {
 	if err != nil {
 		return zero, err
 	}
-	status, ok := s.policy.Status(filepath.Dir(req.Path))
-	if !ok {
-		return zero, errors.New("repair zone has no canonical status")
-	}
 	patched, changed, err := doc.SetStatusCell(status)
 	if err != nil {
 		return zero, err
@@ -161,6 +161,12 @@ func prepareRepair(s *repairSession, req RepairRequest) (repairRecord, error) {
 		return zero, err
 	}
 	rec := repairRecord{Kind: "pending", RequestID: req.RequestID, ID: req.ID, Owner: req.Owner, Token: req.Token, Path: req.Path, ExpectedSHA256: req.ExpectedSHA256, Mode: uint32(info.Mode().Perm()), Original: raw, Patched: patched, PolicyDigest: digest, BoardPath: s.journal.BoardPath, Changed: changed, CanonicalStatus: status}
+	if !isTopLevelWorkflowPath(req.Path, s.policy) {
+		rec.PolicyCanonical, err = s.policy.Canonical()
+		if err != nil {
+			return zero, err
+		}
+	}
 	if s.shared != nil && s.shared.state != nil {
 		rec.Namespace = s.shared.state.NamespaceID
 	}
@@ -179,7 +185,7 @@ func validateRepairRequest(req RepairRequest) error {
 	if req.Token != "" && !claimToken.MatchString(req.Token) {
 		return errors.New("invalid repair token")
 	}
-	if !isTopLevelWorkflowPath(req.Path, boardpolicy.Default()) {
+	if req.Path == "" || filepath.IsAbs(req.Path) || filepath.Clean(req.Path) != req.Path || strings.ContainsAny(req.Path, "\\\x00") || strings.HasPrefix(req.Path, "../") {
 		return errors.New("invalid repair path")
 	}
 	return nil
@@ -203,6 +209,9 @@ func isTopLevelWorkflowPath(name string, policy boardpolicy.Policy) bool {
 	return name != "" && filepath.Clean(name) == name && !filepath.IsAbs(name) && !strings.ContainsAny(name, "\\\x00") && policy.Workflow(filepath.Dir(name)) && filepath.Ext(name) == ".md" && !strings.HasPrefix(filepath.Base(name), ".") && !cardpath.IsDocumentation(filepath.Base(name))
 }
 func inspectRepairFile(r *os.Root, rec repairRecord) (bool, error) {
+	if err := relocationParents(r, rec.Path, false); err != nil {
+		return false, err
+	}
 	parent, err := r.Lstat(filepath.Dir(rec.Path))
 	if err != nil {
 		return false, err

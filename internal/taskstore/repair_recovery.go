@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 func (s *repairSession) verifyPendingRepair(rec repairRecord, req RepairRequest) error {
@@ -128,6 +129,9 @@ func (s *repairSession) finishRepair(rec repairRecord, req RepairRequest, step f
 	}
 	if !patched {
 		return RepairResult{}, errors.New("repair target reverted before completion")
+	}
+	if err := syncRelocationDirectory(s.root, filepath.Dir(rec.Path)); err != nil {
+		return RepairResult{}, err
 	}
 	if err := syncRoot(s.root); err != nil {
 		return RepairResult{}, err

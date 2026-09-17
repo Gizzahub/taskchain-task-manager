@@ -98,6 +98,10 @@ func prepareTaskBundle(document intentdoc.BundleDocument, entries []Entry, ledge
 		if err != nil {
 			return preparedBundle{}, fmt.Errorf("draft %s: %w", draft.Key, err)
 		}
+		prepared, err = scopeBundleCard(prepared, draft)
+		if err != nil {
+			return preparedBundle{}, err
+		}
 		total += len(prepared.Raw)
 		if total > maxPreparedBundleBytes {
 			return preparedBundle{}, errors.New("prepared bundle exceeds 1 MiB")
