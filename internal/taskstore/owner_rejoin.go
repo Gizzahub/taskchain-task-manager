@@ -34,6 +34,7 @@ type OwnerRejoinPlan struct {
 	ReservationFloors     []ReservationFloor            `json:"reservationFloors"`
 	AdditionalReservedIDs []string                      `json:"additionalReservedIds"`
 	Files                 []OwnerRejoinFile             `json:"files"`
+	Artifacts             []OwnerRejoinArtifact         `json:"artifacts,omitempty"`
 	ArchiveCards          []ArchiveNamespaceCardBinding `json:"archiveCards"`
 	PayloadSHA256         string                        `json:"payloadSha256"`
 }
@@ -53,6 +54,16 @@ type OwnerRejoinFile struct {
 	OriginalSHA256  string `json:"originalSha256"`
 	TargetLength    int    `json:"targetLength"`
 	TargetSHA256    string `json:"targetSha256"`
+}
+
+// OwnerRejoinArtifact inventories immutable content-addressed bytes that are
+// transported separately from the bounded owner payload.
+type OwnerRejoinArtifact struct {
+	Role   string `json:"role"`
+	Path   string `json:"path"`
+	Mode   uint32 `json:"mode"`
+	Length int    `json:"length"`
+	SHA256 string `json:"sha256"`
 }
 
 type OwnerRejoinReceipt struct {
@@ -108,6 +119,12 @@ func validateOwnerRejoinPlan(p OwnerRejoinPlan, requirePayload bool) error {
 			return errors.New("invalid owner rejoin file inventory")
 		}
 		seenRole[f.Role], seenPath[f.Path] = true, true
+	}
+	for i, a := range p.Artifacts {
+		if a.Role == "" || len(a.Role) > 255 || seenRole[a.Role] || seenPath[a.Path] || !validRejoinPath(a.Path) || a.Mode == 0 || a.Mode&^0777 != 0 || a.Length <= 0 || a.Length > maxOwnerRejoinCapacityArtifactBytes || !sharedHex64.MatchString(a.SHA256) || (i > 0 && p.Artifacts[i-1].Role >= a.Role) {
+			return errors.New("invalid owner rejoin artifact inventory")
+		}
+		seenRole[a.Role], seenPath[a.Path] = true, true
 	}
 	if len(p.Files) == 0 || len(p.Files) > 64 || !sortedArchiveCards(p.ArchiveCards) || (requirePayload && !sharedHex64.MatchString(p.PayloadSHA256)) || (!requirePayload && p.PayloadSHA256 != "" && !sharedHex64.MatchString(p.PayloadSHA256)) {
 		return errors.New("invalid owner rejoin plan inventory or payload")

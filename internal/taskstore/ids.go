@@ -13,8 +13,10 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
 )
 
-const idsFile = ".task-manager-ids.json"
-const maxIDsBytes = 1 << 20
+const (
+	idsFile     = ".task-manager-ids.json"
+	maxIDsBytes = 1 << 20
+)
 
 type idLedger struct {
 	SchemaVersion     int                `json:"schemaVersion"`
@@ -102,14 +104,36 @@ func publishIDs(r *os.Root, ledger idLedger, initial bool) error {
 	return publishValidatedIDs(r, ledger, initial)
 }
 
+func idLedgerBytes(ledger idLedger) ([]byte, error) {
+	raw, err := json.Marshal(ledger)
+	if err != nil {
+		return nil, err
+	}
+	if ledger.SchemaVersion == 4 && ledger.ReservationFloors != nil && len(ledger.ReservationFloors) == 0 {
+		var shape map[string]any
+		if err := json.Unmarshal(raw, &shape); err != nil {
+			return nil, err
+		}
+		shape["reservationFloors"] = []ReservationFloor{}
+		raw, err = json.Marshal(shape)
+		if err != nil {
+			return nil, err
+		}
+	}
+	raw = append(raw, '\n')
+	if _, err := decodeIDs(raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
 // The bundle writer validates its exact pending operation and bound policy
 // before using this primitive. Ordinary writers use publishIDs.
 func publishValidatedIDs(r *os.Root, ledger idLedger, initial bool) error {
-	raw, err := json.Marshal(ledger)
+	raw, err := idLedgerBytes(ledger)
 	if err != nil {
 		return err
 	}
-	raw = append(raw, '\n')
 	if len(raw) > maxIDsBytes {
 		return errors.New("ID ledger exceeds 1 MiB")
 	}

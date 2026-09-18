@@ -8,7 +8,7 @@ import (
 
 const ownerRejoinPayloadMagic = "TCORJP\x00\x01"
 const ownerRejoinPayloadHeader = 12
-const maxOwnerRejoinPayloadBytes = 64 << 20
+const maxOwnerRejoinPayloadBytes = 160 << 20
 
 // OwnerRejoinFileBytes carries the exact before/after content.  Nil is only
 // valid where the corresponding plan presence bit is false.
@@ -24,6 +24,11 @@ type OwnerRejoinFileBytes struct {
 func OwnerRejoinPayloadBytes(p OwnerRejoinPlan, files []OwnerRejoinFileBytes) ([]byte, error) {
 	if err := validateOwnerRejoinPlan(p, false); err != nil {
 		return nil, err
+	}
+	if p.SourceCommonAvailable {
+		if err := validateSameCommonOwnerRejoinPlan(p, files); err != nil {
+			return nil, err
+		}
 	}
 	if len(files) != len(p.Files) {
 		return nil, errors.New("owner rejoin payload file count mismatch")
@@ -106,6 +111,11 @@ func DecodeOwnerRejoinPayload(raw []byte, p OwnerRejoinPlan) ([]OwnerRejoinFileB
 	}
 	if off != len(raw) {
 		return nil, errors.New("owner rejoin payload trailing bytes")
+	}
+	if p.SourceCommonAvailable {
+		if err := validateSameCommonOwnerRejoinPlan(p, out); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }

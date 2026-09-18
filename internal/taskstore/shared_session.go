@@ -59,6 +59,16 @@ func acquireSharedArchiveOptions(dir string, allowInitializing, allowPendingBund
 }
 
 func acquireSharedCapacityOptions(dir string, allowInitializing, allowPendingBundle, allowPendingPolicy, allowPendingRepair, allowPendingRelocation, allowPendingArchive, allowPendingCapacity bool) (session *sharedSession, release func() error, err error) {
+	return acquireSharedOwnerRejoinOptions(dir, allowInitializing, allowPendingBundle, allowPendingPolicy, allowPendingRepair, allowPendingRelocation, allowPendingArchive, allowPendingCapacity, false)
+}
+
+// Owner-rejoin recovery is the only path allowed to observe its own common
+// exclusion marker.  It still rejects every other pending operation.
+func acquireSharedOwnerRejoin(dir string) (session *sharedSession, release func() error, err error) {
+	return acquireSharedOwnerRejoinOptions(dir, true, false, false, false, false, false, false, true)
+}
+
+func acquireSharedOwnerRejoinOptions(dir string, allowInitializing, allowPendingBundle, allowPendingPolicy, allowPendingRepair, allowPendingRelocation, allowPendingArchive, allowPendingCapacity, allowPendingOwnerRejoin bool) (session *sharedSession, release func() error, err error) {
 	location, err := githistory.LocateBoard(context.Background(), dir)
 	if err != nil {
 		return nil, nil, err
@@ -136,6 +146,9 @@ func acquireSharedCapacityOptions(dir string, allowInitializing, allowPendingBun
 	}
 	if state.PendingArchiveCapacity != nil && !allowPendingCapacity {
 		return nil, release, errors.New("shared namespace has a pending archive capacity adoption; recover from its original board")
+	}
+	if state.PendingOwnerRejoin != nil && !allowPendingOwnerRejoin {
+		return nil, release, errors.New("shared namespace has a pending owner rejoin; recover from its original board")
 	}
 	if state.Policy != nil && state.Policy.Phase != "active" && !allowPendingPolicy {
 		return nil, release, errors.New("shared policy activation is pending; explicit policy recovery required")

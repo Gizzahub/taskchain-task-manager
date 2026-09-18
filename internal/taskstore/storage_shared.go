@@ -32,10 +32,11 @@ func validateSharedStorage(s sharedState) error {
 	if s.StorageProtocol < 0 || s.StorageProtocol > 6 {
 		return errors.New("invalid shared storage protocol")
 	}
-	// Protocol 6 is a durable owner-rejoin barrier. d1 deliberately has no
-	// runtime receipt reader, so ordinary sessions must never treat it as live
-	// authority or manufacture it through existing adoption paths.
-	if s.StorageProtocol == 6 && (s.SchemaVersion != 4 || s.Phase != "active" || s.PendingRepair != nil || s.PendingRelocation != nil || s.PendingArchive != nil || s.PendingArchiveDelta != nil || s.PendingArchiveCapacity != nil) {
+	// Protocol 6 is owned exclusively by the owner-rejoin transaction.  While
+	// it is initializing the marker is exclusion; once active its append-only
+	// history proves that the common authority was completed, but never replaces
+	// the local receipt and immutable artifacts.
+	if s.StorageProtocol == 6 && (s.SchemaVersion != 4 || s.PendingRepair != nil || s.PendingRelocation != nil || s.PendingArchive != nil || s.PendingArchiveDelta != nil || s.PendingArchiveCapacity != nil || (s.Phase == "initializing" && s.PendingOwnerRejoin == nil) || (s.Phase == "active" && (s.PendingOwnerRejoin != nil || len(s.CompletedOwnerRejoins) == 0))) {
 		return errors.New("protocol 6 requires completed owner-rejoin receipt")
 	}
 	if err := validateSharedRelocation(s); err != nil {

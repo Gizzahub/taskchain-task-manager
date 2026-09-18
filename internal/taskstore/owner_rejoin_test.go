@@ -21,19 +21,6 @@ func ownerRejoinFixture(t *testing.T) (OwnerRejoinPlan, []OwnerRejoinFileBytes) 
 	return bound, []OwnerRejoinFileBytes{{Role: "ledger", Original: original, Target: target}}
 }
 
-func sameCommonOwnerRejoinFixture(t *testing.T) OwnerRejoinPlan {
-	t.Helper()
-	p, _ := ownerRejoinFixture(t)
-	p.SourceCommonAvailable = true
-	p.TargetNamespace = p.SourceNamespace
-	p.PayloadSHA256 = ""
-	bound, _, err := BindOwnerRejoinPayload(p, []OwnerRejoinFileBytes{{Role: "ledger", Original: []byte(`{"schemaVersion":1}`), Target: []byte(`{"schemaVersion":2}`)}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return bound
-}
-
 func TestOwnerRejoinStrictCodecs(t *testing.T) {
 	p, files := ownerRejoinFixture(t)
 	praw, err := OwnerRejoinPlanBytes(p)
@@ -60,9 +47,6 @@ func TestOwnerRejoinStrictCodecs(t *testing.T) {
 	}
 	if _, err := DecodeOwnerRejoinReceipt(append([]byte(" "), raw...), p); err == nil {
 		t.Fatal("non-canonical receipt accepted")
-	}
-	if same := sameCommonOwnerRejoinFixture(t); same.SourceNamespace != same.TargetNamespace {
-		t.Fatal("same-common fixture did not preserve namespace")
 	}
 	badSame := p
 	badSame.SourceCommonAvailable = true
@@ -127,6 +111,7 @@ func TestReservationFloorAndProtocolSixBarrier(t *testing.T) {
 	common.SchemaVersion = 4
 	common.StorageProtocol = 6
 	common.ReservationFloors = []ReservationFloor{{Prefix: "TASK", Through: 9}}
+	common.CompletedOwnerRejoins = []sharedOwnerRejoinDone{{RejoinID: strings.Repeat("b", 32), Owner: "/owner", PlanSHA256: strings.Repeat("c", 64), PayloadSHA256: strings.Repeat("d", 64)}}
 	commonRoot, err := os.OpenRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

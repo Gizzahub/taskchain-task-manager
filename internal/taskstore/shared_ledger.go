@@ -25,24 +25,42 @@ var sharedHex40Or64 = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 var sharedHex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 type sharedState struct {
-	SchemaVersion          int                     `json:"schemaVersion"`
-	NamespaceID            string                  `json:"namespaceId"`
-	BoardPath              string                  `json:"boardPath"`
-	Phase                  string                  `json:"phase"`
-	Reserved               []string                `json:"reserved"`
-	ReservationFloors      []ReservationFloor      `json:"reservationFloors,omitempty"`
-	Participants           []sharedParticipant     `json:"participants"`
-	BundleProtocol         int                     `json:"bundleProtocol,omitempty"`
-	PendingBundle          *sharedBundlePending    `json:"pendingBundle,omitempty"`
-	Policy                 *sharedPolicyAuthority  `json:"policy,omitempty"`
-	StorageProtocol        int                     `json:"storageProtocol,omitempty"`
-	PendingRepair          *sharedRepairPending    `json:"pendingRepair,omitempty"`
-	PendingRelocation      *sharedRepairPending    `json:"pendingRelocation,omitempty"`
-	PendingArchive         *sharedRepairPending    `json:"pendingArchive,omitempty"`
-	PendingArchiveDelta    *archivePendingDelta    `json:"pendingArchiveDelta,omitempty"`
-	PendingArchiveCapacity *archiveCapacityPending `json:"pendingArchiveCapacity,omitempty"`
-	PolicyRevisionProtocol int                     `json:"policyRevisionProtocol,omitempty"`
-	ModuleProtocol         int                     `json:"moduleProtocol,omitempty"`
+	SchemaVersion          int                       `json:"schemaVersion"`
+	NamespaceID            string                    `json:"namespaceId"`
+	BoardPath              string                    `json:"boardPath"`
+	Phase                  string                    `json:"phase"`
+	Reserved               []string                  `json:"reserved"`
+	ReservationFloors      []ReservationFloor        `json:"reservationFloors,omitempty"`
+	Participants           []sharedParticipant       `json:"participants"`
+	BundleProtocol         int                       `json:"bundleProtocol,omitempty"`
+	PendingBundle          *sharedBundlePending      `json:"pendingBundle,omitempty"`
+	Policy                 *sharedPolicyAuthority    `json:"policy,omitempty"`
+	StorageProtocol        int                       `json:"storageProtocol,omitempty"`
+	PendingRepair          *sharedRepairPending      `json:"pendingRepair,omitempty"`
+	PendingRelocation      *sharedRepairPending      `json:"pendingRelocation,omitempty"`
+	PendingArchive         *sharedRepairPending      `json:"pendingArchive,omitempty"`
+	PendingArchiveDelta    *archivePendingDelta      `json:"pendingArchiveDelta,omitempty"`
+	PendingArchiveCapacity *archiveCapacityPending   `json:"pendingArchiveCapacity,omitempty"`
+	PendingOwnerRejoin     *sharedOwnerRejoinPending `json:"pendingOwnerRejoin,omitempty"`
+	CompletedOwnerRejoins  []sharedOwnerRejoinDone   `json:"completedOwnerRejoins,omitempty"`
+	PolicyRevisionProtocol int                       `json:"policyRevisionProtocol,omitempty"`
+	ModuleProtocol         int                       `json:"moduleProtocol,omitempty"`
+}
+
+// The common marker is exclusion only.  The local receipt plus immutable
+// plan/payload remain the recovery authority.
+type sharedOwnerRejoinPending struct {
+	RejoinID      string `json:"rejoinId"`
+	Owner         string `json:"owner"`
+	PlanSHA256    string `json:"planSha256"`
+	PayloadSHA256 string `json:"payloadSha256"`
+}
+
+type sharedOwnerRejoinDone struct {
+	RejoinID      string `json:"rejoinId"`
+	Owner         string `json:"owner"`
+	PlanSHA256    string `json:"planSha256"`
+	PayloadSHA256 string `json:"payloadSha256"`
 }
 
 type sharedBundlePending struct {
@@ -111,7 +129,22 @@ func publishSharedState(r *os.Root, state sharedState, initial bool) error {
 	if err := validateSharedState(state); err != nil {
 		return err
 	}
-	raw, err := json.MarshalIndent(state, "", "  ")
+	var raw []byte
+	var err error
+	if state.SchemaVersion == 4 && state.ReservationFloors != nil && len(state.ReservationFloors) == 0 {
+		var shape map[string]any
+		base, marshalErr := json.Marshal(state)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		if err := json.Unmarshal(base, &shape); err != nil {
+			return err
+		}
+		shape["reservationFloors"] = []ReservationFloor{}
+		raw, err = json.MarshalIndent(shape, "", "  ")
+	} else {
+		raw, err = json.MarshalIndent(state, "", "  ")
+	}
 	if err != nil {
 		return err
 	}
@@ -248,6 +281,18 @@ func validateSharedShape(raw []byte) error {
 			return errors.New("schema 4 shared state requires reservation floors")
 		}
 		allowed["reservationFloors"] = true
+		if pending, ok := root["pendingOwnerRejoin"]; ok {
+			allowed["pendingOwnerRejoin"] = true
+			if err := validateSharedOwnerRejoinPendingShape(pending); err != nil {
+				return err
+			}
+		}
+		if completed, ok := root["completedOwnerRejoins"]; ok {
+			allowed["completedOwnerRejoins"] = true
+			if err := validateSharedOwnerRejoinDoneShape(completed); err != nil {
+				return err
+			}
+		}
 		if _, ok := root["policy"]; ok {
 			allowed["policy"] = true
 			if err := validateSharedPolicyShape(root["policy"]); err != nil {
@@ -331,7 +376,7 @@ func validateSharedState(s sharedState) error {
 		return errors.New("invalid shared bundle protocol")
 	}
 	if s.SchemaVersion == 3 || s.SchemaVersion == 4 {
-		if s.Phase != "active" || (s.BundleProtocol != 0 && s.BundleProtocol != 1) || (s.SchemaVersion == 3 && s.Policy == nil) {
+		if (s.SchemaVersion == 3 && s.Phase != "active") || (s.SchemaVersion == 4 && s.Phase != "active" && s.Phase != "initializing") || (s.BundleProtocol != 0 && s.BundleProtocol != 1) || (s.SchemaVersion == 3 && s.Policy == nil) {
 			return errors.New("invalid schema 3 shared state")
 		}
 		if s.Policy != nil {
@@ -369,7 +414,7 @@ func validateSharedState(s sharedState) error {
 		}
 	}
 	if s.SchemaVersion == 4 {
-		if s.Phase != "active" || s.ReservationFloors == nil || len(s.ReservationFloors) == 0 {
+		if s.ReservationFloors == nil {
 			return errors.New("invalid schema 4 owner-rejoin shared state")
 		}
 		if err := validateReservationFloors(s.ReservationFloors); err != nil {
@@ -378,6 +423,11 @@ func validateSharedState(s sharedState) error {
 		if s.StorageProtocol != 6 {
 			return errors.New("schema 4 shared state requires protocol 6")
 		}
+		if err := validateSharedOwnerRejoinRecords(s.PendingOwnerRejoin, s.CompletedOwnerRejoins); err != nil {
+			return err
+		}
+	} else if s.PendingOwnerRejoin != nil || s.CompletedOwnerRejoins != nil {
+		return errors.New("legacy shared state cannot contain owner rejoin markers")
 	}
 	if s.Reserved == nil || s.Participants == nil || len(s.Participants) == 0 || len(s.Participants) > 256 {
 		return errors.New("invalid shared state collections")
@@ -409,6 +459,49 @@ func validateSharedState(s sharedState) error {
 			return errors.New("invalid shared participant")
 		}
 		last = p.Root
+	}
+	return nil
+}
+
+func validateSharedOwnerRejoinPendingShape(raw json.RawMessage) error {
+	var v map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &v); err != nil || len(v) != 4 {
+		return errors.New("invalid shared owner rejoin pending marker")
+	}
+	for _, key := range []string{"rejoinId", "owner", "planSha256", "payloadSha256"} {
+		if v[key] == nil || string(v[key]) == "null" {
+			return errors.New("shared owner rejoin pending marker requires all fields")
+		}
+	}
+	return nil
+}
+
+func validateSharedOwnerRejoinDoneShape(raw json.RawMessage) error {
+	var values []json.RawMessage
+	if err := json.Unmarshal(raw, &values); err != nil || values == nil || len(values) > 256 {
+		return errors.New("invalid shared owner rejoin history")
+	}
+	for _, value := range values {
+		if err := validateSharedOwnerRejoinPendingShape(value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateSharedOwnerRejoinRecords(p *sharedOwnerRejoinPending, done []sharedOwnerRejoinDone) error {
+	valid := func(id, owner, plan, payload string) bool {
+		return sharedHex32.MatchString(id) && validSharedRoot(owner) && sharedHex64.MatchString(plan) && sharedHex64.MatchString(payload)
+	}
+	if p != nil && !valid(p.RejoinID, p.Owner, p.PlanSHA256, p.PayloadSHA256) {
+		return errors.New("invalid shared owner rejoin pending marker")
+	}
+	seen := map[string]bool{}
+	for _, entry := range done {
+		if !valid(entry.RejoinID, entry.Owner, entry.PlanSHA256, entry.PayloadSHA256) || seen[entry.RejoinID] {
+			return errors.New("invalid shared owner rejoin history")
+		}
+		seen[entry.RejoinID] = true
 	}
 	return nil
 }

@@ -11,10 +11,12 @@ import (
 	"os"
 )
 
-const archiveCapacityFile = ".task-manager-archive-capacity.json"
-const archiveCapacityPayloadMagic = "TCARCP\x00\x01"
-const archiveCapacityPayloadHeader = len(archiveCapacityPayloadMagic) + 8 + 8 + 4
-const maxArchiveCapacityPayloadBytes = archiveCapacityPayloadHeader + maxRepairsBytes + maxArchiveCapacityBytes
+const (
+	archiveCapacityFile            = ".task-manager-archive-capacity.json"
+	archiveCapacityPayloadMagic    = "TCARCP\x00\x01"
+	archiveCapacityPayloadHeader   = len(archiveCapacityPayloadMagic) + 8 + 8 + 4
+	maxArchiveCapacityPayloadBytes = archiveCapacityPayloadHeader + maxRepairsBytes + maxArchiveCapacityBytes
+)
 
 type archiveCapacityPending struct {
 	Owner     string `json:"owner"`
@@ -50,7 +52,7 @@ func archiveCapacityPayloadName(digest string) (string, error) {
 }
 
 func archiveCapacityPayloadBytes(original, target []byte, mode uint32) ([]byte, error) {
-	if mode == 0 || mode&^0777 != 0 {
+	if mode == 0 || mode&^0o777 != 0 {
 		return nil, errors.New("invalid archive capacity journal mode")
 	}
 	if _, err := decodeArchiveJournal(original); err != nil {
@@ -96,10 +98,46 @@ func decodeArchiveCapacityPayload(raw []byte, digest string) (original, target [
 }
 
 func validateArchiveCapacityAdoption(a archiveCapacityAdoption) error {
-	if a.SchemaVersion != 1 || (a.Phase != "pending" && a.Phase != "completed") || !sharedHex32.MatchString(a.UpgradeID) || !validSharedRoot(a.BoardPath) || (a.Namespace != "" && !sharedHex32.MatchString(a.Namespace)) || a.SourceJournalSchema != 1 || a.TargetJournalSchema != 2 || a.StorageProtocol != 5 || a.JournalMode == 0 || a.JournalMode&^0777 != 0 || a.OriginalLength <= 0 || a.OriginalLength > maxRepairsBytes || a.TargetLength <= 0 || a.TargetLength > maxArchiveCapacityBytes || !sharedHex64.MatchString(a.OriginalSHA256) || !sharedHex64.MatchString(a.TargetSHA256) || !sharedHex64.MatchString(a.PayloadSHA256) {
+	common := !sharedHex32.MatchString(a.UpgradeID) || !validSharedRoot(a.BoardPath) || (a.Namespace != "" && !sharedHex32.MatchString(a.Namespace)) || a.JournalMode == 0 || a.JournalMode&^0o777 != 0 || a.OriginalLength <= 0 || a.TargetLength <= 0 || !sharedHex64.MatchString(a.OriginalSHA256) || !sharedHex64.MatchString(a.TargetSHA256) || !sharedHex64.MatchString(a.PayloadSHA256)
+	legacy := a.SchemaVersion == 1 && (a.Phase == "pending" || a.Phase == "completed") && a.SourceJournalSchema == 1 && a.TargetJournalSchema == 2 && a.StorageProtocol == 5 && a.OriginalLength <= maxRepairsBytes && a.TargetLength <= maxArchiveCapacityBytes
+	rejoin := a.SchemaVersion == 2 && a.Phase == "completed" && a.SourceJournalSchema == 2 && a.TargetJournalSchema == 2 && a.StorageProtocol == 6 && a.OriginalLength <= maxArchiveCapacityBytes && a.TargetLength <= maxArchiveCapacityBytes
+	if common || (!legacy && !rejoin) {
 		return errors.New("invalid archive capacity adoption journal")
 	}
 	return nil
+}
+
+// prepareOwnerRejoinArchiveCapacity creates new protocol-6 evidence without
+// reading, rewriting or embedding the legacy capacity payload.
+func prepareOwnerRejoinArchiveCapacity(sourceReceipt, sourceArchive []byte, sourceBoard, targetBoard string, mode uint32) ([]byte, []byte, OwnerRejoinArtifact, error) {
+	var zero OwnerRejoinArtifact
+	source, err := decodeOwnerRejoinArchiveCapacityAdoption(sourceReceipt)
+	switch {
+	case err != nil:
+		return nil, nil, zero, fmt.Errorf("owner rejoin source capacity receipt: %w", err)
+	case source.SchemaVersion != 1 || source.Phase != "completed" || source.StorageProtocol != 5 || source.TargetJournalSchema != 2:
+		return nil, nil, zero, errors.New("owner rejoin source capacity receipt protocol invalid")
+	case source.BoardPath != sourceBoard:
+		return nil, nil, zero, errors.New("owner rejoin source capacity receipt board mismatch")
+	case source.JournalMode != mode:
+		return nil, nil, zero, errors.New("owner rejoin source capacity receipt mode mismatch")
+	}
+	targetArchive, err := TransformOwnerRejoinArchiveJournal(sourceArchive, sourceBoard, targetBoard)
+	if err != nil {
+		return nil, nil, zero, err
+	}
+	payload, err := ownerRejoinCapacityPayloadBytes(sourceArchive, targetArchive, sourceBoard, targetBoard, mode)
+	if err != nil {
+		return nil, nil, zero, err
+	}
+	digest := bytesDigest(payload)
+	artifact := OwnerRejoinArtifact{Role: "archive-capacity-payload", Path: ownerRejoinCapacityArtifactPath(digest), Mode: 0o600, Length: len(payload), SHA256: digest}
+	target := archiveCapacityAdoption{SchemaVersion: 2, Phase: "completed", UpgradeID: source.UpgradeID, BoardPath: targetBoard, Namespace: source.Namespace, SourceJournalSchema: 2, TargetJournalSchema: 2, StorageProtocol: 6, JournalMode: mode, OriginalLength: len(sourceArchive), OriginalSHA256: bytesDigest(sourceArchive), TargetLength: len(targetArchive), TargetSHA256: bytesDigest(targetArchive), PayloadSHA256: digest}
+	targetRaw, err := archiveCapacityAdoptionBytes(target)
+	if err != nil {
+		return nil, nil, zero, err
+	}
+	return targetRaw, payload, artifact, nil
 }
 
 func archiveCapacityAdoptionBytes(a archiveCapacityAdoption) ([]byte, error) {
@@ -167,7 +205,7 @@ func publishArchiveCapacityPayload(r *os.Root, original, target []byte, mode uin
 		return "", err
 	}
 	if info, err := r.Lstat(name); err == nil {
-		if !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
+		if !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
 			return "", errors.New("archive capacity payload type or mode invalid")
 		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
@@ -200,7 +238,7 @@ func loadArchiveCapacityPayload(r *os.Root, digest string) ([]byte, []byte, uint
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || info.Size() < int64(archiveCapacityPayloadHeader) || info.Size() > int64(maxArchiveCapacityPayloadBytes) {
+	if !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 || info.Size() < int64(archiveCapacityPayloadHeader) || info.Size() > int64(maxArchiveCapacityPayloadBytes) {
 		return nil, nil, 0, errors.New("archive capacity payload type, mode or size invalid")
 	}
 	f, err := r.Open(name)
