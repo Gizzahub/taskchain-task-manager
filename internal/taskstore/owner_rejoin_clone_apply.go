@@ -3,6 +3,7 @@ package taskstore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -81,8 +82,18 @@ func preflightCloneOwnerRejoin(s *sharedSession, r *os.Root, p OwnerRejoinPlan, 
 		return errors.New("clone common state board path mismatch")
 	case state.NamespaceID == p.SourceNamespace:
 		return errors.New("clone already shares the source namespace; use the same-common rejoin instead")
-	case state.NamespaceID != p.TargetNamespace || state.SchemaVersion != 4 || state.StorageProtocol != 6:
-		return errors.New("clone already has its own shared namespace; reconcile it explicitly before rejoining")
+	// These three are separated deliberately.  They are reached when a clone
+	// already carries common authority that is not the one this rejoin would
+	// have written, and the operator's next move differs in each case, so
+	// collapsing them into one message leaves them with a refusal and no
+	// action.  Each names the value found, the value required, and what to
+	// restore.
+	case state.NamespaceID != p.TargetNamespace:
+		return fmt.Errorf("clone common state is namespace %s, not the planned target namespace %s; restore the common state this rejoin created, or prepare a rejoin for the namespace the clone already holds", state.NamespaceID, p.TargetNamespace)
+	case state.SchemaVersion != 4:
+		return fmt.Errorf("clone common state is schema %d, not the schema 4 an owner rejoin writes; restore the common state this rejoin created rather than an earlier copy of it", state.SchemaVersion)
+	case state.StorageProtocol != 6:
+		return fmt.Errorf("clone common state records storage protocol %d, not the protocol 6 an owner rejoin writes; restore the common state this rejoin created rather than an earlier copy of it", state.StorageProtocol)
 	}
 	if state.PendingBundle != nil || state.PendingRepair != nil || state.PendingRelocation != nil || state.PendingArchive != nil || state.PendingArchiveDelta != nil || state.PendingArchiveCapacity != nil {
 		return errors.New("owner rejoin conflicts with pending common operation")

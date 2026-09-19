@@ -145,9 +145,6 @@ func rejoinBoardPlanHeader(opts RejoinBoardOptions, source, target string) (Owne
 	if p.AdditionalReservedIDs == nil {
 		p.AdditionalReservedIDs = []string{}
 	}
-	if p.SourceStorageProtocol == 0 {
-		p.SourceStorageProtocol = 5
-	}
 	if state.Policy != nil {
 		p.SourcePolicyAuthority, p.SourcePolicySHA256 = state.Policy.AuthorityID, state.Policy.Digest
 		p.TargetPolicyAuthority, p.TargetPolicySHA256 = state.Policy.AuthorityID, state.Policy.Digest
@@ -165,6 +162,27 @@ func rejoinBoardPlanHeader(opts RejoinBoardOptions, source, target string) (Owne
 	sources, err := rejoinBoardSourceFiles(source, state.Policy != nil)
 	if err != nil {
 		return zero, nil, err
+	}
+	if p.SourceStorageProtocol == 0 {
+		// A protocol-5-era common state omits storageProtocol entirely, so the
+		// zero here means "not recorded", not "protocol zero".  Substituting 5
+		// would make the plan header assert on the operator's behalf something
+		// they never stated.  The transition journal does record the protocol
+		// explicitly, so the header takes it from there: a fact read off the
+		// source board rather than a default, and a source that records none
+		// is refused rather than assumed.
+		journal, err := ownerRejoinSourceRoleBytes(sources, "transitions")
+		if err != nil {
+			return zero, nil, err
+		}
+		j, err := decodeTransitionJournal(journal)
+		if err != nil {
+			return zero, nil, err
+		}
+		if j.StorageProtocol == 0 {
+			return zero, nil, errors.New("source records no storage protocol in either its common state or its transition journal")
+		}
+		p.SourceStorageProtocol = j.StorageProtocol
 	}
 	if opts.Clone && len(opts.SourceExport) > 0 {
 		// The export is the only record of what the source's other worktrees

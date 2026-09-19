@@ -16,29 +16,46 @@ import (
 func TestIndependentCloneOwnerRejoinHeaderBoundaries(t *testing.T) {
 	fx := newOwnerRejoinCloneFixture(t, true, []ReservationFloor{{Prefix: "TASK", Through: 64}}, []string{})
 	sources := cloneBoundarySources(t, fx.source, true)
+	// The control that makes the rows mean anything.  Without it a single bad
+	// value shared by every row -- a malformed source file, say -- would refuse
+	// all thirteen for that one reason while the table stayed green and proved
+	// none of its invariants.  This asserts the unedited plan is accepted, so
+	// each refusal below is attributable to that row's own edit.
+	baseline := fx.plan
+	baseline.Files = nil
+	baseline.PayloadSHA256 = ""
+	if _, _, _, err := PrepareIndependentCloneOwnerRejoin(baseline, sources); err != nil {
+		t.Fatalf("the unedited plan was refused, so no row below proves its invariant: %v", err)
+	}
 	for _, row := range []struct {
 		name string
+		// want is the refusal this row must provoke.  Several rows share the
+		// generic header message, so the substring alone cannot attribute a
+		// failure to its own edit; the baseline acceptance below is what does
+		// that, and want keeps a row from passing on an unrelated refusal
+		// raised before the header is ever examined.
+		want string
 		edit func(*OwnerRejoinPlan)
 	}{
-		{"own-namespace", func(p *OwnerRejoinPlan) { p.TargetNamespace = p.SourceNamespace }},
-		{"own-policy-authority", func(p *OwnerRejoinPlan) { p.TargetPolicyAuthority = p.SourcePolicyAuthority }},
-		{"policy-presence", func(p *OwnerRejoinPlan) { p.TargetPolicyAuthority = "" }},
-		{"policy-digest", func(p *OwnerRejoinPlan) { p.TargetPolicySHA256 = strings.Repeat("c", 64) }},
-		{"source-common-available", func(p *OwnerRejoinPlan) { p.SourceCommonAvailable = true }},
-		{"unfenced-source", func(p *OwnerRejoinPlan) { p.SourceFencedNonempty = false }},
-		{"source-protocol", func(p *OwnerRejoinPlan) { p.SourceStorageProtocol = 4 }},
-		{"target-protocol", func(p *OwnerRejoinPlan) { p.TargetStorageProtocol = 5 }},
-		{"same-owner", func(p *OwnerRejoinPlan) { p.TargetOwner = p.SourceOwner }},
-		{"no-reservation-evidence", func(p *OwnerRejoinPlan) {
+		{"own-namespace", "must mint its own namespace", func(p *OwnerRejoinPlan) { p.TargetNamespace = p.SourceNamespace }},
+		{"own-policy-authority", "must mint its own policy authority", func(p *OwnerRejoinPlan) { p.TargetPolicyAuthority = p.SourcePolicyAuthority }},
+		{"policy-presence", "must preserve policy presence and digest", func(p *OwnerRejoinPlan) { p.TargetPolicyAuthority = "" }},
+		{"policy-digest", "must preserve policy presence and digest", func(p *OwnerRejoinPlan) { p.TargetPolicySHA256 = strings.Repeat("c", 64) }},
+		{"source-common-available", "invalid independent clone owner rejoin header", func(p *OwnerRejoinPlan) { p.SourceCommonAvailable = true }},
+		{"unfenced-source", "invalid independent clone owner rejoin header", func(p *OwnerRejoinPlan) { p.SourceFencedNonempty = false }},
+		{"source-protocol", "invalid independent clone owner rejoin header", func(p *OwnerRejoinPlan) { p.SourceStorageProtocol = 4 }},
+		{"target-protocol", "invalid independent clone owner rejoin header", func(p *OwnerRejoinPlan) { p.TargetStorageProtocol = 5 }},
+		{"same-owner", "invalid independent clone owner rejoin preparation header", func(p *OwnerRejoinPlan) { p.TargetOwner = p.SourceOwner }},
+		{"no-reservation-evidence", "requires an explicit reservation floor, additional reserved IDs, or a source export", func(p *OwnerRejoinPlan) {
 			p.ReservationFloors, p.AdditionalReservedIDs = []ReservationFloor{}, []string{}
 		}},
-		{"unsorted-reserved-ids", func(p *OwnerRejoinPlan) {
+		{"unsorted-reserved-ids", "invalid independent clone owner rejoin preparation header", func(p *OwnerRejoinPlan) {
 			p.AdditionalReservedIDs = []string{"TASK-9", "TASK-2"}
 		}},
-		{"zero-floor-bound", func(p *OwnerRejoinPlan) {
+		{"zero-floor-bound", "invalid independent clone owner rejoin preparation header", func(p *OwnerRejoinPlan) {
 			p.ReservationFloors = []ReservationFloor{{Prefix: "TASK", Through: 0}}
 		}},
-		{"unsorted-floors", func(p *OwnerRejoinPlan) {
+		{"unsorted-floors", "invalid independent clone owner rejoin preparation header", func(p *OwnerRejoinPlan) {
 			p.ReservationFloors = []ReservationFloor{{Prefix: "TASK", Through: 2}, {Prefix: "BUG", Through: 2}}
 		}},
 	} {
@@ -47,8 +64,12 @@ func TestIndependentCloneOwnerRejoinHeaderBoundaries(t *testing.T) {
 			p.Files = nil
 			p.PayloadSHA256 = ""
 			row.edit(&p)
-			if _, _, _, err := PrepareIndependentCloneOwnerRejoin(p, sources); err == nil {
+			_, _, _, err := PrepareIndependentCloneOwnerRejoin(p, sources)
+			if err == nil {
 				t.Fatalf("clone rejoin accepted a plan with %s", row.name)
+			}
+			if !strings.Contains(err.Error(), row.want) {
+				t.Fatalf("%s was refused for an unrelated reason: %v", row.name, err)
 			}
 		})
 	}
