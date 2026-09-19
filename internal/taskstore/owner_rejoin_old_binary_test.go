@@ -82,9 +82,16 @@ func TestProtocol5EraLibraryRefusesAnUpgradedBoard(t *testing.T) {
 }
 
 // buildProtocol5EraProbe extracts the pinned revision and builds the probe
-// against it.  It skips loudly rather than silently when the revision or the
-// toolchain is out of reach -- a shallow clone, say -- because a barrier that
-// no-ops without saying so is the defect this test replaces.
+// against it.  Everything that would stop the barrier from running is a
+// failure, not a skip.  `go test` prints no per-test names without -v, so a
+// skip and a pass are the same line in a CI log; this test skipped on every
+// remote run for want of the pinned revision in a shallow checkout, and two
+// green runs reported a barrier that had never executed.  An environment that
+// cannot build the historical revision has not satisfied the barrier, and
+// saying so quietly is indistinguishable from satisfying it.
+//
+// -short remains a skip because it is the operator asking for the short suite,
+// not the environment failing to provide what the barrier needs.
 func buildProtocol5EraProbe(t *testing.T) string {
 	t.Helper()
 	if testing.Short() {
@@ -95,10 +102,11 @@ func buildProtocol5EraProbe(t *testing.T) string {
 		t.Fatal(err)
 	}
 	if _, err := exec.LookPath("go"); err != nil {
-		t.Skip("protocol-5-era barrier needs the go toolchain on PATH")
+		t.Fatalf("the protocol-5-era barrier needs the go toolchain on PATH to build revision %s: %v", protocol5EraCommit, err)
 	}
 	if out, err := exec.Command("git", "-C", root, "cat-file", "-e", protocol5EraCommit+"^{commit}").CombinedOutput(); err != nil {
-		t.Skipf("protocol-5-era barrier needs revision %s in this checkout: %s %v", protocol5EraCommit, out, err)
+		t.Fatalf("the protocol-5-era barrier needs revision %s in this checkout, and it is absent%s: %s %v",
+			protocol5EraCommit, shallowCheckoutRemedy(root), out, err)
 	}
 
 	src := t.TempDir()
@@ -122,7 +130,7 @@ func buildProtocol5EraProbe(t *testing.T) string {
 	build.Dir = src
 	build.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=")
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Skipf("the protocol-5-era checkout could not be built here: %s %v", out, err)
+		t.Fatalf("the protocol-5-era checkout at %s could not be built, so the barrier did not run: %s %v", protocol5EraCommit, out, err)
 	}
 	return probe
 }
@@ -134,4 +142,15 @@ func runProtocol5EraProbe(t *testing.T, probe, board string) string {
 		t.Fatalf("probe on %s: %s %v", board, out, err)
 	}
 	return string(out)
+}
+
+// shallowCheckoutRemedy names the usual cause of a missing pinned revision.  A
+// shallow checkout is the one failure here an operator can fix in one command,
+// and the barrier is worth more if its failure says which command.
+func shallowCheckoutRemedy(root string) string {
+	out, err := exec.Command("git", "-C", root, "rev-parse", "--is-shallow-repository").Output()
+	if err != nil || strings.TrimSpace(string(out)) != "true" {
+		return ""
+	}
+	return " because this is a shallow checkout; fetch the full history (git fetch --unshallow, or fetch-depth: 0 in CI)"
 }
