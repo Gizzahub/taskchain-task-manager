@@ -65,7 +65,65 @@ func TestOwnerRejoinProcessHelper(t *testing.T) {
 	t.Fatal("rejoin helper did not reach interruption boundary")
 }
 
-func TestSameCommonOwnerRejoinSIGKILLReachesExactlyOneState(t *testing.T) {
+// ownerRejoinCrashBoards is just the four values the sweep needs, so the two
+// fixtures can be driven by one harness without either growing a shape it does
+// not otherwise have.
+type ownerRejoinCrashBoards struct {
+	target  string
+	source  string
+	plan    OwnerRejoinPlan
+	payload []byte
+}
+
+// ownerRejoinCrashCase names one rejoin mode for the cutpoint sweep.  The two
+// modes are not interchangeable: an independent clone creates its own common
+// authority partway through, so it has a window the same-common transaction
+// simply does not have, and only running the sweep against both puts that
+// window under the same exactly-one-of assertion.
+type ownerRejoinCrashCase struct {
+	name string
+	// contendSource says whether a writer in the source worktree must be
+	// refused while the rejoin holds its locks.  A same-common rejoin holds the
+	// one lock both boards go through, so it must be.  An independent clone
+	// deliberately shares no lock with its source -- that is the stated
+	// non-goal, not an oversight -- so a source writer there is legitimately
+	// unaffected, and demanding a refusal would be asserting a coupling the
+	// design refuses to create.
+	contendSource bool
+	setup         func(t *testing.T) (target, source string, plan OwnerRejoinPlan, payload []byte)
+	apply         func(dir string, plan OwnerRejoinPlan, payload []byte, step func(string) error) error
+}
+
+func ownerRejoinCrashCases() []ownerRejoinCrashCase {
+	return []ownerRejoinCrashCase{
+		{
+			name: "same-common",
+			setup: func(t *testing.T) (string, string, OwnerRejoinPlan, []byte) {
+				fx := newOwnerRejoinApplyFixture(t, false, []ReservationFloor{})
+				return fx.target, fx.source, fx.plan, fx.payload
+			},
+			apply:         applyOwnerRejoinSameCommon,
+			contendSource: true,
+		},
+		{
+			name: "independent-clone",
+			setup: func(t *testing.T) (string, string, OwnerRejoinPlan, []byte) {
+				fx := newOwnerRejoinCloneFixture(t, false, []ReservationFloor{{Prefix: "TASK", Through: 9}}, []string{})
+				return fx.target, fx.source, fx.plan, fx.payload
+			},
+			apply: applyOwnerRejoinIndependentClone,
+		},
+	}
+}
+
+func TestOwnerRejoinSIGKILLReachesExactlyOneState(t *testing.T) {
+	for _, c := range ownerRejoinCrashCases() {
+		t.Run(c.name, func(t *testing.T) { runOwnerRejoinCrashSweep(t, c) })
+	}
+}
+
+func runOwnerRejoinCrashSweep(t *testing.T, c ownerRejoinCrashCase) {
+	t.Helper()
 	points := []string{
 		"after-owner-rejoin-plan",
 		"after-owner-rejoin-payload",
@@ -77,7 +135,7 @@ func TestSameCommonOwnerRejoinSIGKILLReachesExactlyOneState(t *testing.T) {
 		"after-owner-rejoin-common-clear",
 	}
 	for _, point := range points {
-		t.Run(point, func(t *testing.T) { runOwnerRejoinCrash(t, point) })
+		t.Run(point, func(t *testing.T) { runOwnerRejoinCrash(t, c, point) })
 	}
 }
 
@@ -85,9 +143,10 @@ func TestSameCommonOwnerRejoinSIGKILLReachesExactlyOneState(t *testing.T) {
 // reaches exactly one of its two legitimate states.  Before the resume the
 // board is either untouched or not yet admitted at all - there is no third
 // state a reader can act on - and after the resume it is the completed rejoin.
-func runOwnerRejoinCrash(t *testing.T, point string) {
+func runOwnerRejoinCrash(t *testing.T, c ownerRejoinCrashCase, point string) {
 	t.Helper()
-	fx := newOwnerRejoinApplyFixture(t, false, []ReservationFloor{})
+	target, sourceBoard, plan, payloadBytes := c.setup(t)
+	fx := ownerRejoinCrashBoards{target: target, source: sourceBoard, plan: plan, payload: payloadBytes}
 	work := t.TempDir()
 	planRaw, err := OwnerRejoinPlanBytes(fx.plan)
 	if err != nil {
@@ -150,7 +209,11 @@ func runOwnerRejoinCrash(t *testing.T, point string) {
 	// A concurrent writer in either worktree must be refused while the rejoin
 	// holds its locks, and must leave both boards byte for byte as they were.
 	parked, sourceParked := boardBytes(t, fx.target), boardBytes(t, fx.source)
-	for _, target := range []string{fx.target, fx.source} {
+	contend := []string{fx.target}
+	if c.contendSource {
+		contend = append(contend, fx.source)
+	}
+	for _, target := range contend {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		contender := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestOwnerRejoinProcessHelper$")
 		contender.Env = append(os.Environ(), "TASKCHAIN_REJOIN_HELPER=contend", "TASKCHAIN_REJOIN_BOARD="+target, "TASKCHAIN_REJOIN_MODE=contend")
@@ -204,7 +267,7 @@ func runOwnerRejoinCrash(t *testing.T, point string) {
 		}
 	}
 
-	if err := applyOwnerRejoinSameCommon(fx.target, fx.plan, fx.payload, nil); err != nil {
+	if err := c.apply(fx.target, fx.plan, fx.payload, nil); err != nil {
 		t.Fatalf("resume after SIGKILL at %s: %v", point, err)
 	}
 	if _, err := Ready(fx.target); err != nil {
@@ -253,51 +316,5 @@ func TestOwnerRejoinTamperedPendingStateIsRefusedWithoutMutation(t *testing.T) {
 	delete(after, ".task-manager.lock")
 	if !reflectEqualBoard(before, after) {
 		t.Fatal("a refused tampered resume mutated the board")
-	}
-}
-
-// TestOwnerRejoinUpgradedBoardExportHelper materialises a completed protocol-6
-// board at a caller-named path so an out-of-process binary can be pointed at
-// it.  It is inert unless that path is given, because the old-binary barrier
-// is verified against a binary built from a protocol-5-era checkout, which a
-// single `go test` run cannot produce for itself.
-func TestOwnerRejoinUpgradedBoardExportHelper(t *testing.T) {
-	into := os.Getenv("TASKCHAIN_REJOIN_EXPORT")
-	if into == "" {
-		return
-	}
-	fx := newOwnerRejoinApplyFixture(t, false, []ReservationFloor{})
-	if err := applyOwnerRejoinSameCommon(fx.target, fx.plan, fx.payload, nil); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Ready(fx.target); err != nil {
-		t.Fatal(err)
-	}
-	// The source board shares the target's common directory, so the rejoin's
-	// protocol upgrade legitimately covers it too and it cannot serve as the
-	// control.  The control has to be a board on a common directory no rejoin
-	// has touched, so that a refusal of the upgraded board is a statement about
-	// protocol 6 rather than about everything this fixture builds.
-	_, control, _ := protocol5SharedFixture(t)
-	if _, err := EnableShared(control, false); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(into, []byte(fx.target+"\n"+fx.source+"\n"+control+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	// The board lives under the test's own temporary directory, and a board is
-	// bound to its own absolute path, so it cannot be copied somewhere durable
-	// and must instead be held alive here until the caller says it is finished
-	// with it.  The signal is a sentinel file rather than stdin, because `go
-	// test` gives a test binary no stdin to wait on.
-	deadline := time.Now().Add(5 * time.Minute)
-	for {
-		if _, err := os.Stat(into + ".done"); err == nil {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("caller never released the exported board")
-		}
-		time.Sleep(50 * time.Millisecond)
 	}
 }
