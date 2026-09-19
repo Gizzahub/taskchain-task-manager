@@ -14,6 +14,9 @@ import (
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, out, errOut io.Writer) int {
+	if len(args) > 0 && args[0] == "rejoin-board" {
+		return runRejoinBoard(args, out, errOut)
+	}
 	if len(args) > 0 && args[0] == "adopt-archive-capacity" {
 		return runArchiveCapacity(args, out, errOut)
 	}
@@ -100,6 +103,7 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "       taskchain-task-manager", archiveUsage)
 		fmt.Fprintln(out, "       taskchain-task-manager", legacyArchiveUsage)
 		fmt.Fprintln(out, "       taskchain-task-manager", archiveCapacityUsage)
+		fmt.Fprintln(out, "       taskchain-task-manager", rejoinBoardUsage)
 		return 0
 	}
 	if len(args) != 3 || args[2] != "--json" || args[0] != "show" {
