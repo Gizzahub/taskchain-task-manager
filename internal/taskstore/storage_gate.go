@@ -34,7 +34,9 @@ func checkStorageGate(r *os.Root, transitions transitionJournal) error {
 
 func checkStorageGateWithoutArchive(r *os.Root, transitions transitionJournal) error {
 	if transitions.StorageProtocol == 6 {
-		return errors.New("protocol 6 requires completed owner-rejoin receipt; runtime support is unavailable")
+		if err := ownerRejoinAdmitsProtocol6(r); err != nil {
+			return err
+		}
 	}
 	if err := checkRelocationGate(r, transitions); err != nil {
 		return err
@@ -49,7 +51,7 @@ func checkStorageGateWithoutArchive(r *os.Root, transitions transitionJournal) e
 	if err != nil {
 		return err
 	}
-	if transitions.StorageProtocol < 1 || transitions.StorageProtocol > 5 {
+	if transitions.StorageProtocol < 1 || transitions.StorageProtocol > 6 {
 		return errors.New("storage adoption is incomplete; resume explicit adoption")
 	}
 	board, err := canonicalStorageBoard(r)
@@ -81,7 +83,7 @@ func checkRelocationGate(r *os.Root, transitions transitionJournal) error {
 	if err != nil {
 		return err
 	}
-	if transitions.StorageProtocol < 2 || transitions.StorageProtocol > 5 {
+	if transitions.StorageProtocol < 2 || transitions.StorageProtocol > 6 {
 		return errors.New("relocation adoption is incomplete; resume explicit adoption")
 	}
 	board, err := canonicalStorageBoard(r)

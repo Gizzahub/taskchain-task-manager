@@ -74,7 +74,9 @@ func loadTransitionsForStorage(r *os.Root) (transitionJournal, error) {
 		return transitionJournal{}, err
 	}
 	if j.StorageProtocol == 6 {
-		return transitionJournal{}, errors.New("protocol 6 requires completed owner-rejoin receipt; runtime support is unavailable")
+		if err := ownerRejoinAdmitsProtocol6(r); err != nil {
+			return transitionJournal{}, err
+		}
 	}
 	policy, err := policyForJournal(r, j)
 	if err != nil {

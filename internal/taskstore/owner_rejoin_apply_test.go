@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -97,7 +98,38 @@ func newOwnerRejoinApplyFixture(t *testing.T, policy bool, floors []ReservationF
 		}
 		writeOwnerRejoinFixtureFile(t, filepath.Join(target, card.Path), raw, os.FileMode(card.Mode))
 	}
+	mirrorOwnerRejoinCards(t, source, target)
 	return ownerRejoinApplyFixture{plan: p, payload: payload, source: source, target: target}
+}
+
+// mirrorOwnerRejoinCards makes the returning worktree a faithful copy of the
+// source board's card tree.  A worktree checked out at HEAD still holds cards
+// the source board has since relocated or archived, and leaving those behind
+// would make the rejoined board fail ordinary validation for reasons that have
+// nothing to do with the transaction under test.
+func mirrorOwnerRejoinCards(t *testing.T, source, target string) {
+	t.Helper()
+	err := filepath.WalkDir(target, func(name string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, relErr := filepath.Rel(target, name)
+		if relErr != nil {
+			return relErr
+		}
+		if strings.HasPrefix(filepath.Base(rel), ".task-manager") {
+			return nil
+		}
+		if _, statErr := os.Lstat(filepath.Join(source, rel)); errors.Is(statErr, fs.ErrNotExist) {
+			return os.Remove(name)
+		} else if statErr != nil {
+			return statErr
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func ownerRejoinCommonBytes(t *testing.T, board string) []byte {
@@ -156,8 +188,8 @@ func TestSameCommonOwnerRejoinResumesEveryPhaseAndClass(t *testing.T) {
 	if state.Phase != "active" || state.PendingOwnerRejoin != nil || len(state.CompletedOwnerRejoins) != 1 {
 		t.Fatalf("completion state=%+v", state)
 	}
-	if _, err := Ready(fx.target); err == nil || !strings.Contains(err.Error(), "protocol 6") {
-		t.Fatalf("ordinary runtime admitted protocol 6: %v", err)
+	if _, err := Ready(fx.target); err != nil {
+		t.Fatalf("completed rejoin was not admitted by the ordinary runtime: %v", err)
 	}
 }
 

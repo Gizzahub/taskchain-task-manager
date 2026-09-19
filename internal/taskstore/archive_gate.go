@@ -25,6 +25,9 @@ type completedArchiveCapacity struct {
 // later valid archive writes need not equal its target or retain its mode.
 func validateCompletedArchiveCapacity(r *os.Root, transitions transitionJournal) (completedArchiveCapacity, error) {
 	var out completedArchiveCapacity
+	if transitions.StorageProtocol == 6 {
+		return validateCompletedOwnerRejoinCapacity(r)
+	}
 	if transitions.StorageProtocol != 5 {
 		return out, errors.New("completed archive capacity requires permanent protocol 5 barrier")
 	}
@@ -40,6 +43,44 @@ func validateCompletedArchiveCapacity(r *os.Root, transitions transitionJournal)
 	if err != nil || validateCapacityPayloadBinding(a, original, target, mode) != nil {
 		return out, errors.New("archive capacity payload does not cross-bind receipt")
 	}
+	return completedArchiveCapacityTail(r, a, receiptRaw, original, target, mode)
+}
+
+// validateCompletedOwnerRejoinCapacity is the protocol-6 counterpart.  The
+// receipt is the schema-2 rejoin receipt and its payload is the separately
+// transported owner-rejoin capacity frame, whose source board binding comes
+// only from the completed local rejoin plan - never from the receipt alone.
+func validateCompletedOwnerRejoinCapacity(r *os.Root) (completedArchiveCapacity, error) {
+	var out completedArchiveCapacity
+	plan, err := ownerRejoinCompletedLocal(r)
+	if err != nil {
+		return out, err
+	}
+	receiptRaw, err := boundedSnapshotFile(r, archiveCapacityFile, 4096)
+	if err != nil {
+		return out, errors.New("rejoined archive journal is missing its adoption receipt; restore it")
+	}
+	a, err := loadArchiveCapacityAdoption(r)
+	if err != nil || a.SchemaVersion != 2 || a.Phase != "completed" || a.StorageProtocol != 6 {
+		return out, errors.New("archive capacity receipt is not a completed protocol 6 owner-rejoin receipt")
+	}
+	name := ownerRejoinCapacityArtifactPath(a.PayloadSHA256)
+	raw, err := loadOwnerRejoinArtifact(r, name, maxOwnerRejoinCapacityArtifactBytes)
+	if err != nil {
+		return out, errors.New("owner-rejoin capacity payload is missing or unreadable; restore it")
+	}
+	original, target, mode, err := decodeOwnerRejoinCapacityPayload(raw, a.PayloadSHA256, plan.SourceOwner, plan.TargetOwner)
+	if err != nil || validateCapacityPayloadBinding(a, original, target, mode) != nil {
+		return out, errors.New("owner-rejoin capacity payload does not cross-bind receipt")
+	}
+	return completedArchiveCapacityTail(r, a, receiptRaw, original, target, mode)
+}
+
+// completedArchiveCapacityTail proves the live schema-2 archive for either
+// barrier.  The payload describes historical conversion bytes only; later
+// valid archive writes need not equal its target or retain its mode.
+func completedArchiveCapacityTail(r *os.Root, a archiveCapacityAdoption, receiptRaw, original, target []byte, mode uint32) (completedArchiveCapacity, error) {
+	var out completedArchiveCapacity
 	board, err := canonicalStorageBoard(r)
 	if err != nil || a.BoardPath != board {
 		return out, errors.New("archive capacity receipt belongs to another board")
