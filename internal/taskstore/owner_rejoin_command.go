@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/githistory"
 )
@@ -165,7 +166,56 @@ func rejoinBoardPlanHeader(opts RejoinBoardOptions, source, target string) (Owne
 	if err != nil {
 		return zero, nil, err
 	}
+	if opts.Clone && len(opts.SourceExport) > 0 {
+		// The export is the only record of what the source's other worktrees
+		// reserved through the common directory, and this board's own ledger
+		// cannot show those.  Deriving them here is not a convenience: leaving
+		// them out would let the clone reissue IDs the source already handed
+		// out, which is exactly what the bootstrap refusal exists to prevent.
+		// Operator-supplied evidence is merged with it rather than replaced by
+		// it, so neither source of evidence can quietly drop a reservation.
+		ledger, err := ownerRejoinSourceRoleBytes(sources, "ids")
+		if err != nil {
+			return zero, nil, err
+		}
+		floors, additional, err := OwnerRejoinCloneReservationEvidence(opts.SourceExport, ledger, p.SourceNamespace)
+		if err != nil {
+			return zero, nil, err
+		}
+		if p.ReservationFloors, err = unionReservationFloors(p.ReservationFloors, floors); err != nil {
+			return zero, nil, err
+		}
+		if p.AdditionalReservedIDs, err = mergeReservedIDs(p.AdditionalReservedIDs, additional); err != nil {
+			return zero, nil, err
+		}
+	}
 	return p, sources, nil
+}
+
+func ownerRejoinSourceRoleBytes(sources []OwnerRejoinSourceFile, role string) ([]byte, error) {
+	for _, f := range sources {
+		if f.Role == role {
+			return f.Raw, nil
+		}
+	}
+	return nil, fmt.Errorf("source %s is missing", role)
+}
+
+// mergeReservedIDs unions the two sets.  The plan requires them sorted and
+// unique, and an ID that both sides name is one reservation rather than two.
+func mergeReservedIDs(a, b []string) ([]string, error) {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, id := range append(append([]string{}, a...), b...) {
+		if identityKey(id) != id || id == "" {
+			return nil, fmt.Errorf("reserved ID %q is not canonical", id)
+		}
+		if !seen[id] {
+			seen[id], out = true, append(out, id)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 // rejoinBoardSourceState resolves the source's common state.  A same-common
