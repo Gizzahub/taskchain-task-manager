@@ -100,6 +100,13 @@ func loadSharedState(r *os.Root) (sharedState, error) {
 	if err != nil {
 		return sharedState{}, err
 	}
+	return decodeSharedState(raw)
+}
+
+// decodeSharedState is the single strict decoder for common-state bytes,
+// whether they came from the common directory or from an operator-supplied
+// export of another clone's common state.
+func decodeSharedState(raw []byte) (sharedState, error) {
 	if len(raw) > maxSharedStateBytes || !utf8.Valid(raw) {
 		return sharedState{}, errors.New("invalid shared state size or UTF-8")
 	}
@@ -125,20 +132,21 @@ func loadSharedState(r *os.Root) (sharedState, error) {
 	return state, nil
 }
 
-func publishSharedState(r *os.Root, state sharedState, initial bool) error {
-	if err := validateSharedState(state); err != nil {
-		return err
-	}
+// sharedStateCanonicalBytes is the one serialization of a common state.  It is
+// separate from publishSharedState so that bytes arriving from outside the
+// common directory can be held to the same exact form they would have been
+// written in.
+func sharedStateCanonicalBytes(state sharedState) ([]byte, error) {
 	var raw []byte
 	var err error
 	if state.SchemaVersion == 4 && state.ReservationFloors != nil && len(state.ReservationFloors) == 0 {
 		var shape map[string]any
 		base, marshalErr := json.Marshal(state)
 		if marshalErr != nil {
-			return marshalErr
+			return nil, marshalErr
 		}
 		if err := json.Unmarshal(base, &shape); err != nil {
-			return err
+			return nil, err
 		}
 		shape["reservationFloors"] = []ReservationFloor{}
 		raw, err = json.MarshalIndent(shape, "", "  ")
@@ -146,11 +154,22 @@ func publishSharedState(r *os.Root, state sharedState, initial bool) error {
 		raw, err = json.MarshalIndent(state, "", "  ")
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	raw = append(raw, '\n')
 	if len(raw) > maxSharedStateBytes {
-		return errors.New("shared state exceeds 16 MiB")
+		return nil, errors.New("shared state exceeds 16 MiB")
+	}
+	return raw, nil
+}
+
+func publishSharedState(r *os.Root, state sharedState, initial bool) error {
+	if err := validateSharedState(state); err != nil {
+		return err
+	}
+	raw, err := sharedStateCanonicalBytes(state)
+	if err != nil {
+		return err
 	}
 	name, err := stage(r, raw)
 	if err != nil {

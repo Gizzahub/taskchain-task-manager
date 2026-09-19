@@ -141,3 +141,20 @@ func (s *sharedSession) verifyStorageBinding(j transitionJournal) error {
 	}
 	return nil
 }
+
+// saveInitialStorageState creates a common state that does not yet exist.  It
+// links rather than renames, so a concurrent creator loses the race instead of
+// silently overwriting the winner's authority.
+func (s *sharedSession) saveInitialStorageState(next sharedState) error {
+	if err := s.verify(); err != nil {
+		return err
+	}
+	if s.state != nil {
+		return errors.New("common state already exists")
+	}
+	if err := publishSharedState(s.root, next, true); err != nil {
+		return err
+	}
+	s.state = &next
+	return nil
+}

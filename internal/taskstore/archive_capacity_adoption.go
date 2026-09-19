@@ -252,3 +252,42 @@ func loadArchiveCapacityPayload(r *os.Root, digest string) ([]byte, []byte, uint
 	}
 	return decodeArchiveCapacityPayload(raw, digest)
 }
+
+// prepareCloneOwnerRejoinArchiveCapacity is the independent-clone counterpart.
+// The target archive journal is derived by the caller because only the clone
+// derivation knows the new namespace; the receipt is rebound to the clone's
+// board and namespace so the capacity contract still cross-binds exactly one
+// board and one namespace.
+func prepareCloneOwnerRejoinArchiveCapacity(sourceReceipt, sourceArchive, targetArchive []byte, sourceBoard, targetBoard, sourceNamespace, targetNamespace string, mode uint32) ([]byte, []byte, OwnerRejoinArtifact, error) {
+	var zero OwnerRejoinArtifact
+	source, err := decodeOwnerRejoinArchiveCapacityAdoption(sourceReceipt)
+	switch {
+	case err != nil:
+		return nil, nil, zero, fmt.Errorf("owner rejoin source capacity receipt: %w", err)
+	case source.SchemaVersion != 1 || source.Phase != "completed" || source.StorageProtocol != 5 || source.TargetJournalSchema != 2:
+		return nil, nil, zero, errors.New("owner rejoin source capacity receipt protocol invalid")
+	case source.BoardPath != sourceBoard:
+		return nil, nil, zero, errors.New("owner rejoin source capacity receipt board mismatch")
+	// The receipt records the namespace as it stood when capacity was adopted.
+	// Enabling sharing afterwards rebinds the archive journal but deliberately
+	// leaves this receipt alone, so a board that adopted capacity before it
+	// shared legitimately carries an empty namespace here.  Any other value must
+	// be exactly the source namespace the plan names.
+	case source.Namespace != "" && source.Namespace != sourceNamespace:
+		return nil, nil, zero, errors.New("owner rejoin source capacity receipt namespace mismatch")
+	case source.JournalMode != mode:
+		return nil, nil, zero, errors.New("owner rejoin source capacity receipt mode mismatch")
+	}
+	payload, err := ownerRejoinCapacityPayloadBytes(sourceArchive, targetArchive, sourceBoard, targetBoard, mode)
+	if err != nil {
+		return nil, nil, zero, err
+	}
+	digest := bytesDigest(payload)
+	artifact := OwnerRejoinArtifact{Role: "archive-capacity-payload", Path: ownerRejoinCapacityArtifactPath(digest), Mode: 0o600, Length: len(payload), SHA256: digest}
+	target := archiveCapacityAdoption{SchemaVersion: 2, Phase: "completed", UpgradeID: source.UpgradeID, BoardPath: targetBoard, Namespace: targetNamespace, SourceJournalSchema: 2, TargetJournalSchema: 2, StorageProtocol: 6, JournalMode: mode, OriginalLength: len(sourceArchive), OriginalSHA256: bytesDigest(sourceArchive), TargetLength: len(targetArchive), TargetSHA256: bytesDigest(targetArchive), PayloadSHA256: digest}
+	targetRaw, err := archiveCapacityAdoptionBytes(target)
+	if err != nil {
+		return nil, nil, zero, err
+	}
+	return targetRaw, payload, artifact, nil
+}
