@@ -178,6 +178,18 @@ func (s *sharedSession) merge(ledger idLedger) (idLedger, error) {
 	}
 	ledger.Namespace = s.state.NamespaceID
 	ledger.Reserved = unionIDs(ledger.Reserved, s.state.Reserved)
+	// The common state is the durable record of the reservation floor a rejoin
+	// bootstrapped, and allocation reads the floor off the local ledger only.
+	// Without folding it back a board whose ids.json lost its floors would
+	// silently start reissuing IDs the floor exists to hold back, so the floor
+	// has to survive the local file rather than depend on it.
+	floors, err := unionReservationFloors(ledger.ReservationFloors, s.state.ReservationFloors)
+	if err != nil {
+		return ledger, err
+	}
+	if len(floors) > 0 {
+		ledger.ReservationFloors, ledger.SchemaVersion = floors, 4
+	}
 	history, err := githistory.Scan(context.Background(), s.location.Repository, s.location.Board)
 	if err != nil {
 		return ledger, err
@@ -201,6 +213,15 @@ func (s *sharedSession) publish(ledger idLedger) error {
 	}
 	next := *s.state
 	next.Reserved = unionIDs(next.Reserved, ledger.Reserved)
+	// Publishing the floor is the other half of that: a floor established
+	// locally is only durable once the common directory carries it too.
+	floors, err := unionReservationFloors(next.ReservationFloors, ledger.ReservationFloors)
+	if err != nil {
+		return err
+	}
+	if len(floors) > 0 {
+		next.ReservationFloors, next.SchemaVersion = floors, 4
+	}
 	if err := publishSharedState(s.root, next, false); err != nil {
 		return err
 	}
