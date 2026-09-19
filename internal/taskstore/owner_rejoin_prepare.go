@@ -187,7 +187,13 @@ func validateSameCommonPolicy(p OwnerRejoinPlan, sources map[string]OwnerRejoinS
 	if err != nil || !bytes.Equal(canonical, activation) {
 		return errors.New("same-common policy activation receipt is not exact")
 	}
-	targets["policy"], targets["policy-activation"] = append([]byte(nil), policy...), append([]byte(nil), activation...)
+	// The policy itself is preserved byte for byte; only the activation
+	// receipt's board identity moves with the board.
+	rebound, err := TransformOwnerRejoinPolicyActivation(activation, sourceBoard, p.TargetOwner)
+	if err != nil {
+		return err
+	}
+	targets["policy"], targets["policy-activation"] = append([]byte(nil), policy...), rebound
 	return nil
 }
 

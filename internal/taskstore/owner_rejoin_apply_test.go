@@ -202,6 +202,29 @@ func TestSameCommonOwnerRejoinPolicyAndEmptyReservationFloors(t *testing.T) {
 	if state.Policy == nil || state.ReservationFloors == nil || len(state.ReservationFloors) != 0 {
 		t.Fatalf("policy or empty floors lost: %+v", state)
 	}
+	// The activation receipt is the board's own identity check.  A rejoined
+	// policy-bearing board that still named the source root would refuse
+	// itself, so this is the assertion that keeps the rebinding honest.
+	activation, err := loadPolicyActivation(mustOwnerRejoinRoot(t, fx.target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if activation.Plan.Root != fx.target || activation.AuthorityID != fx.plan.TargetPolicyAuthority {
+		t.Fatalf("activation root or authority wrong: %+v", activation.Plan.Root)
+	}
+	if _, err := Ready(fx.target); err != nil {
+		t.Fatalf("completed policy-bearing rejoin was not admitted by the ordinary runtime: %v", err)
+	}
+}
+
+func mustOwnerRejoinRoot(t *testing.T, dir string) *os.Root {
+	t.Helper()
+	r, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = r.Close() })
+	return r
 }
 
 func TestSameCommonOwnerRejoinTamperStopsBeforeFurtherMutation(t *testing.T) {

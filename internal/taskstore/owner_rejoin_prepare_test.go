@@ -72,8 +72,22 @@ func TestPrepareSameCommonOwnerRejoinPolicyStates(t *testing.T) {
 				if file.Role == "archive-capacity-payload" {
 					t.Fatal("capacity artifact was inlined in owner payload")
 				}
-				if file.Role == "policy-activation" && !bytes.Equal(file.Original, file.Target) {
-					t.Fatal("policy activation provenance changed")
+				if file.Role == "policy-activation" {
+					var before, after policyActivationState
+					if err := decodeExact(file.Original, &before); err != nil {
+						t.Fatal(err)
+					}
+					if err := decodeExact(file.Target, &after); err != nil {
+						t.Fatal(err)
+					}
+					if before.Plan.Root != base.SourceOwner || after.Plan.Root != base.TargetOwner {
+						t.Fatal("policy activation root was not rebound to the returning board")
+					}
+					before.Plan.Root = after.Plan.Root
+					rebound, err := policyActivationBytes(before)
+					if err != nil || !bytes.Equal(rebound, file.Target) {
+						t.Fatal("policy activation changed beyond its board identity")
+					}
 				}
 			}
 		})

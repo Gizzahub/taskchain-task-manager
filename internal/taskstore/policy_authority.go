@@ -123,7 +123,10 @@ func (s *sharedSession) verifyPolicyAuthority(r *os.Root, j transitionJournal) e
 	if err != nil {
 		return errors.Join(errors.New("shared policy requires its original ID ledger"), err)
 	}
-	if ledger.SchemaVersion != 3 || ledger.Namespace != binding.Namespace {
+	// Schema 4 is the owner-rejoin ledger and exists only on a protocol-6
+	// board, which loadTransitions admits only against a completed rejoin
+	// receipt.  Every other board still requires schema 3 exactly.
+	if (ledger.SchemaVersion != 3 && !(ledger.SchemaVersion == 4 && j.StorageProtocol == 6)) || ledger.Namespace != binding.Namespace {
 		return errors.New("shared policy ID ledger binding mismatch")
 	}
 	return nil

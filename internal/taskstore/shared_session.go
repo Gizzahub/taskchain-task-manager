@@ -162,15 +162,20 @@ func (s *sharedSession) merge(ledger idLedger) (idLedger, error) {
 		return ledger, err
 	}
 	if s == nil || s.state == nil {
-		if ledger.SchemaVersion == 3 {
+		if ledger.SchemaVersion >= 3 {
 			return ledger, errors.New("shared local binding has no common state; restore shared state, never reinitialize")
 		}
 		return ledger, nil
 	}
-	if ledger.SchemaVersion == 3 && ledger.Namespace != s.state.NamespaceID {
+	if ledger.SchemaVersion >= 3 && ledger.Namespace != s.state.NamespaceID {
 		return ledger, errors.New("local shared namespace binding mismatch")
 	}
-	ledger.SchemaVersion = 3
+	// Schema 4 is the owner-rejoin ledger: it carries the reservation floor a
+	// returning board depends on, so joining shared work must never fold it
+	// back down to schema 3.
+	if ledger.SchemaVersion < 3 {
+		ledger.SchemaVersion = 3
+	}
 	ledger.Namespace = s.state.NamespaceID
 	ledger.Reserved = unionIDs(ledger.Reserved, s.state.Reserved)
 	history, err := githistory.Scan(context.Background(), s.location.Repository, s.location.Board)
@@ -189,7 +194,7 @@ func (s *sharedSession) publish(ledger idLedger) error {
 		return err
 	}
 	if s == nil || s.state == nil {
-		if ledger.SchemaVersion == 3 {
+		if ledger.SchemaVersion >= 3 {
 			return errors.New("missing common state for shared ledger")
 		}
 		return nil
@@ -272,7 +277,7 @@ func (s *sharedSession) verifyLocalIDBinding(r *os.Root) error {
 	if err != nil {
 		return err
 	}
-	if ledger.SchemaVersion != 3 {
+	if ledger.SchemaVersion != 3 && ledger.SchemaVersion != 4 {
 		return nil
 	}
 	if s == nil || s.state == nil {
