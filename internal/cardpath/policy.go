@@ -31,3 +31,16 @@ func WorkflowStatus(segment string) string {
 	}
 	return ""
 }
+
+// IsStatusOpaqueZone names the reserved directories that hold cards without
+// expressing a status of their own. A workflow-looking segment below one of
+// them is a category, or the provenance of an archived card -- never the zone
+// that decides status. Board policy refuses every one of these names as a
+// module root, so a reader holding no policy can still recognise them.
+func IsStatusOpaqueZone(segment string) bool {
+	switch strings.ToLower(segment) {
+	case "archive", "_archive", "plan", "issue", "backlog":
+		return true
+	}
+	return false
+}

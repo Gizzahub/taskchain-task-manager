@@ -46,10 +46,9 @@ func observeArchiveAdmission(raw []byte, id, source string, p boardpolicy.Policy
 		}
 		return *v
 	}
-	f := archivepolicy.Facts{ID: id, Kind: "task", Status: v.Status, Review: value(m.QualityReview), Evidence: value(m.QualityReviewEvidence), Resolution: value(m.Resolution)}
-	if status, ok := p.Status(zone); ok {
-		f.Status = status
-	}
+	// The superseded guard above reads frontmatter deliberately: that value has
+	// no zone form. The admission fact goes through the shared zone resolution.
+	f := archivepolicy.Facts{ID: id, Kind: "task", Status: zoneStatusView(doc, zone, p).Status, Review: value(m.QualityReview), Evidence: value(m.QualityReviewEvidence), Resolution: value(m.Resolution)}
 	f.WorkflowDone = p.Workflow(zone) && zone == p.DoneZone()
 	switch zone {
 	case "plan":

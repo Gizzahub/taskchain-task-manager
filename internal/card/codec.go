@@ -221,6 +221,13 @@ func zoneFromPath(path string) string {
 		parts = parts[:len(parts)-1] // the final segment is the card filename
 	}
 	for _, part := range parts {
+		// A card under archive/done is stored, not done, and one under
+		// plan/done is a plan, not a done task. These directories hold cards
+		// whose status they do not express, and nothing below them names a
+		// zone either, so stop rather than keep looking for one.
+		if cardpath.IsStatusOpaqueZone(part) {
+			return ""
+		}
 		if status := cardpath.WorkflowStatus(part); status != "" {
 			return status
 		}

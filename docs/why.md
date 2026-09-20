@@ -157,16 +157,42 @@ tasks/todo/TASK-2.md
 
 초기 개발 단계입니다. 출력 계약은 안정화 전이며 변경될 수 있습니다.
 
-알려진 한계 하나를 먼저 밝힙니다. 상태의 정본은 경로이고, 도구는 frontmatter의
-`status` 필드를 재직렬화하지 않습니다. 따라서 전이 후 카드 본문의
+알려진 한계 하나를 먼저 밝힙니다. 상태의 정본은 카드를 담은 **존**이고, 도구는
+frontmatter의 `status` 필드를 재직렬화하지 않습니다. 따라서 전이 후 카드 본문의
 `status: pending`은 경로와 어긋난 채로 남을 수 있습니다.
 
 ```
-tasks/doing/TASK-1.md 의 frontmatter: status: pending   # 경로가 정본, 이 값은 아님
+tasks/doing/TASK-1.md 의 frontmatter: status: pending   # 존이 정본, 이 값은 아님
 ```
 
-카드를 읽는 도구는 **경로를 기준으로** 상태를 판정해야 합니다. frontmatter의
-`status`를 신뢰하지 마십시오. 이 필드의 역할 축소는 예정된 변경입니다.
+`list --json`이 내보내는 `status`는 존이 결정합니다. frontmatter를 신뢰하지 마십시오.
+
+다만 **모든 디렉터리가 상태를 표현하지는 않습니다.** 이 구분이 중요합니다.
+
+| 존 | `status`의 출처 |
+|---|---|
+| workflow 존 (`todo` `doing` `review` `blocked` `done`과 그 별칭) | 존이 결정합니다. frontmatter는 무시됩니다 |
+| kind 존 (`plan` `issue` `backlog`) | 존이 상태를 표현하지 않으므로 frontmatter가 유일한 출처입니다 |
+| `archive` · `_archive` | 같습니다. frontmatter가 유일한 출처입니다 |
+| 상태를 선언하지 않은 parked 존 | 같습니다. frontmatter가 유일한 출처입니다 |
+
+**상태를 표현하지 않는 존 아래의 workflow 이름은 상태가 아닙니다.**
+`archive/done/TASK-1.md`의 `done`은 이 카드가 *어디서* 보관됐는지를 뜻하고,
+`plan/done/PLAN-1.md`의 `done`은 계획 안의 분류를 뜻합니다. 둘 다 `done` 상태라는
+뜻이 아닙니다. 상태를 결정하는 것은 카드를 담은 존 하나뿐이며, 그 아래 디렉터리는
+분류이거나 보관 이력입니다. 마찬가지로 아카이브는 의존성 완료를 부여하지 않습니다 —
+그 판정은 별도의 완료 영수증을 거칩니다([아카이브](archive.md)).
+
+frontmatter `status`는 카드 생성 시 한 번 기록되고, 그 뒤로는 `supersede`가 쓰는
+`superseded` 외에 도구가 다시 쓰지 않습니다. 이 필드는 읽을 때 검증되지 않는 열린
+문자열이므로 경로로 표현할 수 없는 임의의 값이 들어 있을 수 있습니다. 위 표에서
+frontmatter가 유일한 출처인 존에서는 그 값을 그대로 돌려줍니다 — 도구가 지어내지 않습니다.
+
+`show <file> --json`은 보드 정책 없이 파일 하나만 읽는 view입니다. workflow 존,
+kind 존, 아카이브는 예약된 이름이라 정책 없이도 판정하지만, 선언된 모듈과 parked 존은
+알지 못합니다. 또한 `show`는 경로에 `tasks/` 경계가 있을 때만 그 아래 디렉터리를
+메타데이터로 읽습니다 — 경계가 없으면 파일 이름만 보고 frontmatter를 그대로 돌려줍니다.
+보드 상태는 `list --dir <board> --json`으로 읽으십시오.
 
 ## 더 읽을 것
 

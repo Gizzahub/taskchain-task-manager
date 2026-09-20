@@ -34,8 +34,12 @@ release 후 doing/review/blocked/done에 남은 카드는 새 token의 `claim --
 
 ## 원본과 저장
 
-파일명과 기본 permission bits를 유지합니다. 경로가 상태의 정본이며, 본문의 첫 실제
+파일명과 기본 permission bits를 유지합니다. 카드를 담은 존이 상태의 정본이며, 본문의 첫 실제
 Status 표 셀만 동기화합니다. frontmatter의 status·알 수 없는 필드·본문은 재직렬화하지 않습니다.
+`list`가 내보내는 status는 카드의 존 하나만 보고 판정합니다. 그보다 깊은 경로 세그먼트는
+category나 provenance이며 상태로 해석하지 않습니다 — `archive/done/TASK-1.md`는 `done`이
+아닙니다. archive·kind(`plan`/`issue`/`backlog`)·상태 없는 parked 존은 존 자체가 상태를
+표현하지 않으므로 frontmatter 값을 그대로 돌려줍니다.
 코드 fence 안의 예제, CRLF, 마지막 newline 유무, 상태 사유 tail을 보존합니다.
 해당 표 셀이 없으면 내용 변경 없이 경로만 바뀝니다. inode·mtime·소유자·확장 속성 보존은
 보장하지 않습니다. 원본과 패치 카드 각각 최대 1 MiB입니다.

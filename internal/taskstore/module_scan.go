@@ -112,12 +112,7 @@ func scanModuleZone(r *os.Root, root string, out *[]Entry, ids map[string]string
 		if err != nil {
 			return fmt.Errorf("parse task card %s: %w", path, err)
 		}
-		view := doc.View()
-		if policy.Workflow(modulePath.Zone) || policy.Parked(modulePath.Zone) {
-			if status, ok := policy.Status(modulePath.Zone); ok {
-				view.Status = status
-			}
-		}
+		view := zoneStatusView(doc, modulePath.Zone, policy)
 		key := identityKey(view.ID)
 		if key == "" {
 			return fmt.Errorf("invalid task ID %q in %s", view.ID, path)

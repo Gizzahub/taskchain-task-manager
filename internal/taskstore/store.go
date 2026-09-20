@@ -562,14 +562,7 @@ func scanDirExceptWithPolicy(r *os.Root, dir string, out *[]Entry, ids map[strin
 		if err != nil {
 			return fmt.Errorf("parse task card %s: %w", path, err)
 		}
-		view := doc.Snapshot(path)
-		if policy.Parked(dir) {
-			// A nested workflow-looking path must not override parking semantics.
-			view = doc.View()
-			if status, ok := policy.Status(dir); ok {
-				view.Status = status
-			}
-		}
+		view := zoneStatusView(doc, dir, policy)
 		key := identityKey(view.ID)
 		if key == "" {
 			return fmt.Errorf("invalid task ID %q in %s", view.ID, path)
