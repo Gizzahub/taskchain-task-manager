@@ -18,7 +18,9 @@ type PlanProgressRequest struct {
 
 // ChildProgress is one declared child's completion as the shared census sees
 // it. Complete means the card reached the done zone or left it through a
-// verified archive completion; an absent card is neither.
+// verified archive completion. Present is not decoration: a child the board
+// has never heard of counts as incomplete exactly like a real unfinished one,
+// so without this flag a typo in the children list reads as outstanding work.
 type ChildProgress struct {
 	ID       string `json:"id"`
 	Complete bool   `json:"complete"`
@@ -39,22 +41,22 @@ type PlanProgress struct {
 }
 
 // ReadPlanProgress counts a plan's declared children against the board's
-// shared completion index — the same verdict archive admission uses, so the
-// two can never disagree about whether a child is complete.
+// shared completion index — the same verdict archive admission uses. Sharing
+// the index is not enough to keep the two from disagreeing: archive admission
+// only reads it after resumeArchive has settled every pending transition, so
+// this query rejects pending transitions for the same reason List and Ready
+// do. A card with an unsettled move has no zone to be counted in yet.
 func ReadPlanProgress(dir string, req PlanProgressRequest) (result PlanProgress, err error) {
 	if identityKey(req.ID) == "" {
 		return result, errors.New("plan progress requires a canonical plan ID")
 	}
+	// ParseConfig ends in Canonical, which validates, so a config that parses
+	// is already valid and every one of the five field names is present. A
+	// Validate call or a mapping guard here would be a branch that never runs.
 	cfg, err := archivepolicy.ParseConfig(req.Rules)
 	if err != nil {
 		return result, err
 	}
-	if err := cfg.Validate(); err != nil {
-		return result, err
-	}
-	// ParseConfig requires all five field names and Validate rejects an empty
-	// one, so the children mapping is always present here. A guard for that
-	// case would never run; the rules document is where it is enforced.
 	mapping := cfg.Admission.Fields.Mapping()
 	session, err := openBoardSession(dir)
 	if err != nil {
@@ -62,6 +64,9 @@ func ReadPlanProgress(dir string, req PlanProgressRequest) (result PlanProgress,
 	}
 	defer func() { err = errors.Join(err, session.close()) }()
 	r := session.root
+	if err := rejectPendingTransitions(r); err != nil {
+		return result, err
+	}
 	entries, err := listLocked(r)
 	if err != nil {
 		return result, err
