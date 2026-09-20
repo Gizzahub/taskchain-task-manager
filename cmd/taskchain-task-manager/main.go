@@ -68,6 +68,9 @@ func run(args []string, out, errOut io.Writer) int {
 	if len(args) > 0 && args[0] == "create-bundle" {
 		return runCreateBundle(args, out, errOut)
 	}
+	if len(args) > 0 && args[0] == "plan-progress" {
+		return runPlanProgress(args, out, errOut)
+	}
 	if len(args) > 0 && (args[0] == "transition" || args[0] == "recover") {
 		return runTransition(args, out, errOut)
 	}
@@ -97,6 +100,7 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "       taskchain-task-manager create --dir <board> --title <title> --config <rules.yaml> --type <type> --priority <priority> --summary <text> --criterion <text> [--criterion <text> ...] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager <claim|release> --dir <board> --id TASK-N --owner <owner> --token <32 lowercase hex> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager claim --resume --dir <board> --id TASK-N --owner <owner> --token <32 lowercase hex> --json")
+		fmt.Fprintln(out, "       taskchain-task-manager "+planProgressUsage)
 		fmt.Fprintln(out, "       taskchain-task-manager <transition|recover> --dir <board> --id TASK-N --owner <owner> --token <claim token> --request-id <32 lowercase hex> --from <zone> --to <zone> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager repair-status --dir <board> --id TASK-N --path <card> --owner <owner> [--token <claim token>] --request-id <32 lowercase hex> --expected-sha256 <64 lowercase hex> [--adopt | --resume] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager", relocationUsage)
