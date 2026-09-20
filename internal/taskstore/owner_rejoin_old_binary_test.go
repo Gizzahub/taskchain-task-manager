@@ -57,6 +57,7 @@ func main() {
 // directory no rejoin has touched, so a refusal of the target is a statement
 // about protocol 6 rather than about this fixture.
 func TestProtocol5EraLibraryRefusesAnUpgradedBoard(t *testing.T) {
+	t.Parallel()
 	probe := buildProtocol5EraProbe(t)
 	fx := newOwnerRejoinApplyFixture(t, false, []ReservationFloor{})
 	if err := applyOwnerRejoinSameCommon(fx.target, fx.plan, fx.payload, nil); err != nil {

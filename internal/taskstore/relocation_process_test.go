@@ -17,6 +17,7 @@ import (
 )
 
 func TestRelocationProcessHelper(t *testing.T) {
+	t.Parallel()
 	mode := os.Getenv("TASKCHAIN_RELOCATION_HELPER")
 	if mode == "" {
 		return
@@ -56,6 +57,7 @@ func TestRelocationProcessHelper(t *testing.T) {
 }
 
 func TestRelocationProcessKillAndContention(t *testing.T) {
+	t.Parallel()
 	for _, shared := range []bool{false, true} {
 		for _, point := range []string{"after-relocation-common-pending", "after-relocation-journal", "after-target", "after-source", "after-relocation-receipt"} {
 			if !shared && point == "after-relocation-common-pending" {

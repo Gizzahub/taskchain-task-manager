@@ -8,6 +8,7 @@ import (
 )
 
 func TestPolicySharedAcknowledgementBeforeMutation(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)
@@ -43,6 +44,7 @@ func TestPolicySharedAcknowledgementBeforeMutation(t *testing.T) {
 }
 
 func TestPolicyCompletedCleanupDiagnostic(t *testing.T) {
+	t.Parallel()
 	operation, cleanup := errors.New("board unlock"), errors.New("common unlock")
 	for _, pair := range [][2]error{{operation, nil}, {nil, cleanup}, {operation, cleanup}} {
 		err := finishPolicyActivation(PolicyActivationResult{Status: "completed"}, pair[0], pair[1])

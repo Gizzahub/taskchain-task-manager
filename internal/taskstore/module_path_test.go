@@ -8,6 +8,7 @@ import (
 )
 
 func TestModuleTransitionRejectsOverlongTarget(t *testing.T) {
+	t.Parallel()
 	policy, err := boardpolicy.New(boardpolicy.Declaration{Modules: []string{"backend"}})
 	if err != nil {
 		t.Fatal(err)
@@ -25,6 +26,7 @@ func TestModuleTransitionRejectsOverlongTarget(t *testing.T) {
 }
 
 func TestModulePathUsesDeclaredScopeAndExactZone(t *testing.T) {
+	t.Parallel()
 	policy, err := boardpolicy.New(boardpolicy.Declaration{Modules: []string{"backend"}, Zones: []string{"manual"}})
 	if err != nil {
 		t.Fatal(err)
@@ -60,6 +62,7 @@ func TestModulePathUsesDeclaredScopeAndExactZone(t *testing.T) {
 }
 
 func TestModuleArchivePreservesHistoricalZoneWithoutReclassifying(t *testing.T) {
+	t.Parallel()
 	policy, err := boardpolicy.New(boardpolicy.Declaration{Modules: []string{"backend"}})
 	if err != nil {
 		t.Fatal(err)

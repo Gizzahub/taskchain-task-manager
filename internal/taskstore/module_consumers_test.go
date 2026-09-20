@@ -11,6 +11,7 @@ import (
 )
 
 func TestModuleRepairReceiptSurvivesPolicyRevision(t *testing.T) {
+	t.Parallel()
 	board, req := moduleRepairFixture(t)
 	active, err := ActivatePolicy(board, moduleAdoptionRaw(t), PolicyActivationOptions{AdoptModules: true})
 	if err != nil {
@@ -48,6 +49,7 @@ func TestModuleRepairReceiptSurvivesPolicyRevision(t *testing.T) {
 }
 
 func TestModuleContextReferencesAndHistoricalReplay(t *testing.T) {
+	t.Parallel()
 	board := moduleAdoptionBoard(t)
 	if _, err := ActivatePolicy(board, moduleAdoptionRaw(t), PolicyActivationOptions{AdoptModules: true}); err != nil {
 		t.Fatal(err)

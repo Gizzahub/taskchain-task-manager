@@ -18,6 +18,7 @@ import (
 // a named cutpoint so the parent can SIGKILL it there.  The plan and payload
 // arrive as files because that is exactly how an operator transports them.
 func TestOwnerRejoinProcessHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("TASKCHAIN_REJOIN_HELPER") == "" {
 		return
 	}
@@ -117,6 +118,7 @@ func ownerRejoinCrashCases() []ownerRejoinCrashCase {
 }
 
 func TestOwnerRejoinSIGKILLReachesExactlyOneState(t *testing.T) {
+	t.Parallel()
 	for _, c := range ownerRejoinCrashCases() {
 		t.Run(c.name, func(t *testing.T) { runOwnerRejoinCrashSweep(t, c) })
 	}
@@ -286,6 +288,7 @@ func runOwnerRejoinCrash(t *testing.T, c ownerRejoinCrashCase, point string) {
 }
 
 func TestOwnerRejoinTamperedPendingStateIsRefusedWithoutMutation(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinApplyFixture(t, false, []ReservationFloor{})
 	if err := applyOwnerRejoinSameCommon(fx.target, fx.plan, fx.payload, func(point string) error {
 		if point == "after-owner-rejoin-local-pending" {

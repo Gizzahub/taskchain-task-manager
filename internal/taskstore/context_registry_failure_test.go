@@ -9,6 +9,7 @@ import (
 )
 
 func TestContextRegistryFailureBoundariesAndRetry(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-stage", "after-link", "after-cleanup"} {
 		t.Run(phase, func(t *testing.T) {
 			board := filepath.Join(t.TempDir(), "tasks")
@@ -66,6 +67,7 @@ func TestContextRegistryFailureBoundariesAndRetry(t *testing.T) {
 }
 
 func TestContextRegistryRejectsIdentityAndPathInputs(t *testing.T) {
+	t.Parallel()
 	board := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(board); err != nil {
 		t.Fatal(err)

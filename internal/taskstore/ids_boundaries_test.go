@@ -11,6 +11,7 @@ import (
 )
 
 func TestCorruptIDLedgerFailsClosed(t *testing.T) {
+	t.Parallel()
 	for name, raw := range map[string][]byte{
 		"duplicate key": []byte(`{"schemaVersion":1,"reserved":[],"reserved":[]}`),
 		"unknown":       []byte(`{"schemaVersion":1,"reserved":[],"extra":1}`),
@@ -54,6 +55,7 @@ func TestCorruptIDLedgerFailsClosed(t *testing.T) {
 }
 
 func TestIDLedgerNonRegularRejected(t *testing.T) {
+	t.Parallel()
 	for _, symlink := range []bool{false, true} {
 		t.Run(fmt.Sprint(symlink), func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "tasks")
@@ -85,6 +87,7 @@ func TestIDLedgerNonRegularRejected(t *testing.T) {
 }
 
 func TestIDCapacityRefusesBeforeReservationOrCard(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(dir); err != nil {
 		t.Fatal(err)
@@ -116,6 +119,7 @@ func TestIDCapacityRefusesBeforeReservationOrCard(t *testing.T) {
 }
 
 func TestDeletedReceiptIDsRemainReserved(t *testing.T) {
+	t.Parallel()
 	for _, omit := range []string{"", claimsFile, transitionsFile} {
 		t.Run("omit-"+omit, func(t *testing.T) {
 			dir, req, _, _ := transitionFixture(t)

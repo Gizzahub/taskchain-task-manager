@@ -23,6 +23,7 @@ func claimBoard(t *testing.T) string {
 }
 
 func TestClaimReleaseReplayAndReady(t *testing.T) {
+	t.Parallel()
 	root := claimBoard(t)
 	req := ClaimRequest{ID: "TASK-1", Owner: "worker", Token: testToken}
 	record, err := Claim(root, req)
@@ -69,6 +70,7 @@ func TestClaimReleaseReplayAndReady(t *testing.T) {
 }
 
 func TestClaimsLedgerSymlinkAndOversizeRejected(t *testing.T) {
+	t.Parallel()
 	root := claimBoard(t)
 	target := filepath.Join(root, "real-ledger")
 	if err := os.WriteFile(target, []byte(`{"schemaVersion":1,"records":[]}`), 0o600); err != nil {
@@ -92,6 +94,7 @@ func TestClaimsLedgerSymlinkAndOversizeRejected(t *testing.T) {
 }
 
 func TestConcurrentClaimHasOneWinner(t *testing.T) {
+	t.Parallel()
 	root := claimBoard(t)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -115,6 +118,7 @@ func TestConcurrentClaimHasOneWinner(t *testing.T) {
 }
 
 func TestClaimsCorruptLedgerFailsClosed(t *testing.T) {
+	t.Parallel()
 	for name, raw := range map[string]string{
 		"unknown field":      `{"schemaVersion":1,"records":[],"extra":1}`,
 		"duplicate field":    `{"schemaVersion":1,"schemaVersion":1,"records":[]}`,
@@ -138,6 +142,7 @@ func TestClaimsCorruptLedgerFailsClosed(t *testing.T) {
 }
 
 func TestMissingHeldReferenceBlocksCreate(t *testing.T) {
+	t.Parallel()
 	root := claimBoard(t)
 	raw := `{"schemaVersion":1,"records":[{"id":"TASK-99","owner":"worker","token":"0123456789abcdef0123456789abcdef","status":"held"}]}`
 	if err := os.WriteFile(filepath.Join(root, claimsFile), []byte(raw), 0o600); err != nil {
@@ -149,6 +154,7 @@ func TestMissingHeldReferenceBlocksCreate(t *testing.T) {
 }
 
 func TestClaimValidationAndLedgerPreservedOnFailure(t *testing.T) {
+	t.Parallel()
 	root := claimBoard(t)
 	before, err := os.ReadFile(filepath.Join(root, "todo/TASK-1.md"))
 	if err != nil {

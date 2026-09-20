@@ -10,6 +10,7 @@ import (
 )
 
 func TestBoardSessionRejectsLostSharedIdentityIncludingReplay(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"missing", "mismatch", "non-git"} {
 		t.Run(kind, func(t *testing.T) {
 			_, a, b := sharedFixture(t)
@@ -87,6 +88,7 @@ func TestBoardSessionRejectsLostSharedIdentityIncludingReplay(t *testing.T) {
 }
 
 func TestBoardSessionLegacyWithoutLedgerAndFailureCleanup(t *testing.T) {
+	t.Parallel()
 	_, a, _ := sharedFixture(t)
 	if err := os.Remove(filepath.Join(a, idsFile)); err != nil {
 		t.Fatal(err)

@@ -9,6 +9,7 @@ import (
 )
 
 func TestContextRegistryPreservesPendingTransition(t *testing.T) {
+	t.Parallel()
 	board, req, _, _ := transitionFixture(t)
 	registered, err := RegisterContext(board, []byte(testContextIntent))
 	if err != nil {
@@ -44,6 +45,7 @@ func TestContextRegistryPreservesPendingTransition(t *testing.T) {
 }
 
 func TestContextRegistryUsesSharedSession(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)

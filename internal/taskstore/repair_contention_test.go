@@ -9,6 +9,7 @@ import (
 )
 
 func TestRepairConcurrentSessionsCannotWriteThroughHeldLock(t *testing.T) {
+	t.Parallel()
 	for _, shared := range []bool{false, true} {
 		t.Run(fmt.Sprintf("shared=%v", shared), func(t *testing.T) {
 			var board, other string

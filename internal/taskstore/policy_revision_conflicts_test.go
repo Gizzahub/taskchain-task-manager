@@ -11,6 +11,7 @@ import (
 )
 
 func TestPolicyRevisionJoinRetainsBarrierBinding(t *testing.T) {
+	t.Parallel()
 	repo, a, _, options := sharedRevisionFixture(t)
 	raw := revisionPolicyBytes(t)
 	if _, err := RevisePolicy(a, raw, options); err != nil {
@@ -65,6 +66,7 @@ func TestPolicyRevisionJoinRetainsBarrierBinding(t *testing.T) {
 }
 
 func TestPolicyRevisionSharedResumePreflightsEveryBoard(t *testing.T) {
+	t.Parallel()
 	_, a, b, options := sharedRevisionFixture(t)
 	raw := revisionPolicyBytes(t)
 	stop := errors.New("common-only revision stop")
@@ -95,6 +97,7 @@ func TestPolicyRevisionSharedResumePreflightsEveryBoard(t *testing.T) {
 }
 
 func TestPolicyRevisionRejectsLostHistoricalBinding(t *testing.T) {
+	t.Parallel()
 	for _, downgrade := range []bool{false, true} {
 		t.Run(map[bool]string{false: "missing-previous", true: "downgrade"}[downgrade], func(t *testing.T) {
 			dir, options := localRevisionFixture(t)

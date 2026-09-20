@@ -9,6 +9,7 @@ import (
 )
 
 func TestModuleCreateRejectsSymlinkWithoutReservation(t *testing.T) {
+	t.Parallel()
 	board := moduleAdoptionBoard(t)
 	if _, err := ActivatePolicy(board, moduleAdoptionRaw(t), PolicyActivationOptions{AdoptModules: true}); err != nil {
 		t.Fatal(err)
@@ -35,6 +36,7 @@ func TestModuleCreateRejectsSymlinkWithoutReservation(t *testing.T) {
 }
 
 func TestModuleCreateDestinations(t *testing.T) {
+	t.Parallel()
 	board := moduleAdoptionBoard(t)
 	if _, err := ActivatePolicy(board, moduleAdoptionRaw(t), PolicyActivationOptions{AdoptModules: true}); err != nil {
 		t.Fatal(err)
@@ -58,6 +60,7 @@ func TestModuleCreateDestinations(t *testing.T) {
 }
 
 func TestModuleCreateRejectsUnsafeScopeWithoutReservation(t *testing.T) {
+	t.Parallel()
 	board := moduleAdoptionBoard(t)
 	if _, err := ActivatePolicy(board, moduleAdoptionRaw(t), PolicyActivationOptions{AdoptModules: true}); err != nil {
 		t.Fatal(err)

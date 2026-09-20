@@ -22,6 +22,7 @@ func validSharedV3Fixture(t *testing.T) sharedState {
 }
 
 func TestSharedStateV3RoundTripAndPolicyRequired(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := os.OpenRoot(dir)
 	if err != nil {
@@ -60,6 +61,7 @@ func TestSharedStateV3RoundTripAndPolicyRequired(t *testing.T) {
 }
 
 func TestSharedStateV3StrictMutations(t *testing.T) {
+	t.Parallel()
 	base := validSharedV3Fixture(t)
 	if err := validateSharedState(base); err != nil {
 		t.Fatalf("baseline invalid: %v", err)
@@ -112,6 +114,7 @@ func TestSharedStateV3StrictMutations(t *testing.T) {
 }
 
 func TestSharedStateV3LoaderRejectsSingleFieldMutations(t *testing.T) {
+	t.Parallel()
 	r, err := os.OpenRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -176,6 +179,7 @@ func TestSharedStateV3LoaderRejectsSingleFieldMutations(t *testing.T) {
 }
 
 func TestSharedStateV3SerializationRetainsPolicy(t *testing.T) {
+	t.Parallel()
 	raw, err := json.Marshal(validSharedV3Fixture(t))
 	if err != nil {
 		t.Fatal(err)
@@ -186,6 +190,7 @@ func TestSharedStateV3SerializationRetainsPolicy(t *testing.T) {
 }
 
 func TestSharedBundlePreparationRetainsSchema3(t *testing.T) {
+	t.Parallel()
 	_, board, _ := sharedFixture(t)
 	if _, err := EnableShared(board, false); err != nil {
 		t.Fatal(err)

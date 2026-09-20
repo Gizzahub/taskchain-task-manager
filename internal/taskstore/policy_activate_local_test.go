@@ -11,6 +11,7 @@ import (
 )
 
 func TestActivateLocalPolicyFreshReplayAndNoResume(t *testing.T) {
+	t.Parallel()
 	dir := claimBoard(t)
 	first, err := activateLocalPolicy(dir, nil, boardpolicy.Default(), false, nil)
 	if err != nil || first.Status != "completed" || first.Replayed || first.Boards != 1 {
@@ -45,6 +46,7 @@ func TestActivateLocalPolicyFreshReplayAndNoResume(t *testing.T) {
 }
 
 func TestActivateLocalPolicyResumesAllPublicationBoundaries(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-local-pending", "after-policy", "after-policy-journal", "after-local-completed"} {
 		t.Run(phase, func(t *testing.T) {
 			dir := claimBoard(t)
@@ -66,6 +68,7 @@ func TestActivateLocalPolicyResumesAllPublicationBoundaries(t *testing.T) {
 }
 
 func TestActivateLocalPolicyPendingResumeAndNoTransactionResume(t *testing.T) {
+	t.Parallel()
 	dir := claimBoard(t)
 	stop := errors.New("stop")
 	if _, err := activateLocalPolicy(dir, nil, boardpolicy.Default(), false, func(phase string) error {
@@ -89,6 +92,7 @@ func TestActivateLocalPolicyPendingResumeAndNoTransactionResume(t *testing.T) {
 }
 
 func TestActivateLocalPolicyDifferentPolicyLeavesBoardUnchanged(t *testing.T) {
+	t.Parallel()
 	dir := claimBoard(t)
 	if _, err := activateLocalPolicy(dir, nil, boardpolicy.Default(), false, nil); err != nil {
 		t.Fatal(err)

@@ -11,6 +11,7 @@ import (
 )
 
 func TestModuleAdoptionSharedRejectsRehashedSubset(t *testing.T) {
+	t.Parallel()
 	_, a, _ := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)
@@ -74,6 +75,7 @@ func TestModuleAdoptionSharedRejectsRehashedSubset(t *testing.T) {
 }
 
 func TestModuleAdoptionSharedInitialAndRevisionRecovery(t *testing.T) {
+	t.Parallel()
 	for _, revision := range []bool{false, true} {
 		for _, phase := range []string{"after-common-policy-pending", "board-0/after-policy-ids", "after-policy-board-0", "after-common-policy-active"} {
 			t.Run(map[bool]string{false: "initial", true: "revision"}[revision]+"/"+phase, func(t *testing.T) {
@@ -150,6 +152,7 @@ func TestModuleAdoptionSharedInitialAndRevisionRecovery(t *testing.T) {
 }
 
 func TestModuleAdoptionJoinRetainsPermanentBarrier(t *testing.T) {
+	t.Parallel()
 	repo, a, _, options := sharedRevisionFixture(t)
 	writeModuleCard(t, a, "backend/todo/TASK-100.md", "TASK-100", "pending")
 	options.AdoptModules = true

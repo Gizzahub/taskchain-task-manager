@@ -40,6 +40,7 @@ func assertNoArchiveStageFiles(t *testing.T, dir string) {
 }
 
 func TestArchiveJournalIOValidRoundTripAndUpdate(t *testing.T) {
+	t.Parallel()
 	r, dir := openArchiveTestRoot(t)
 	j, _, _, _ := archiveJournalFixture(t)
 	if err := saveArchiveJournal(r, j, true); err != nil {
@@ -63,6 +64,7 @@ func TestArchiveJournalIOValidRoundTripAndUpdate(t *testing.T) {
 }
 
 func TestArchiveJournalIOInitialSaveNeverOverwrites(t *testing.T) {
+	t.Parallel()
 	r, dir := openArchiveTestRoot(t)
 	first := emptyArchiveJournal()
 	if err := saveArchiveJournal(r, first, true); err != nil {
@@ -85,6 +87,7 @@ func TestArchiveJournalIOInitialSaveNeverOverwrites(t *testing.T) {
 }
 
 func TestArchiveJournalIOMissingUpdateAndMalformedRead(t *testing.T) {
+	t.Parallel()
 	r, dir := openArchiveTestRoot(t)
 	if err := saveArchiveJournal(r, emptyArchiveJournal(), false); err == nil || !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("missing update err=%v", err)
@@ -99,6 +102,7 @@ func TestArchiveJournalIOMissingUpdateAndMalformedRead(t *testing.T) {
 }
 
 func TestArchiveJournalIOSymlinkAndDirectoryRejected(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"symlink", "directory"} {
 		t.Run(kind, func(t *testing.T) {
 			r, dir := openArchiveTestRoot(t)

@@ -11,6 +11,7 @@ import (
 )
 
 func TestPendingRepairBlocksCrossProtocolAdmissionsWithoutMutation(t *testing.T) {
+	t.Parallel()
 	_, board, _ := sharedFixture(t)
 	if _, err := EnableShared(board, false); err != nil {
 		t.Fatal(err)
@@ -60,6 +61,7 @@ func TestPendingRepairBlocksCrossProtocolAdmissionsWithoutMutation(t *testing.T)
 }
 
 func TestCompletedRepairSurvivesBundleAdoption(t *testing.T) {
+	t.Parallel()
 	_, board, _ := sharedFixture(t)
 	req := storageRepairRequest(t, board, 'c')
 	first, err := RepairStatus(board, req, true)
@@ -117,6 +119,7 @@ func TestCompletedRepairSurvivesBundleAdoption(t *testing.T) {
 }
 
 func TestPendingRepairBlocksPublicBundleOnLocalAndSharedBoards(t *testing.T) {
+	t.Parallel()
 	for _, sharedBoard := range []bool{false, true} {
 		t.Run(map[bool]string{false: "local", true: "shared"}[sharedBoard], func(t *testing.T) {
 			var board string
@@ -200,6 +203,7 @@ func repairRequestForCardAt(t *testing.T, board, rel, id, request string) Repair
 }
 
 func TestPendingOtherProtocolsRejectRepairBeforeAdoption(t *testing.T) {
+	t.Parallel()
 	t.Run("bundle", func(t *testing.T) {
 		board := configuredFixture(t)
 		if _, err := Create(board, CreateRequest{ID: "TASK-3", Title: "Repair target"}); err != nil {

@@ -9,6 +9,7 @@ import (
 )
 
 func TestCompletionJournalNeverExposesPendingOrWrongScope(t *testing.T) {
+	t.Parallel()
 	j, r, b, raw := archiveJournalFixture(t)
 	entries := []Entry{{Path: b.Target, Card: card.View{ID: b.ID, Status: "done"}}}
 	read := func(Entry) ([]byte, error) { return raw, nil }

@@ -8,6 +8,7 @@ import (
 )
 
 func TestKindConsumerExecutionRequiresExactClaimAndDoneDependencies(t *testing.T) {
+	t.Parallel()
 	for _, targetZone := range []string{"doing", "done"} {
 		t.Run(targetZone, func(t *testing.T) {
 			board := filepath.Join(t.TempDir(), "tasks")

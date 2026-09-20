@@ -10,6 +10,7 @@ import (
 )
 
 func TestArchiveAdmissionBindsSourceAndExplicitMetadata(t *testing.T) {
+	t.Parallel()
 	cfg, err := archivepolicy.ParseConfig([]byte(archiveCompletionRulesFixture))
 	if err != nil {
 		t.Fatal(err)
@@ -40,6 +41,7 @@ func TestArchiveAdmissionBindsSourceAndExplicitMetadata(t *testing.T) {
 }
 
 func TestArchiveAdmissionResolvesDeclaredChildrenAndPromotions(t *testing.T) {
+	t.Parallel()
 	cfg, err := archivepolicy.ParseConfig([]byte(archiveCompletionRulesFixture))
 	if err != nil {
 		t.Fatal(err)

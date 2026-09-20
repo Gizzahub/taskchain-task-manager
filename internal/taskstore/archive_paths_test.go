@@ -8,6 +8,7 @@ import (
 )
 
 func TestArchiveDestinationPreservesModuleZoneAndCategory(t *testing.T) {
+	t.Parallel()
 	p, err := boardpolicy.New(boardpolicy.Declaration{Modules: []string{"backend"}})
 	if err != nil {
 		t.Fatal(err)
@@ -32,6 +33,7 @@ func TestArchiveDestinationPreservesModuleZoneAndCategory(t *testing.T) {
 }
 
 func TestArchiveDestinationRefusesInvalidAndAlreadyArchivedPaths(t *testing.T) {
+	t.Parallel()
 	p, err := boardpolicy.New(boardpolicy.Declaration{Modules: []string{"backend"}})
 	if err != nil {
 		t.Fatal(err)
@@ -52,6 +54,7 @@ func TestArchiveDestinationRefusesInvalidAndAlreadyArchivedPaths(t *testing.T) {
 }
 
 func TestArchiveDestinationChecksExpandedPathLimit(t *testing.T) {
+	t.Parallel()
 	p := boardpolicy.Default()
 	// Source is valid, but adding the storage segment crosses the byte limit.
 	source := "done/" + strings.Repeat(strings.Repeat("a", 250)+"/", 4) + "TASK-1.md"

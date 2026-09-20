@@ -10,6 +10,7 @@ import (
 )
 
 func TestActivateSharedPolicyRejectsHeldClaimWithoutMutation(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)
@@ -27,6 +28,7 @@ func TestActivateSharedPolicyRejectsHeldClaimWithoutMutation(t *testing.T) {
 }
 
 func TestActivateSharedPolicyDifferentPolicyRejectsActiveAndPending(t *testing.T) {
+	t.Parallel()
 	t.Run("active", func(t *testing.T) {
 		_, a, b := sharedFixture(t)
 		if _, err := EnableShared(a, false); err != nil {
@@ -79,6 +81,7 @@ func TestActivateSharedPolicyDifferentPolicyRejectsActiveAndPending(t *testing.T
 }
 
 func TestActivateSharedPolicyPendingHeadChangeCannotResume(t *testing.T) {
+	t.Parallel()
 	_, a, _ := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)
@@ -107,6 +110,7 @@ func TestActivateSharedPolicyPendingHeadChangeCannotResume(t *testing.T) {
 }
 
 func TestActivateSharedPolicyMissingIDLedgerIsRestoreOnly(t *testing.T) {
+	t.Parallel()
 	_, a, _ := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)
@@ -128,6 +132,7 @@ func TestActivateSharedPolicyMissingIDLedgerIsRestoreOnly(t *testing.T) {
 }
 
 func TestActivateSharedPolicyMarkerlessChangedIDModeCannotResume(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"mode", "content"} {
 		t.Run(mode, func(t *testing.T) {
 			repo, a, _ := sharedFixture(t)
@@ -174,6 +179,7 @@ func TestActivateSharedPolicyMarkerlessChangedIDModeCannotResume(t *testing.T) {
 }
 
 func TestActivateSharedPolicyCopiedPendingReceiptCannotJoin(t *testing.T) {
+	t.Parallel()
 	repo, a, _ := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)

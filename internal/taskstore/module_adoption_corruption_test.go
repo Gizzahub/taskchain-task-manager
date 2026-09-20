@@ -12,6 +12,7 @@ import (
 )
 
 func TestModuleAdoptionRejectsRehashedTargetMissingObservedID(t *testing.T) {
+	t.Parallel()
 	board := moduleAdoptionBoard(t)
 	rawPolicy := moduleAdoptionRaw(t)
 	stop := errors.New("stop after pending activation")
@@ -66,6 +67,7 @@ func TestModuleAdoptionRejectsRehashedTargetMissingObservedID(t *testing.T) {
 }
 
 func TestModuleAdoptionRejectsMalformedOriginalBytesShapes(t *testing.T) {
+	t.Parallel()
 	base := map[string]json.RawMessage{
 		"original":     json.RawMessage(`"e30="`),
 		"originalMode": json.RawMessage(`420`),
@@ -93,6 +95,7 @@ func TestModuleAdoptionRejectsMalformedOriginalBytesShapes(t *testing.T) {
 }
 
 func TestModuleAdoptionMalformedTargetBytesRejectedWithoutWrite(t *testing.T) {
+	t.Parallel()
 	board := moduleAdoptionBoard(t)
 	before := boardBytes(t, board)
 	validTarget, err := ledgerBytes(idLedger{SchemaVersion: 2, Reserved: []string{"PLAN-2", "TASK-7"}})

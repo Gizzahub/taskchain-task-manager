@@ -23,6 +23,7 @@ func aliasBoard(t *testing.T, id string) string {
 }
 
 func TestFilesystemAliasClaimsPreserveRawReplayIdentity(t *testing.T) {
+	t.Parallel()
 	root := aliasBoard(t, "TASK-01")
 	first := ClaimRequest{ID: "TASK-1", Owner: "worker", Token: testToken}
 	if _, err := Claim(root, first); err != nil {
@@ -43,6 +44,7 @@ func TestFilesystemAliasClaimsPreserveRawReplayIdentity(t *testing.T) {
 }
 
 func TestFilesystemAliasTransitionPreservesCardBytes(t *testing.T) {
+	t.Parallel()
 	root := aliasBoard(t, "TASK-01")
 	req := ClaimRequest{ID: "TASK-1", Owner: "worker", Token: strings.Repeat("a", 32)}
 	if _, err := Claim(root, req); err != nil {
@@ -71,6 +73,7 @@ func TestFilesystemAliasTransitionPreservesCardBytes(t *testing.T) {
 }
 
 func TestFilesystemKindCardsAreNotReadyOrDoneDependencies(t *testing.T) {
+	t.Parallel()
 	root := aliasBoard(t, "PLAN-1")
 	if err := os.WriteFile(filepath.Join(root, "todo", "TASK-2.md"), []byte("---\nid: TASK-2\ntitle: blocked\nstatus: pending\ndepends-on: [TASK-3]\n---\n\n| **Status** | [ ] Pending |\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -93,6 +96,7 @@ func TestFilesystemKindCardsAreNotReadyOrDoneDependencies(t *testing.T) {
 }
 
 func TestIdentityAliasesNormalizeForReadyAndHeldConflicts(t *testing.T) {
+	t.Parallel()
 	if !sameIdentity("TASK-01", "TASK-1") || !isWorkTask("TASK-01") || isWorkTask("PLAN-1") {
 		t.Fatal("identity classification mismatch")
 	}
@@ -113,6 +117,7 @@ func TestIdentityAliasesNormalizeForReadyAndHeldConflicts(t *testing.T) {
 }
 
 func TestIdentityKindsNeverSatisfyWorkflow(t *testing.T) {
+	t.Parallel()
 	entries := []Entry{
 		{Path: "todo/PLAN-1.md", Card: card.View{ID: "PLAN-1", Status: "pending"}},
 		{Path: "todo/TASK-2.md", Card: card.View{ID: "TASK-2", Status: "pending", DependsOn: []string{"TASK-3"}}},

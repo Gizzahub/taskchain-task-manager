@@ -10,6 +10,7 @@ import (
 )
 
 func TestPrepareBundleAggregateExpansionBound(t *testing.T) {
+	t.Parallel()
 	req, intent := bundleFixture(t)
 	req.Tasks = nil
 	refs := []intentdoc.TaskReference{}
@@ -31,6 +32,7 @@ func TestPrepareBundleAggregateExpansionBound(t *testing.T) {
 }
 
 func TestCreateFilenameLimitBeforeReservation(t *testing.T) {
+	t.Parallel()
 	id := "TASK-" + strings.Repeat("0", 246) + "1"
 	if len(id+".md") != 255 {
 		t.Fatal("invalid boundary fixture")
@@ -50,6 +52,7 @@ func TestCreateFilenameLimitBeforeReservation(t *testing.T) {
 }
 
 func TestPrepareBundleRejectsInvalidLedgerAndZeroRequest(t *testing.T) {
+	t.Parallel()
 	req, intent := bundleFixture(t)
 	doc := parsedBundle(t, req)
 	for _, ledger := range []idLedger{
@@ -69,6 +72,7 @@ func TestPrepareBundleRejectsInvalidLedgerAndZeroRequest(t *testing.T) {
 }
 
 func TestPrepareBundleExplicitHolePreservesSharedBinding(t *testing.T) {
+	t.Parallel()
 	req, intent := bundleFixture(t)
 	req.Tasks[0].ID = "TASK-002"
 	ledger := idLedger{SchemaVersion: 3, Namespace: strings.Repeat("1", 32), Reserved: []string{"TASK-100"}}

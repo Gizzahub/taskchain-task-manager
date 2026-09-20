@@ -28,6 +28,7 @@ func protocol4DeltaFixture(t *testing.T) (sharedState, archivePendingDelta) {
 }
 
 func TestArchiveDeltaTransportProtocol5Schema2AllRecoveryStates(t *testing.T) {
+	t.Parallel()
 	original, pending, _ := archiveDeltaFixture(t)
 	original.SchemaVersion = 2
 	delta, err := prepareArchivePendingDelta(original, pending)
@@ -65,6 +66,7 @@ func TestArchiveDeltaTransportProtocol5Schema2AllRecoveryStates(t *testing.T) {
 }
 
 func TestArchiveDeltaTransportProtocol5SharedSessionResolvesAllStates(t *testing.T) {
+	t.Parallel()
 	board, _, first := archiveProcessFixture(t, true)
 	if _, err := Archive(board, first, true); err != nil {
 		t.Fatal(err)
@@ -127,6 +129,7 @@ func TestArchiveDeltaTransportProtocol5SharedSessionResolvesAllStates(t *testing
 }
 
 func TestArchiveDeltaTransportProtocol4WireAndGuards(t *testing.T) {
+	t.Parallel()
 	state, delta := protocol4DeltaFixture(t)
 	if err := validateSharedState(state); err != nil {
 		t.Fatalf("valid protocol4 delta rejected: %v", err)
@@ -168,6 +171,7 @@ func TestArchiveDeltaTransportProtocol4WireAndGuards(t *testing.T) {
 }
 
 func TestArchiveDeltaTransportRecoveryFromCommonPending(t *testing.T) {
+	t.Parallel()
 	_, board, _ := sharedFixture(t)
 	if _, err := EnableShared(board, false); err != nil {
 		t.Fatal(err)
@@ -220,6 +224,7 @@ func TestArchiveDeltaTransportRecoveryFromCommonPending(t *testing.T) {
 }
 
 func TestArchiveDeltaTransportMissingLocalJournalIsRestoreOnly(t *testing.T) {
+	t.Parallel()
 	board, _, req := archiveProcessFixture(t, true)
 	if _, err := archiveWithStep(board, req, true, false, repairStopAt("after-archive-common-pending")); err == nil || !strings.Contains(err.Error(), "stop at after-archive-common-pending") {
 		t.Fatalf("archive interruption was not reached: %v", err)
@@ -259,6 +264,7 @@ func TestArchiveDeltaTransportMissingLocalJournalIsRestoreOnly(t *testing.T) {
 }
 
 func TestArchiveDeltaTransportBlocksGeneralReadersAndWriters(t *testing.T) {
+	t.Parallel()
 	board, other, req := archiveProcessFixture(t, true)
 	if _, err := archiveWithStep(board, req, true, false, repairStopAt("after-archive-common-pending")); err == nil {
 		t.Fatal("common delta interruption was not reached")
@@ -282,6 +288,7 @@ func TestArchiveDeltaTransportBlocksGeneralReadersAndWriters(t *testing.T) {
 }
 
 func TestArchiveDeltaTransportLegacyModeRefusesBeforeLocalRepublish(t *testing.T) {
+	t.Parallel()
 	board, _, req, _, _ := legacyArchiveProcessFixture(t, true)
 	commonPath := legacyCommonPath(t, board, req)
 	if _, err := legacyArchiveWithStep(board, req, true, false, repairStopAt("after-archive-common-pending")); err == nil {

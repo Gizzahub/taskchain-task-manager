@@ -22,6 +22,7 @@ func ownerRejoinFixture(t *testing.T) (OwnerRejoinPlan, []OwnerRejoinFileBytes) 
 }
 
 func TestOwnerRejoinStrictCodecs(t *testing.T) {
+	t.Parallel()
 	p, files := ownerRejoinFixture(t)
 	praw, err := OwnerRejoinPlanBytes(p)
 	if err != nil {
@@ -88,6 +89,7 @@ func TestOwnerRejoinStrictCodecs(t *testing.T) {
 }
 
 func TestReservationFloorAndProtocolSixBarrier(t *testing.T) {
+	t.Parallel()
 	ledger := idLedger{SchemaVersion: 4, Namespace: strings.Repeat("a", 32), Reserved: []string{"TASK-2"}, ReservationFloors: []ReservationFloor{{Prefix: "TASK", Through: 9}}}
 	if got, err := allocateID(ledger, "", "TASK"); err != nil || got != "TASK-10" {
 		t.Fatalf("floor allocation=%q %v", got, err)
@@ -144,6 +146,7 @@ func TestReservationFloorAndProtocolSixBarrier(t *testing.T) {
 }
 
 func TestOwnerRejoinPayloadAcceptsSchemaTwoScaleTarget(t *testing.T) {
+	t.Parallel()
 	p, files := ownerRejoinFixture(t)
 	target := bytes.Repeat([]byte("x"), (8<<20)+1)
 	p.Files[0].TargetLength = len(target)

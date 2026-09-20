@@ -10,6 +10,7 @@ import (
 )
 
 func TestKindAllocationPreservesExplicitSpelling(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(dir); err != nil {
 		t.Fatal(err)
@@ -46,6 +47,7 @@ func TestKindAllocationPreservesExplicitSpelling(t *testing.T) {
 }
 
 func TestNumericDuplicateCardsAndDependencies(t *testing.T) {
+	t.Parallel()
 	for name, raw := range map[string]string{
 		"duplicate": "---\nid: TASK-01\n---\n",
 		"self":      "---\nid: TASK-2\ndepends-on: [TASK-002]\n---\n",
@@ -77,6 +79,7 @@ func TestNumericDuplicateCardsAndDependencies(t *testing.T) {
 }
 
 func TestV1UpgradeAndZeroReservation(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(dir); err != nil {
 		t.Fatal(err)
@@ -114,6 +117,7 @@ func TestV1UpgradeAndZeroReservation(t *testing.T) {
 }
 
 func TestKindOverflowDoesNotExhaustOtherPrefixes(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(dir); err != nil {
 		t.Fatal(err)

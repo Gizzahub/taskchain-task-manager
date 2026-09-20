@@ -14,6 +14,7 @@ import (
 // one field, so a row that stops failing names the invariant that was lost
 // rather than merely reporting that something broke.
 func TestIndependentCloneOwnerRejoinHeaderBoundaries(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinCloneFixture(t, true, []ReservationFloor{{Prefix: "TASK", Through: 64}}, []string{})
 	sources := cloneBoundarySources(t, fx.source, true)
 	// The control that makes the rows mean anything.  Without it a single bad
@@ -80,6 +81,7 @@ func TestIndependentCloneOwnerRejoinHeaderBoundaries(t *testing.T) {
 // the contract being checked is not only that the bytes are rejected but that
 // the board they were aimed at is left exactly as it was.
 func TestIndependentCloneOwnerRejoinRefusesMalformedPayloadWithoutMutation(t *testing.T) {
+	t.Parallel()
 	for _, row := range []struct {
 		name string
 		edit func([]byte) []byte
@@ -118,6 +120,7 @@ func TestIndependentCloneOwnerRejoinRefusesMalformedPayloadWithoutMutation(t *te
 // namespace-changing transform rather than the namespace-preserving one, and
 // the legacy 8 MiB repairs ceiling must not reappear on that path.
 func TestCloneOwnerRejoinCapacityPayloadCrossesLegacyEightMiBBoundary(t *testing.T) {
+	t.Parallel()
 	journal, base, _, _ := archiveJournalFixture(t)
 	sourceNS, targetNS := strings.Repeat("a", 32), strings.Repeat("b", 32)
 	journal.SchemaVersion, journal.BoardPath, journal.Namespace = 2, ownerRejoinTransformSource, sourceNS

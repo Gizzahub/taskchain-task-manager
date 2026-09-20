@@ -15,6 +15,7 @@ import (
 )
 
 func TestContextIterationRegisterProcessHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("TASKSTORE_ITERATION_HELPER") != "1" {
 		return
 	}
@@ -81,6 +82,7 @@ func runIterationProcess(t *testing.T, board, variant, phase string) ([]byte, er
 }
 
 func TestContextIterationProcessExitPreservesCommitPoint(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-stage", "after-link"} {
 		t.Run(phase, func(t *testing.T) {
 			board := filepath.Join(t.TempDir(), "tasks")
@@ -139,6 +141,7 @@ func TestContextIterationProcessExitPreservesCommitPoint(t *testing.T) {
 }
 
 func TestContextIterationConcurrentProcesses(t *testing.T) {
+	t.Parallel()
 	for _, distinct := range []bool{false, true} {
 		t.Run(fmt.Sprintf("distinct-content-%v", distinct), func(t *testing.T) {
 			board := filepath.Join(t.TempDir(), "tasks")

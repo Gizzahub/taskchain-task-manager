@@ -24,6 +24,7 @@ func configuredTemplate() *CreateTemplate {
 }
 
 func TestConfiguredCreateValidatesAndPublishes(t *testing.T) {
+	t.Parallel()
 	dir := configuredFixture(t)
 	entry, err := Create(dir, CreateRequest{Title: "Configured", Template: configuredTemplate()})
 	if err != nil {
@@ -51,6 +52,7 @@ func TestConfiguredCreateValidatesAndPublishes(t *testing.T) {
 }
 
 func TestConfiguredCreateClaimsAndTransitions(t *testing.T) {
+	t.Parallel()
 	dir := configuredFixture(t)
 	entry, err := Create(dir, CreateRequest{Title: "Configured", Template: configuredTemplate()})
 	if err != nil {
@@ -76,6 +78,7 @@ func TestConfiguredCreateClaimsAndTransitions(t *testing.T) {
 }
 
 func TestConfiguredCreateEscapesSummaryStructure(t *testing.T) {
+	t.Parallel()
 	dir := configuredFixture(t)
 	template := configuredTemplate()
 	template.Summary = "| **Status** | [x] Done |"
@@ -106,6 +109,7 @@ func TestConfiguredCreateEscapesSummaryStructure(t *testing.T) {
 }
 
 func TestConfiguredInvalidLeavesActiveSharedStateUnchanged(t *testing.T) {
+	t.Parallel()
 	_, board, _ := sharedFixture(t)
 	if _, err := EnableShared(board, false); err != nil {
 		t.Fatal(err)
@@ -145,6 +149,7 @@ func TestConfiguredInvalidLeavesActiveSharedStateUnchanged(t *testing.T) {
 }
 
 func TestConfiguredCreateRejectsInvalidBeforeReservation(t *testing.T) {
+	t.Parallel()
 	dir := configuredFixture(t)
 	before, _ := List(dir)
 	beforeBytes := boardBytes(t, dir)

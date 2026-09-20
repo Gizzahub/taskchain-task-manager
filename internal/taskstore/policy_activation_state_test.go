@@ -32,6 +32,7 @@ func authorityFixture(t *testing.T) sharedPolicyAuthority {
 }
 
 func TestPolicyActivationStateRoundTripAndNoOverwrite(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := os.OpenRoot(dir)
 	if err != nil {
@@ -67,6 +68,7 @@ func TestPolicyActivationStateRoundTripAndNoOverwrite(t *testing.T) {
 }
 
 func TestPolicyActivationStateValidationBoundaries(t *testing.T) {
+	t.Parallel()
 	base := activationFixture(t)
 	mutations := map[string]func(*policyActivationState){
 		"authority": func(s *policyActivationState) { s.AuthorityID = "bad" },
@@ -94,6 +96,7 @@ func TestPolicyActivationStateValidationBoundaries(t *testing.T) {
 }
 
 func TestPolicyActivationIDTargetValidation(t *testing.T) {
+	t.Parallel()
 	base := activationFixture(t)
 	if err := validatePolicyActivationState(base); err != nil {
 		t.Fatalf("baseline invalid: %v", err)
@@ -130,6 +133,7 @@ func TestPolicyActivationIDTargetValidation(t *testing.T) {
 }
 
 func TestSharedPolicyAuthorityValidation(t *testing.T) {
+	t.Parallel()
 	base := authorityFixture(t)
 	if err := validateSharedPolicyAuthority(base); err != nil {
 		t.Fatal(err)
@@ -173,6 +177,7 @@ func TestSharedPolicyAuthorityValidation(t *testing.T) {
 }
 
 func TestPolicyActivationShapesRejectStrictJSON(t *testing.T) {
+	t.Parallel()
 	state := activationFixture(t)
 	raw, err := json.Marshal(state)
 	if err != nil {
@@ -216,6 +221,7 @@ func TestPolicyActivationShapesRejectStrictJSON(t *testing.T) {
 }
 
 func TestLoadPolicyActivationRejectsStrictBoundaries(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := os.OpenRoot(dir)
 	if err != nil {

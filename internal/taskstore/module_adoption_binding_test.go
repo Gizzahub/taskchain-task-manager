@@ -3,6 +3,7 @@ package taskstore
 import "testing"
 
 func TestModuleAdoptionRequiresRevisionForPreviousPolicy(t *testing.T) {
+	t.Parallel()
 	for _, original := range []string{"", "target", "previous"} {
 		t.Run(original, func(t *testing.T) {
 			state := policyActivationState{

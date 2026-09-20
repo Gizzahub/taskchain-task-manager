@@ -12,6 +12,7 @@ import (
 )
 
 func TestBundleProcessHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("TASKSTORE_BUNDLE_HELPER") != "1" {
 		return
 	}
@@ -53,6 +54,7 @@ func bundleChild(t *testing.T, board, requestPath, phase string) *exec.Cmd {
 }
 
 func TestBundleProcessCrashAndExplicitRecovery(t *testing.T) {
+	t.Parallel()
 	phases := []string{"after-empty-journal", "after-local-protocol", "after-common-protocol", "after-pending-journal", "after-shared-reservation", "after-local-reservation", "after-card-0", "after-card-1", "after-batch", "after-completed-receipt", "after-common-clear"}
 	for _, shared := range []bool{false, true} {
 		for _, phase := range phases {
@@ -116,6 +118,7 @@ func TestBundleProcessCrashAndExplicitRecovery(t *testing.T) {
 }
 
 func TestBundleConcurrentProcesses(t *testing.T) {
+	t.Parallel()
 	for _, shared := range []bool{false, true} {
 		t.Run(fmt.Sprintf("shared-%t", shared), func(t *testing.T) {
 			var boards [2]string

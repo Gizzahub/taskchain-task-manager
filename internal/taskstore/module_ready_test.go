@@ -8,6 +8,7 @@ import (
 )
 
 func TestModuleDependencyEligibilityDoesNotPromoteKindOrArchive(t *testing.T) {
+	t.Parallel()
 	policy, err := boardpolicy.New(boardpolicy.Declaration{Modules: []string{"backend", "frontend"}, KindStatus: map[string]string{"plan": "done"}})
 	if err != nil {
 		t.Fatal(err)

@@ -10,6 +10,7 @@ import (
 
 // Run with an actual pre-storage-protocol executable, not a simulated decoder.
 func TestStorageLegacyBinaryBarrier(t *testing.T) {
+	t.Parallel()
 	binary := os.Getenv("TASKCHAIN_STORAGE_LEGACY_BINARY")
 	if binary == "" {
 		t.Skip("set TASKCHAIN_STORAGE_LEGACY_BINARY to a pre-storage executable")

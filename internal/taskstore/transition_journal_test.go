@@ -26,6 +26,7 @@ func journalFixture(t *testing.T) transitionJournal {
 }
 
 func TestTransitionJournalForgedRecordsPreserveBoard(t *testing.T) {
+	t.Parallel()
 	for name, mutate := range map[string]func(*transitionJournal){
 		"version":           func(j *transitionJournal) { j.SchemaVersion = 2 },
 		"duplicate request": func(j *transitionJournal) { j.Records = append(j.Records, j.Records[0]) },
@@ -85,6 +86,7 @@ func writeJournalFixture(t *testing.T, root string, raw []byte) {
 }
 
 func TestTransitionJournalStrictValidation(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	r, err := os.OpenRoot(root)
 	if err != nil {
@@ -121,6 +123,7 @@ func TestTransitionJournalStrictValidation(t *testing.T) {
 }
 
 func TestTransitionJournalCapacityChecksBothStates(t *testing.T) {
+	t.Parallel()
 	j := journalFixture(t)
 	if err := validateTransitionCapacity(j); err != nil {
 		t.Fatal(err)

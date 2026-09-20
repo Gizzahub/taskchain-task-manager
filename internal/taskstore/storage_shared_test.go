@@ -26,6 +26,7 @@ func storageRepairRequest(t *testing.T, board string, request byte) RepairReques
 }
 
 func TestStorageSharedInterruptionAndOtherBoardGate(t *testing.T) {
+	t.Parallel()
 	for _, at := range []string{"after-common-protocol", "after-common-pending", "after-journal", "after-replacement", "after-receipt"} {
 		t.Run(at, func(t *testing.T) {
 			_, board, other := sharedFixture(t)
@@ -72,10 +73,12 @@ func TestStorageSharedInterruptionAndOtherBoardGate(t *testing.T) {
 }
 
 func TestStorageSharedTargetCannotDropHistoricalReceipt(t *testing.T) {
+	t.Parallel()
 	testStorageSharedTargetTampering(t, false)
 }
 
 func TestStorageSharedTargetMustBeCanonical(t *testing.T) {
+	t.Parallel()
 	testStorageSharedTargetTampering(t, true)
 }
 
@@ -144,6 +147,7 @@ func testStorageSharedTargetTampering(t *testing.T, formattingOnly bool) {
 }
 
 func TestStorageCommonMarkerRollbackRejected(t *testing.T) {
+	t.Parallel()
 	_, board, _ := sharedFixture(t)
 	if _, err := EnableShared(board, false); err != nil {
 		t.Fatal(err)
@@ -185,6 +189,7 @@ func TestStorageCommonMarkerRollbackRejected(t *testing.T) {
 }
 
 func TestStorageReceiptSurvivesPolicyAndSharedAdoption(t *testing.T) {
+	t.Parallel()
 	_, board, _ := sharedFixture(t)
 	req := storageRepairRequest(t, board, 'a')
 	first, err := RepairStatus(board, req, true)

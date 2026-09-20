@@ -40,6 +40,7 @@ func cloneRejoinPrepareOptions(fx ownerRejoinCloneFixture) RejoinBoardOptions {
 // naming the export as the remedy would tell the operator to do the thing they
 // had already done.
 func TestRejoinBoardPrepareAcceptsASourceExportAsEvidence(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinCloneFixture(t, false, []ReservationFloor{{Prefix: "TASK", Through: 9}}, []string{})
 	export, reserved := cloneRejoinExportWithSiblingReservation(t, fx)
 	opts := cloneRejoinPrepareOptions(fx)
@@ -62,6 +63,7 @@ func TestRejoinBoardPrepareAcceptsASourceExportAsEvidence(t *testing.T) {
 // IDs the source's other worktrees already hold -- a silent collision rather
 // than a refusal.
 func TestRejoinBoardPrepareKeepsExportEvidenceAlongsideOperatorFlags(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinCloneFixture(t, false, []ReservationFloor{{Prefix: "TASK", Through: 9}}, []string{})
 	export, reserved := cloneRejoinExportWithSiblingReservation(t, fx)
 	opts := cloneRejoinPrepareOptions(fx)
@@ -86,6 +88,7 @@ func TestRejoinBoardPrepareKeepsExportEvidenceAlongsideOperatorFlags(t *testing.
 // TestRejoinBoardPrepareRefusesACloneWithNoEvidenceAtAll keeps the refusal that
 // the wiring above must not weaken.
 func TestRejoinBoardPrepareRefusesACloneWithNoEvidenceAtAll(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinCloneFixture(t, false, []ReservationFloor{{Prefix: "TASK", Through: 9}}, []string{})
 	if _, _, _, _, err := PrepareRejoinBoard(cloneRejoinPrepareOptions(fx)); err == nil {
 		t.Fatal("a clone bootstrap with neither an export nor explicit evidence was accepted")

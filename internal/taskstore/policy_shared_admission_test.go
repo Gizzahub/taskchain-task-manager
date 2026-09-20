@@ -44,6 +44,7 @@ func syntheticPolicyTransition() TransitionRequest {
 }
 
 func TestSharedPolicyPendingBlocksEveryBoardAdmission(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedPolicyFixture(t)
 	s, release, err := acquireShared(a, false)
 	if err != nil {
@@ -98,6 +99,7 @@ func TestSharedPolicyPendingBlocksEveryBoardAdmission(t *testing.T) {
 }
 
 func TestSharedPolicyMarkerlessAndCopiedCompletedRequireJoin(t *testing.T) {
+	t.Parallel()
 	repo, a, _ := sharedPolicyFixture(t)
 	newRoot := filepath.Join(t.TempDir(), "new")
 	sharedGit(t, repo, "worktree", "add", "--detach", newRoot, "HEAD")
@@ -119,6 +121,7 @@ func TestSharedPolicyMarkerlessAndCopiedCompletedRequireJoin(t *testing.T) {
 }
 
 func TestSharedPolicyCommonAuthorityMustMatchLocal(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"missing-policy", "different-policy", "missing-ids"} {
 		t.Run(scenario, func(t *testing.T) {
 			_, a, _ := sharedPolicyFixture(t)
@@ -152,6 +155,7 @@ func TestSharedPolicyCommonAuthorityMustMatchLocal(t *testing.T) {
 }
 
 func TestLocalPolicyCanPrecedeSharedIDActivation(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	for _, dir := range []string{a, b} {
 		bindAuthorityFixture(t, dir, policyAuthorityBinding{AuthorityID: strings.Repeat("a", 32), Scope: "local"})
@@ -167,6 +171,7 @@ func TestLocalPolicyCanPrecedeSharedIDActivation(t *testing.T) {
 }
 
 func TestSharedPolicyBundleAdoptionKeepsAuthority(t *testing.T) {
+	t.Parallel()
 	_, a, _ := sharedPolicyFixture(t)
 	raw := publicationRequest(t, a)
 	result, err := PublishBundle(a, raw, BundleOptions{Adopt: true})

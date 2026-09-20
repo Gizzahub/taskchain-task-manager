@@ -10,6 +10,7 @@ import (
 )
 
 func TestRepairIntegrityDamageRequiresRestore(t *testing.T) {
+	t.Parallel()
 	for _, damage := range []string{"missing-journal", "missing-marker", "missing-ids", "copied-board"} {
 		t.Run(damage, func(t *testing.T) {
 			board, req, _, _ := statusRepairFixture(t)
@@ -69,6 +70,7 @@ func TestRepairIntegrityDamageRequiresRestore(t *testing.T) {
 }
 
 func TestRepairHeldClaimReleaseAndHistoricalReplay(t *testing.T) {
+	t.Parallel()
 	board, req, _, _ := statusRepairFixture(t)
 	claim := ClaimRequest{ID: req.ID, Owner: req.Owner, Token: testToken}
 	if _, err := Claim(board, claim); err != nil {

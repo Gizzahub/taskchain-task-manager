@@ -25,6 +25,7 @@ type moduleAdoptionProcessRequest struct {
 }
 
 func TestModuleAdoptionProcessHelper(t *testing.T) {
+	t.Parallel()
 	mode := os.Getenv("TASKCHAIN_MODULE_ADOPTION_HELPER")
 	if mode == "" {
 		return
@@ -67,6 +68,7 @@ func TestModuleAdoptionProcessHelper(t *testing.T) {
 }
 
 func TestModuleAdoptionProcessKillAndRecovery(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		shared   bool

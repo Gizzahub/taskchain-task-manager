@@ -10,6 +10,7 @@ import (
 )
 
 func TestPolicyRevisionLegacyBinaryBarrier(t *testing.T) {
+	t.Parallel()
 	binary := os.Getenv("TASKCHAIN_REVISION_LEGACY_BINARY")
 	if binary == "" {
 		t.Skip("set TASKCHAIN_REVISION_LEGACY_BINARY to pre-revision executable")

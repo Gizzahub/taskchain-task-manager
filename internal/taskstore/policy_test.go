@@ -9,6 +9,7 @@ import (
 )
 
 func TestDefaultPolicyPreservesStoreDirectories(t *testing.T) {
+	t.Parallel()
 	want := []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "archive", "_archive"}
 	if got := currentPolicy().KnownDirs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("default store directories=%v want=%v", got, want)
@@ -21,6 +22,7 @@ func TestDefaultPolicyPreservesStoreDirectories(t *testing.T) {
 }
 
 func TestPolicyClassificationCannotGrantWorkflowCompletion(t *testing.T) {
+	t.Parallel()
 	p, err := boardpolicy.New(boardpolicy.Declaration{Zones: []string{"manual"}, ZoneStatus: map[string]string{"manual": "done"}})
 	if err != nil {
 		t.Fatal(err)

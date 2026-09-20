@@ -11,6 +11,7 @@ import (
 )
 
 func TestPaddedRequestClaimAndInterruptedRecovery(t *testing.T) {
+	t.Parallel()
 	dir := aliasBoard(t, "TASK-01")
 	claim := ClaimRequest{ID: "TASK-0001", Owner: "worker", Token: testToken}
 	if _, err := Claim(dir, claim); err != nil {
@@ -62,6 +63,7 @@ func TestPaddedRequestClaimAndInterruptedRecovery(t *testing.T) {
 }
 
 func TestKindInDoneCannotFulfilTaskDependency(t *testing.T) {
+	t.Parallel()
 	dir := aliasBoard(t, "TASK-1")
 	claim := ClaimRequest{ID: "TASK-1", Owner: "worker", Token: testToken}
 	if _, err := Claim(dir, claim); err != nil {
@@ -94,6 +96,7 @@ func TestKindInDoneCannotFulfilTaskDependency(t *testing.T) {
 }
 
 func TestV1LedgerDoesNotGainV2Syntax(t *testing.T) {
+	t.Parallel()
 	for _, id := range []string{"TASK-0", "TASK-01", "PLAN-1", "ISSUE-1", "BACKLOG-1"} {
 		t.Run(id, func(t *testing.T) {
 			dir := aliasBoard(t, "TASK-1")
@@ -112,6 +115,7 @@ func TestV1LedgerDoesNotGainV2Syntax(t *testing.T) {
 }
 
 func TestNumericAliasCycle(t *testing.T) {
+	t.Parallel()
 	dir := aliasBoard(t, "TASK-001")
 	if err := os.WriteFile(filepath.Join(dir, "todo/TASK-001.md"), []byte("---\nid: TASK-001\ndepends-on: [TASK-2]\n---\n"), 0o644); err != nil {
 		t.Fatal(err)

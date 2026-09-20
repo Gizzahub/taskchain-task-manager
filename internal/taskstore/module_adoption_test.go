@@ -61,6 +61,7 @@ func adoptionLedger(t *testing.T, board string) idLedger {
 }
 
 func TestModuleAdoptionRequiresExplicitFlagAndPreservesObservedIDs(t *testing.T) {
+	t.Parallel()
 	board := moduleAdoptionBoard(t)
 	raw := moduleAdoptionRaw(t)
 	before := boardBytes(t, board)
@@ -93,6 +94,7 @@ func TestModuleAdoptionRequiresExplicitFlagAndPreservesObservedIDs(t *testing.T)
 }
 
 func TestModuleAdoptionResumesEveryLocalBoundaryWithExplicitScope(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-local-pending", "after-policy", "after-policy-ids", "after-policy-journal", "after-local-completed"} {
 		t.Run(phase, func(t *testing.T) {
 			board := moduleAdoptionBoard(t)
@@ -125,6 +127,7 @@ func TestModuleAdoptionResumesEveryLocalBoundaryWithExplicitScope(t *testing.T) 
 }
 
 func TestModuleAdoptionRejectsChangedInventoryAndCardInputs(t *testing.T) {
+	t.Parallel()
 	t.Run("changed-card", func(t *testing.T) {
 		board := moduleAdoptionBoard(t)
 		raw := moduleAdoptionRaw(t)
@@ -198,6 +201,7 @@ func TestModuleAdoptionRejectsChangedInventoryAndCardInputs(t *testing.T) {
 }
 
 func TestModuleAdoptionRejectsPreexistingHeldClaim(t *testing.T) {
+	t.Parallel()
 	board := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(board); err != nil {
 		t.Fatal(err)

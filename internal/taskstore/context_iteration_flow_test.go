@@ -9,6 +9,7 @@ import (
 )
 
 func TestContextIterationHealthyChildAndFork(t *testing.T) {
+	t.Parallel()
 	board := configuredFixture(t)
 	raw, intent := maintenanceIntentRaw(t)
 	if _, err := RegisterContext(board, raw); err != nil {
@@ -51,6 +52,7 @@ func TestContextIterationHealthyChildAndFork(t *testing.T) {
 }
 
 func TestContextMaintenanceBundlePublication(t *testing.T) {
+	t.Parallel()
 	board := configuredFixture(t)
 	rawIntent, intent := maintenanceIntentRaw(t)
 	if _, err := RegisterContext(board, rawIntent); err != nil {

@@ -118,6 +118,7 @@ func sourceCommonNamespaceDir(t *testing.T, board string) string {
 }
 
 func TestIndependentCloneOwnerRejoinBootstrapsItsOwnAuthority(t *testing.T) {
+	t.Parallel()
 	for _, policy := range []bool{false, true} {
 		t.Run(map[bool]string{false: "policy-absent", true: "policy-bearing"}[policy], func(t *testing.T) {
 			fx := newOwnerRejoinCloneFixture(t, policy, []ReservationFloor{{Prefix: "TASK", Through: 9}}, []string{})
@@ -164,6 +165,7 @@ func publishCloneCapacityArtifact(t *testing.T, fx ownerRejoinCloneFixture) erro
 }
 
 func TestIndependentCloneOwnerRejoinRefusesWithoutReservationEvidence(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinCloneFixture(t, false, []ReservationFloor{{Prefix: "TASK", Through: 9}}, []string{})
 	stripped := fx.plan
 	stripped.ReservationFloors, stripped.AdditionalReservedIDs = []ReservationFloor{}, []string{}
@@ -173,6 +175,7 @@ func TestIndependentCloneOwnerRejoinRefusesWithoutReservationEvidence(t *testing
 }
 
 func TestOwnerRejoinCloneReservationEvidenceFromSourceExport(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinCloneFixture(t, false, []ReservationFloor{{Prefix: "TASK", Through: 9}}, []string{})
 	ledger, err := os.ReadFile(filepath.Join(fx.source, idsFile))
 	if err != nil {

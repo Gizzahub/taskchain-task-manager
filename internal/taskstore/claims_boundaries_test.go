@@ -10,6 +10,7 @@ import (
 )
 
 func TestClaimCapacityReservesReleaseSpace(t *testing.T) {
+	t.Parallel()
 	root := claimBoard(t)
 	if _, err := Create(root, CreateRequest{ID: "TASK-2", Title: "second"}); err != nil {
 		t.Fatal(err)
@@ -78,6 +79,7 @@ func TestClaimCapacityReservesReleaseSpace(t *testing.T) {
 }
 
 func TestClaimReplayAfterLeavingTodo(t *testing.T) {
+	t.Parallel()
 	root := claimBoard(t)
 	req := ClaimRequest{ID: "TASK-1", Owner: "worker", Token: testToken}
 	claimed, err := Claim(root, req)
@@ -100,6 +102,7 @@ func TestClaimReplayAfterLeavingTodo(t *testing.T) {
 }
 
 func TestClaimLedgerRequiredAndMalformedFormsFailClosed(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		"missing records":  `{"schemaVersion":1}`,
 		"null records":     `{"schemaVersion":1,"records":null}`,
@@ -137,6 +140,7 @@ func TestClaimLedgerRequiredAndMalformedFormsFailClosed(t *testing.T) {
 }
 
 func TestClaimOwnerBoundaryValidation(t *testing.T) {
+	t.Parallel()
 	root := claimBoard(t)
 	for _, owner := range []string{" ", "\t", string([]byte{0xff})} {
 		if _, err := Claim(root, ClaimRequest{ID: "TASK-1", Owner: owner, Token: testToken}); err == nil {

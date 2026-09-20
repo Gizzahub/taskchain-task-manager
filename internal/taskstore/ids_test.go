@@ -10,6 +10,7 @@ import (
 )
 
 func TestDeletedIDsAndExplicitHoles(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(dir); err != nil {
 		t.Fatal(err)
@@ -40,6 +41,7 @@ func TestDeletedIDsAndExplicitHoles(t *testing.T) {
 }
 
 func TestInterruptedCreateBurnsReservation(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(dir); err != nil {
 		t.Fatal(err)
@@ -60,6 +62,7 @@ func TestInterruptedCreateBurnsReservation(t *testing.T) {
 }
 
 func TestAdoptionMustBeExplicitAndNeverResets(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "tasks")
 	if err := os.MkdirAll(filepath.Join(dir, "todo"), 0o755); err != nil {
 		t.Fatal(err)
@@ -102,6 +105,7 @@ func TestAdoptionMustBeExplicitAndNeverResets(t *testing.T) {
 }
 
 func TestReservationOverflowAndHole(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(dir); err != nil {
 		t.Fatal(err)
@@ -122,6 +126,7 @@ func TestReservationOverflowAndHole(t *testing.T) {
 }
 
 func TestInitialLedgerPublishNeverOverwrites(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(dir); err != nil {
 		t.Fatal(err)

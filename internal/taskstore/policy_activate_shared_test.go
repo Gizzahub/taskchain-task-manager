@@ -21,6 +21,7 @@ func defaultPolicyBytes(t *testing.T) []byte {
 }
 
 func TestActivateSharedPolicyFreshReplayAndMarkerlessJoin(t *testing.T) {
+	t.Parallel()
 	repo, a, b := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)
@@ -76,6 +77,7 @@ func TestActivateSharedPolicyFreshReplayAndMarkerlessJoin(t *testing.T) {
 }
 
 func TestActivateSharedPolicyResumesEveryPublicationBoundary(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-common-policy-pending", "board-0/after-local-pending", "board-0/after-policy", "board-0/after-policy-ids", "board-0/after-policy-journal", "board-0/after-local-completed", "after-policy-board-0", "after-policy-board-1", "after-common-policy-active"} {
 		t.Run(phase, func(t *testing.T) {
 			_, a, b := sharedFixture(t)
@@ -114,6 +116,7 @@ func TestActivateSharedPolicyResumesEveryPublicationBoundary(t *testing.T) {
 }
 
 func TestActivateSharedPolicyJoinResumesIDsAndPreservesMode(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-common-policy-pending", "board-0/after-policy-ids", "board-0/after-policy-journal"} {
 		t.Run(phase, func(t *testing.T) {
 			repo, a, _ := sharedFixture(t)
@@ -157,6 +160,7 @@ func TestActivateSharedPolicyJoinResumesIDsAndPreservesMode(t *testing.T) {
 }
 
 func TestActivateSharedPolicyCopiedCompletedReceiptNeedsExplicitJoin(t *testing.T) {
+	t.Parallel()
 	repo, a, _ := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)
@@ -182,6 +186,7 @@ func TestActivateSharedPolicyCopiedCompletedReceiptNeedsExplicitJoin(t *testing.
 }
 
 func TestActivateSharedPolicyMigratesSameLocalPolicy(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	policy := filepathPolicy(t)
 	raw, err := policy.Canonical()
@@ -208,6 +213,7 @@ func TestActivateSharedPolicyMigratesSameLocalPolicy(t *testing.T) {
 }
 
 func TestActivateLocalPolicyLockFailureIsVisible(t *testing.T) {
+	t.Parallel()
 	dir := claimBoard(t)
 	r, err := openBoard(dir)
 	if err != nil {

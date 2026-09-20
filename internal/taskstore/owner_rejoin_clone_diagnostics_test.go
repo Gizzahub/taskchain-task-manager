@@ -14,6 +14,7 @@ import (
 // 5 -- recording a protocol assertion the operator never made.  The value now
 // comes off the source's transition journal, which records it explicitly.
 func TestRejoinBoardPrepareReadsTheSourceProtocolRatherThanAssumingIt(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinCloneFixture(t, false, []ReservationFloor{{Prefix: "TASK", Through: 9}}, []string{})
 	state := readOwnerRejoinCommonState(t, fx.source)
 	if state.StorageProtocol == 0 {
@@ -40,6 +41,7 @@ func TestRejoinBoardPrepareReadsTheSourceProtocolRatherThanAssumingIt(t *testing
 // when a clone already carries common authority that is not the one this rejoin
 // would have written, and the operator's next move differs in each case.
 func TestCloneOwnerRejoinDistinguishesForeignCommonAuthority(t *testing.T) {
+	t.Parallel()
 	// Only two of the three branches can be provoked through a decodable
 	// common state.  validateSharedShape already refuses a schema 4 state whose
 	// storageProtocol is not 6 (shared_ledger.go:442), so the protocol branch

@@ -23,6 +23,7 @@ func boardSessionRequest() (ClaimRequest, TransitionRequest) {
 }
 
 func TestSharedNamespaceLockBlocksBoardSessions(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)
@@ -89,6 +90,7 @@ func TestSharedNamespaceLockBlocksBoardSessions(t *testing.T) {
 }
 
 func TestCompletedTransitionReplayAfterNamespaceLockRelease(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)
@@ -123,6 +125,7 @@ func TestCompletedTransitionReplayAfterNamespaceLockRelease(t *testing.T) {
 }
 
 func TestSharedInitializingNamespaceBlocksBoardSessions(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	claim, transition := boardSessionRequest()
 	if _, err := Claim(b, claim); err != nil {
@@ -175,6 +178,7 @@ func TestSharedInitializingNamespaceBlocksBoardSessions(t *testing.T) {
 }
 
 func TestBoardLockFailureReleasesNamespaceLock(t *testing.T) {
+	t.Parallel()
 	_, a, _ := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)
@@ -212,6 +216,7 @@ func TestBoardLockFailureReleasesNamespaceLock(t *testing.T) {
 }
 
 func TestMalformedSharedStateBlocksNonIDBoardOperations(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)
@@ -240,6 +245,7 @@ func TestMalformedSharedStateBlocksNonIDBoardOperations(t *testing.T) {
 }
 
 func TestNonGitBoardSessionRemainsLocal(t *testing.T) {
+	t.Parallel()
 	board := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(board); err != nil {
 		t.Fatal(err)

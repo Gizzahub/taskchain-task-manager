@@ -12,6 +12,7 @@ import (
 )
 
 func TestPolicyActivationPlanIsReadOnlyAndReconstructsExactTarget(t *testing.T) {
+	t.Parallel()
 	dir := claimBoard(t)
 	r, err := openBoard(dir)
 	if err != nil {
@@ -53,6 +54,7 @@ func TestPolicyActivationPlanIsReadOnlyAndReconstructsExactTarget(t *testing.T) 
 }
 
 func TestPolicyActivationPlanUsesTargetParkingWithoutAdoption(t *testing.T) {
+	t.Parallel()
 	dir := claimBoard(t)
 	if err := os.Mkdir(filepath.Join(dir, "manual"), 0o755); err != nil {
 		t.Fatal(err)
@@ -79,6 +81,7 @@ func TestPolicyActivationPlanUsesTargetParkingWithoutAdoption(t *testing.T) {
 }
 
 func TestPolicyActivationPlanRefusesPolicyChangeAndHeldClaim(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"immutable", "held"} {
 		t.Run(scenario, func(t *testing.T) {
 			dir := claimBoard(t)

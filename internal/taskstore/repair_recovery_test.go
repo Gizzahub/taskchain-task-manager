@@ -91,6 +91,7 @@ func reflectEqualBoard(a, b map[string]string) bool {
 }
 
 func TestRepairRecoveryPhasesAndPendingGates(t *testing.T) {
+	t.Parallel()
 	phases := []string{"after-empty-journal", "after-common-protocol", "after-local-protocol", "after-common-pending", "after-journal", "after-stage", "after-replacement", "after-receipt"}
 	for _, phase := range phases {
 		t.Run(phase, func(t *testing.T) {
@@ -122,6 +123,7 @@ func TestRepairRecoveryPhasesAndPendingGates(t *testing.T) {
 }
 
 func TestRepairRecoveryConflictsPreserveBoard(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"content", "mode", "symlink", "missing"} {
 		t.Run(kind, func(t *testing.T) {
 			dir, req, _, _ := statusRepairFixture(t)
@@ -163,6 +165,7 @@ func TestRepairRecoveryConflictsPreserveBoard(t *testing.T) {
 }
 
 func TestRepairRecoveryRequestConflictClaimAndNoop(t *testing.T) {
+	t.Parallel()
 	dir, req, current, _ := statusRepairFixture(t)
 	if _, err := repairStatusWithStep(dir, req, true, false, repairStopAt("after-journal")); err == nil {
 		t.Fatal("repair did not stop")
@@ -192,6 +195,7 @@ func TestRepairRecoveryRequestConflictClaimAndNoop(t *testing.T) {
 }
 
 func TestRepairRecoveryProcessKill(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("TASKCHAIN_REPAIR_HELPER") == "1" {
 		dir := os.Getenv("TASKCHAIN_REPAIR_DIR")
 		req := RepairRequest{ID: os.Getenv("TASKCHAIN_REPAIR_ID"), Owner: os.Getenv("TASKCHAIN_REPAIR_OWNER"), RequestID: os.Getenv("TASKCHAIN_REPAIR_REQUEST"), Path: os.Getenv("TASKCHAIN_REPAIR_PATH"), ExpectedSHA256: os.Getenv("TASKCHAIN_REPAIR_SHA256")}

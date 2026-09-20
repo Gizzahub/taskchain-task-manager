@@ -23,6 +23,7 @@ func moduleBundleRequest(t *testing.T, board, module, category string) []byte {
 }
 
 func TestModuleBundleSharedRecovery(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-shared-reservation", "after-local-reservation", "after-card-0"} {
 		t.Run(phase, func(t *testing.T) {
 			_, board, other := sharedFixture(t)
@@ -77,6 +78,7 @@ func TestModuleBundleSharedRecovery(t *testing.T) {
 }
 
 func TestModuleBundleScopeRefusalDoesNotAdoptProtocol(t *testing.T) {
+	t.Parallel()
 	for _, scope := range []struct{ module, category string }{{"unknown", "auth"}, {"todo", "auth"}, {"backend", "done"}} {
 		board := moduleAdoptionBoard(t)
 		if _, err := ActivatePolicy(board, moduleAdoptionRaw(t), PolicyActivationOptions{AdoptModules: true}); err != nil {

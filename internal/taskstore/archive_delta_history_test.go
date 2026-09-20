@@ -33,6 +33,7 @@ func deltaJournalBytes(t *testing.T, j archiveJournal) []byte {
 }
 
 func TestArchiveDeltaPreservesHistoryAndInputAcrossAllStates(t *testing.T) {
+	t.Parallel()
 	original, pending := deltaHistoryFixture(t)
 	before := deltaJournalBytes(t, original)
 	d, err := prepareArchivePendingDelta(original, pending)
@@ -68,6 +69,7 @@ func TestArchiveDeltaPreservesHistoryAndInputAcrossAllStates(t *testing.T) {
 }
 
 func TestArchiveDeltaRejectsHistoryReplacementDespiteMatchingCurrentHash(t *testing.T) {
+	t.Parallel()
 	original, pending := deltaHistoryFixture(t)
 	d, err := prepareArchivePendingDelta(original, pending)
 	if err != nil {
@@ -102,6 +104,7 @@ func TestArchiveDeltaRejectsHistoryReplacementDespiteMatchingCurrentHash(t *test
 }
 
 func TestArchiveDeltaLegacyApprovalAndModeRemainBound(t *testing.T) {
+	t.Parallel()
 	original, pending := deltaHistoryFixture(t)
 	pending.Operation, pending.Source, pending.Assertion = "legacy-adoption", pending.Target, "explicit legacy completion approval"
 	completion := *pending.Completion
@@ -141,6 +144,7 @@ func TestArchiveDeltaLegacyApprovalAndModeRemainBound(t *testing.T) {
 }
 
 func TestArchiveDeltaPreparationRejectsExistingIdentityRequestAndPending(t *testing.T) {
+	t.Parallel()
 	for _, field := range []string{"identity", "request", "pending"} {
 		t.Run(field, func(t *testing.T) {
 			original, pending := deltaHistoryFixture(t)

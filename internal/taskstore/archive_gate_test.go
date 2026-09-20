@@ -65,6 +65,7 @@ func archiveBoardFixture(t *testing.T) (string, *os.Root, archiveJournal) {
 }
 
 func TestArchiveGateReadyClaimTransition(t *testing.T) {
+	t.Parallel()
 	dir, _, _ := archiveBoardFixture(t)
 	ready, err := Ready(dir)
 	if err != nil || len(ready) != 1 || ready[0].Card.ID != "TASK-2" {
@@ -84,6 +85,7 @@ func TestArchiveGateReadyClaimTransition(t *testing.T) {
 }
 
 func TestArchiveGateReceiptRequiredByConsumers(t *testing.T) {
+	t.Parallel()
 	dir, r, j := archiveBoardFixture(t)
 	j.Records = []archiveRecord{}
 	if err := saveArchiveJournal(r, j, false); err != nil {
@@ -113,6 +115,7 @@ func TestArchiveGateReceiptRequiredByConsumers(t *testing.T) {
 }
 
 func TestArchiveGatePreservesProtocolDuringRepair(t *testing.T) {
+	t.Parallel()
 	dir, r, _ := archiveBoardFixture(t)
 	raw, err := os.ReadFile(filepath.Join(dir, "todo/TASK-2.md"))
 	if err != nil {
@@ -129,6 +132,7 @@ func TestArchiveGatePreservesProtocolDuringRepair(t *testing.T) {
 }
 
 func TestArchiveGateRelocationAndPolicySnapshot(t *testing.T) {
+	t.Parallel()
 	dir, r, _ := archiveBoardFixture(t)
 	before, err := boundedSnapshotFile(r, archivesFile, maxRepairsBytes)
 	if err != nil {
@@ -171,6 +175,7 @@ func TestArchiveGateRelocationAndPolicySnapshot(t *testing.T) {
 }
 
 func TestArchiveGateRejectsMissingOrUnadoptedJournal(t *testing.T) {
+	t.Parallel()
 	for _, missing := range []bool{true, false} {
 		t.Run(map[bool]string{true: "missing", false: "unadopted"}[missing], func(t *testing.T) {
 			dir, r, _ := archiveBoardFixture(t)
@@ -199,6 +204,7 @@ func TestArchiveGateRejectsMissingOrUnadoptedJournal(t *testing.T) {
 }
 
 func TestArchiveGateRejectsPendingAndChangedCard(t *testing.T) {
+	t.Parallel()
 	for _, pending := range []bool{true, false} {
 		t.Run(map[bool]string{true: "pending", false: "changed-card"}[pending], func(t *testing.T) {
 			dir, r, j := archiveBoardFixture(t)

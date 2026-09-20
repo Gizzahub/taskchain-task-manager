@@ -31,6 +31,7 @@ func installBundleTestJournal(t *testing.T, dir string, records []bundleRecord, 
 }
 
 func TestBundleGateRejectsIncompleteAdoption(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"orphan", "missing", "corrupt", "pending"} {
 		t.Run(scenario, func(t *testing.T) {
 			dir, req, _, _ := transitionFixture(t)
@@ -90,6 +91,7 @@ func TestBundleGateRejectsIncompleteAdoption(t *testing.T) {
 }
 
 func TestBundleMarkerSurvivesTransitionAndRecovery(t *testing.T) {
+	t.Parallel()
 	for _, interrupted := range []bool{false, true} {
 		t.Run(map[bool]string{false: "normal", true: "recovery"}[interrupted], func(t *testing.T) {
 			dir, req, _, _ := transitionFixture(t)
@@ -127,6 +129,7 @@ func TestBundleMarkerSurvivesTransitionAndRecovery(t *testing.T) {
 }
 
 func TestBundleAdoptedBoardCannotReinitializeMissingIDs(t *testing.T) {
+	t.Parallel()
 	dir := configuredFixture(t)
 	record := bundleRecordFixture(t)
 	record.Status = "completed"

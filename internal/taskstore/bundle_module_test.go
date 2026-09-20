@@ -9,6 +9,7 @@ import (
 )
 
 func TestModuleBundlePublicationRecoveryAndReplay(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-pending-journal", "after-local-reservation", "after-card-0", "after-completed-receipt"} {
 		t.Run(phase, func(t *testing.T) {
 			board := moduleAdoptionBoard(t)

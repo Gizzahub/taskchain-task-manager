@@ -54,6 +54,7 @@ func sameCommonPreparationFixture(t *testing.T, withPolicy bool) (OwnerRejoinPla
 }
 
 func TestPrepareSameCommonOwnerRejoinPolicyStates(t *testing.T) {
+	t.Parallel()
 	for _, withPolicy := range []bool{false, true} {
 		t.Run(map[bool]string{false: "absent", true: "present"}[withPolicy], func(t *testing.T) {
 			base, sources := sameCommonPreparationFixture(t, withPolicy)
@@ -95,6 +96,7 @@ func TestPrepareSameCommonOwnerRejoinPolicyStates(t *testing.T) {
 }
 
 func TestSameCommonOwnerRejoinRejectsInventoryAndTargetTampering(t *testing.T) {
+	t.Parallel()
 	base, sources := sameCommonPreparationFixture(t, false)
 	plan, outer, _, err := PrepareSameCommonOwnerRejoin(base, sources)
 	if err != nil {
@@ -133,6 +135,7 @@ func TestSameCommonOwnerRejoinRejectsInventoryAndTargetTampering(t *testing.T) {
 }
 
 func TestOwnerRejoinArtifactInventoryMaximum(t *testing.T) {
+	t.Parallel()
 	p, _ := ownerRejoinFixture(t)
 	p.Artifacts = []OwnerRejoinArtifact{{Role: "archive-capacity-payload", Path: ownerRejoinCapacityArtifactPath(strings.Repeat("a", 64)), Mode: 0600, Length: maxOwnerRejoinCapacityArtifactBytes, SHA256: strings.Repeat("a", 64)}}
 	if err := validateOwnerRejoinPlan(p, true); err != nil {

@@ -8,6 +8,7 @@ import (
 )
 
 func TestRelocationFilesRecovery(t *testing.T) {
+	t.Parallel()
 	for _, point := range []string{"after-stage", "after-target", "after-source"} {
 		t.Run(point, func(t *testing.T) {
 			r, dir := relocationFileFixture(t)
@@ -38,6 +39,7 @@ func TestRelocationFilesRecovery(t *testing.T) {
 }
 
 func TestRelocationFilesPreserveConflicts(t *testing.T) {
+	t.Parallel()
 	for _, conflict := range []string{"target-race", "source-edit", "target-edit", "authority"} {
 		t.Run(conflict, func(t *testing.T) {
 			r, dir := relocationFileFixture(t)
@@ -85,6 +87,7 @@ func TestRelocationFilesPreserveConflicts(t *testing.T) {
 }
 
 func TestRelocationFilesRejectAncestorSymlink(t *testing.T) {
+	t.Parallel()
 	r, dir := relocationFileFixture(t)
 	if err := os.Symlink("module", filepath.Join(dir, "alias")); err != nil {
 		t.Fatal(err)

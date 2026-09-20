@@ -8,6 +8,7 @@ import (
 )
 
 func TestArchiveActivationBindingRequiresProtocol5CapacityAndExactArtifactRule(t *testing.T) {
+	t.Parallel()
 	base := &archiveActivationBinding{
 		SchemaVersion:         1,
 		StorageProtocol:       5,
@@ -37,6 +38,7 @@ func TestArchiveActivationBindingRequiresProtocol5CapacityAndExactArtifactRule(t
 }
 
 func TestArchiveActivationBindingStrictAndLegacyJSONShapes(t *testing.T) {
+	t.Parallel()
 	legacyShared, err := json.Marshal(validSharedFixture())
 	if err != nil || validateSharedShape(legacyShared) != nil {
 		t.Fatalf("legacy shared shape: %v", err)

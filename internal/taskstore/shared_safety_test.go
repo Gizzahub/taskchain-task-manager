@@ -10,6 +10,7 @@ import (
 )
 
 func TestSharedExternalAncestorAliasCannotBypass(t *testing.T) {
+	t.Parallel()
 	repo := t.TempDir()
 	sharedGit(t, repo, "init", "-b", "fixture")
 	sharedGit(t, repo, "config", "commit.gpgsign", "false")
@@ -41,6 +42,7 @@ func TestSharedExternalAncestorAliasCannotBypass(t *testing.T) {
 }
 
 func TestSharedActivationBoardReplacementRejected(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	_, err := enableSharedStep(a, false, func(at string) error {
 		if at != "after-initializing" {
@@ -66,6 +68,7 @@ func TestSharedActivationBoardReplacementRejected(t *testing.T) {
 }
 
 func TestSharedResumeCorruptTargetCannotReduceReservations(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	if _, err := ReserveIDs(b, []string{"TASK-90"}, false); err != nil {
 		t.Fatal(err)
@@ -101,6 +104,7 @@ func TestSharedResumeCorruptTargetCannotReduceReservations(t *testing.T) {
 }
 
 func TestSharedActivationSymlinkReplacementRejected(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	_, err := enableSharedStep(a, false, func(at string) error {
 		if at != "after-initializing" {
@@ -117,6 +121,7 @@ func TestSharedActivationSymlinkReplacementRejected(t *testing.T) {
 }
 
 func TestSharedActivationTopologyChangeDoesNotBecomeActive(t *testing.T) {
+	t.Parallel()
 	repo, a, _ := sharedFixture(t)
 	_, err := enableSharedStep(a, false, func(at string) error {
 		if at == "after-local-0" {

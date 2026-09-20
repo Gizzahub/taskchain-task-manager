@@ -11,6 +11,7 @@ import (
 )
 
 func TestArchiveCapacityCodecAcceptsCanonicalExpansionOfValidV1(t *testing.T) {
+	t.Parallel()
 	j, base, _, _ := archiveJournalFixture(t)
 	j.Records = make([]archiveRecord, 1000)
 	for i := range j.Records {
@@ -52,6 +53,7 @@ func TestArchiveCapacityCodecAcceptsCanonicalExpansionOfValidV1(t *testing.T) {
 }
 
 func TestArchiveCapacityCodecVersionSpecificBounds(t *testing.T) {
+	t.Parallel()
 	for _, schema := range []int{1, 2} {
 		j := archiveJournal{SchemaVersion: schema, BoardPath: "/tasks", Records: []archiveRecord{}}
 		raw, err := archiveCapacityJournalBytes(j)
@@ -71,6 +73,7 @@ func TestArchiveCapacityCodecVersionSpecificBounds(t *testing.T) {
 }
 
 func TestArchiveCapacityCodecPreservesStrictRecords(t *testing.T) {
+	t.Parallel()
 	j, _, _, _ := archiveJournalFixture(t)
 	j.SchemaVersion = 2
 	raw, err := archiveCapacityJournalBytes(j)
@@ -101,6 +104,7 @@ func TestArchiveCapacityCodecPreservesStrictRecords(t *testing.T) {
 }
 
 func TestArchiveCapacityCodecDoesNotEnableRuntimeSchema2(t *testing.T) {
+	t.Parallel()
 	j := archiveJournal{SchemaVersion: 2, BoardPath: "/tasks", Records: []archiveRecord{}}
 	raw, err := archiveCapacityJournalBytes(j)
 	if err != nil {

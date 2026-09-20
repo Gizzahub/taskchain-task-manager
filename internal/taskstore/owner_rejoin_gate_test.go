@@ -22,6 +22,7 @@ func completedOwnerRejoinBoard(t *testing.T) ownerRejoinApplyFixture {
 }
 
 func TestProtocol6RefusedWithoutIntactLocalEvidence(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		want   string
@@ -137,6 +138,7 @@ func TestProtocol6RefusedWithoutIntactLocalEvidence(t *testing.T) {
 
 // A rejoin receipt from another board must never admit protocol 6 here.
 func TestProtocol6RefusesForeignReceipt(t *testing.T) {
+	t.Parallel()
 	fx := completedOwnerRejoinBoard(t)
 	other := newOwnerRejoinApplyFixture(t, false, []ReservationFloor{{Prefix: "TASK", Through: 1}})
 	if err := applyOwnerRejoinSameCommon(other.target, other.plan, other.payload, nil); err != nil {

@@ -30,6 +30,7 @@ func snapshotFixture(t *testing.T) (string, *os.Root, transitionJournal) {
 }
 
 func TestPolicyActivationSnapshotStableAndCardMutationChanges(t *testing.T) {
+	t.Parallel()
 	dir, r, journal := snapshotFixture(t)
 	defer r.Close()
 	first, err := policyActivationSnapshot(r, currentPolicy(), journal)
@@ -55,6 +56,7 @@ func TestPolicyActivationSnapshotStableAndCardMutationChanges(t *testing.T) {
 }
 
 func TestPolicyActivationSnapshotRejectsHeldAndPending(t *testing.T) {
+	t.Parallel()
 	_, r, journal := snapshotFixture(t)
 	defer r.Close()
 	claims := claimsLedger{SchemaVersion: 1, Records: []ClaimRecord{{ID: "TASK-1", Owner: "worker", Token: strings.Repeat("a", 32), Status: "held"}}}
@@ -76,6 +78,7 @@ func TestPolicyActivationSnapshotRejectsHeldAndPending(t *testing.T) {
 }
 
 func TestPolicyActivationSnapshotMetadataMutationsChangeHash(t *testing.T) {
+	t.Parallel()
 	mutate := func(t *testing.T, kind string) (string, string) {
 		_, r, journal := snapshotFixture(t)
 		defer r.Close()
@@ -118,6 +121,7 @@ func TestPolicyActivationSnapshotMetadataMutationsChangeHash(t *testing.T) {
 }
 
 func TestPolicyActivationSnapshotAdmitsDeclaredParkingZone(t *testing.T) {
+	t.Parallel()
 	dir, r, journal := snapshotFixture(t)
 	defer r.Close()
 	if err := os.Mkdir(filepath.Join(dir, "parking"), 0o755); err != nil {
@@ -136,6 +140,7 @@ func TestPolicyActivationSnapshotAdmitsDeclaredParkingZone(t *testing.T) {
 }
 
 func TestPolicyActivationSnapshotExcludesTransactionOwnedFiles(t *testing.T) {
+	t.Parallel()
 	_, r, journal := snapshotFixture(t)
 	defer r.Close()
 	before, err := policyActivationSnapshot(r, currentPolicy(), journal)

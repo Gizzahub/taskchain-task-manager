@@ -68,6 +68,7 @@ func boardBytes(t *testing.T, dir string) map[string]string {
 }
 
 func TestTransitionCrashPhasesAndPendingGates(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-journal", "after-target", "after-source", "after-receipt"} {
 		t.Run(phase, func(t *testing.T) {
 			dir, req, _, want := transitionFixture(t)
@@ -131,6 +132,7 @@ func TestTransitionCrashPhasesAndPendingGates(t *testing.T) {
 }
 
 func TestTransitionRecoveryConflictsNeverModifyBoard(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"source-content", "target-content", "source-mode", "target-mode", "source-symlink", "target-symlink", "both-missing"} {
 		t.Run(kind, func(t *testing.T) {
 			dir, req, _, _ := transitionFixture(t)

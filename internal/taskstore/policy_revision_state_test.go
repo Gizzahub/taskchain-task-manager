@@ -9,6 +9,7 @@ import (
 )
 
 func TestPolicyRevisionStateRejectsMalformedBindings(t *testing.T) {
+	t.Parallel()
 	dir, options := localRevisionFixture(t)
 	r, err := openBoard(dir)
 	if err != nil {

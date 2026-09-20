@@ -34,6 +34,7 @@ func legacyArchiveWriterFixture(t *testing.T) (string, LegacyArchiveRequest, []b
 }
 
 func TestAdoptLegacyArchiveLocalPreservesCardAndRecordsExplicitObservation(t *testing.T) {
+	t.Parallel()
 	dir, req, raw := legacyArchiveWriterFixture(t)
 	result, err := AdoptLegacyArchive(dir, req, true)
 	if err != nil || result.Status != "completed" || result.Source != req.Source || result.Target != req.Source || result.CompletionEligible {
@@ -61,6 +62,7 @@ func TestAdoptLegacyArchiveLocalPreservesCardAndRecordsExplicitObservation(t *te
 }
 
 func TestAdoptLegacyArchiveApprovedTaskPublishesCompletionBinding(t *testing.T) {
+	t.Parallel()
 	dir, req, _ := legacyArchiveWriterFixture(t)
 	req.ApproveCompletion = true
 	result, err := AdoptLegacyArchive(dir, req, true)
@@ -70,6 +72,7 @@ func TestAdoptLegacyArchiveApprovedTaskPublishesCompletionBinding(t *testing.T) 
 }
 
 func TestAdoptLegacyArchiveSharedPreservesCommonOwnership(t *testing.T) {
+	t.Parallel()
 	board, _, normal := archiveProcessFixture(t, true)
 	target := filepath.Join(board, "_archive", "done", "TASK-1.md")
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
@@ -98,6 +101,7 @@ func TestAdoptLegacyArchiveSharedPreservesCommonOwnership(t *testing.T) {
 }
 
 func TestAdoptLegacyArchiveRejectsModeAndApprovalChangesBeforeAdoption(t *testing.T) {
+	t.Parallel()
 	dir, req, _ := legacyArchiveWriterFixture(t)
 	before := boardBytes(t, dir)
 	wrongMode := req
@@ -116,6 +120,7 @@ func TestAdoptLegacyArchiveRejectsModeAndApprovalChangesBeforeAdoption(t *testin
 }
 
 func TestRecoverLegacyArchiveAfterJournalInterruption(t *testing.T) {
+	t.Parallel()
 	dir, req, raw := legacyArchiveWriterFixture(t)
 	stop := errors.New("stop at after-archive-journal")
 	if _, err := legacyArchiveWithStep(dir, req, true, false, func(point string) error {

@@ -120,6 +120,7 @@ func moduleRootSnapshot(t *testing.T, board string) map[string]string {
 }
 
 func TestModuleRelocationMovesCardUsingDeclaredPath(t *testing.T) {
+	t.Parallel()
 	board := moduleRelocationBoard(t)
 	req := moduleRelocationRequest(t, board, "backend/todo/PLAN-2.md")
 	result, err := Relocate(board, req, true)
@@ -135,6 +136,7 @@ func TestModuleRelocationMovesCardUsingDeclaredPath(t *testing.T) {
 }
 
 func TestModuleRelocationRejectsOverlongTargetWithoutMutation(t *testing.T) {
+	t.Parallel()
 	board := moduleRelocationBoard(t)
 	target := "backend/todo/" + strings.Repeat("x", 256) + "/PLAN-2.md"
 	req := moduleRelocationRequest(t, board, target)
@@ -148,6 +150,7 @@ func TestModuleRelocationRejectsOverlongTargetWithoutMutation(t *testing.T) {
 }
 
 func TestModuleRelocationRejectsTargetBeyondTotalPathLimitWithoutMutation(t *testing.T) {
+	t.Parallel()
 	source := modulePathWithLength(t, 1023, "plan", "PLAN-3.md")
 	if len(source) != 1023 {
 		t.Fatalf("source length=%d", len(source))

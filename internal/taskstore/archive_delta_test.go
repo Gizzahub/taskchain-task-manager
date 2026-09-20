@@ -30,6 +30,7 @@ func archiveDeltaStates(t *testing.T) (archivePendingDelta, []archiveJournal) {
 }
 
 func TestArchiveDeltaRoundTripStatesAndEmptyHistory(t *testing.T) {
+	t.Parallel()
 	d, states := archiveDeltaStates(t)
 	raw, err := archivePendingDeltaBytes(d)
 	if err != nil {
@@ -61,6 +62,7 @@ func TestArchiveDeltaRoundTripStatesAndEmptyHistory(t *testing.T) {
 }
 
 func TestArchiveDeltaRejectsPreparationStatesAndHashForgery(t *testing.T) {
+	t.Parallel()
 	original, pending, _ := archiveDeltaFixture(t)
 	if _, err := prepareArchivePendingDelta(archiveJournal{SchemaVersion: 1, BoardPath: original.BoardPath}, pending); err == nil {
 		t.Fatal("missing namespace accepted")
@@ -105,6 +107,7 @@ func TestArchiveDeltaRejectsPreparationStatesAndHashForgery(t *testing.T) {
 }
 
 func TestArchiveDeltaStrictWireAndResolutionScope(t *testing.T) {
+	t.Parallel()
 	d, states := archiveDeltaStates(t)
 	raw, err := archivePendingDeltaBytes(d)
 	if err != nil {

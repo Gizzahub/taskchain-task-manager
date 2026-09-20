@@ -9,6 +9,7 @@ import (
 )
 
 func TestArchiveSharedWriterRecovery(t *testing.T) {
+	t.Parallel()
 	for _, point := range []string{"after-archive-common-pending", "after-archive-journal", "after-target", "after-source", "after-archive-receipt"} {
 		t.Run(point, func(t *testing.T) {
 			_, board, other := sharedFixture(t)
@@ -58,6 +59,7 @@ func TestArchiveSharedWriterRecovery(t *testing.T) {
 }
 
 func TestArchiveRecoveryRechecksPlanChildren(t *testing.T) {
+	t.Parallel()
 	dir, _, _ := archiveWriterFixture(t)
 	entry, err := Create(dir, CreateRequest{Kind: "plan", Title: "plan"})
 	if err != nil {
@@ -91,6 +93,7 @@ func TestArchiveRecoveryRechecksPlanChildren(t *testing.T) {
 }
 
 func TestArchiveRecoveryModeAndAncestorConflicts(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"source-mode", "target-mode", "target-ancestor"} {
 		t.Run(kind, func(t *testing.T) {
 			dir, req, _ := archiveWriterFixture(t)

@@ -26,6 +26,7 @@ func archiveRebindPayloadFixture(t *testing.T) ArchiveNamespaceRebindPlan {
 }
 
 func TestArchiveRebindPayloadV2RoundTripAndArtifactRecoveryAboveLegacyLimit(t *testing.T) {
+	t.Parallel()
 	base := archiveRebindPayloadFixture(t)
 	j, err := decodeArchiveJournal(base.OriginalJournal)
 	if err != nil {
@@ -74,6 +75,7 @@ func TestArchiveRebindPayloadV2RoundTripAndArtifactRecoveryAboveLegacyLimit(t *t
 }
 
 func TestArchiveRebindPayloadRoundTripExactBytesAndScope(t *testing.T) {
+	t.Parallel()
 	plan := archiveRebindPayloadFixture(t)
 	raw, err := archiveRebindPayloadBytes(plan)
 	if err != nil {
@@ -100,6 +102,7 @@ func TestArchiveRebindPayloadRoundTripExactBytesAndScope(t *testing.T) {
 }
 
 func TestArchiveRebindPayloadRejectsFramingDigestAndMode(t *testing.T) {
+	t.Parallel()
 	plan := archiveRebindPayloadFixture(t)
 	payload, err := archiveRebindPayloadBytes(plan)
 	if err != nil {
@@ -136,6 +139,7 @@ func TestArchiveRebindPayloadRejectsFramingDigestAndMode(t *testing.T) {
 }
 
 func TestArchiveRebindPayloadRejectsMalformedJournalsAndForgedTarget(t *testing.T) {
+	t.Parallel()
 	plan := archiveRebindPayloadFixture(t)
 	validTarget := append([]byte(nil), plan.TargetJournal...)
 	build := func(original, target []byte, mode uint32) []byte {
@@ -185,6 +189,7 @@ func TestArchiveRebindPayloadRejectsMalformedJournalsAndForgedTarget(t *testing.
 }
 
 func TestArchiveRebindPayloadAcceptsNearMaxOriginalJournal(t *testing.T) {
+	t.Parallel()
 	base := archiveRebindPayloadFixture(t)
 	padded := append([]byte(nil), base.OriginalJournal...)
 	padded = append(padded, bytes.Repeat([]byte{' '}, maxRepairsBytes-len(padded))...)

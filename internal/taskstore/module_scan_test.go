@@ -54,6 +54,7 @@ func listWithModulePolicy(t *testing.T, board string, policy boardpolicy.Policy)
 }
 
 func TestListLockedWithPolicyScansModulesAndPreservesZoneSemantics(t *testing.T) {
+	t.Parallel()
 	board := claimBoard(t)
 	policy := moduleScanPolicy(t)
 	writeModuleCard(t, board, "backend/todo/category/TASK-2.md", "TASK-2", "done")
@@ -89,6 +90,7 @@ func TestListLockedWithPolicyScansModulesAndPreservesZoneSemantics(t *testing.T)
 }
 
 func TestListLockedWithPolicyRejectsModuleShapeAndDuplicates(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		make func(t *testing.T, board string)
@@ -128,6 +130,7 @@ func TestListLockedWithPolicyRejectsModuleShapeAndDuplicates(t *testing.T) {
 }
 
 func TestListLockedWithPolicyRejectsUndeclaredRootAndNormalizedDuplicate(t *testing.T) {
+	t.Parallel()
 	board := claimBoard(t)
 	if err := os.MkdirAll(filepath.Join(board, "frontend", "todo"), 0o755); err != nil {
 		t.Fatal(err)
@@ -148,6 +151,7 @@ func TestListLockedWithPolicyRejectsUndeclaredRootAndNormalizedDuplicate(t *test
 }
 
 func TestListLockedWithPolicyRejectsModuleRootSymlink(t *testing.T) {
+	t.Parallel()
 	board := claimBoard(t)
 	if err := os.Symlink(t.TempDir(), filepath.Join(board, "backend")); err != nil {
 		t.Fatal(err)

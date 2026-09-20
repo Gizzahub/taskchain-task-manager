@@ -12,6 +12,7 @@ import (
 )
 
 func TestContextRegisterProcessHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("TASKSTORE_CONTEXT_HELPER") != "1" {
 		return
 	}
@@ -44,6 +45,7 @@ func TestContextRegisterProcessHelper(t *testing.T) {
 }
 
 func TestContextRegistryProcessExitPreservesCommitPoint(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-stage", "after-link"} {
 		t.Run(phase, func(t *testing.T) {
 			board := claimBoard(t)
@@ -85,6 +87,7 @@ func TestContextRegistryProcessExitPreservesCommitPoint(t *testing.T) {
 }
 
 func TestContextRegisterConcurrentProcesses(t *testing.T) {
+	t.Parallel()
 	for _, distinct := range []bool{false, true} {
 		t.Run(fmt.Sprintf("distinct-content-%v", distinct), func(t *testing.T) {
 			board := claimBoard(t)

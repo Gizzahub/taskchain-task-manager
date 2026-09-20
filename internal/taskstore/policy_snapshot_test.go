@@ -30,6 +30,7 @@ func legacyFixtureSnapshot(t *testing.T, dir string) string {
 }
 
 func TestPrePolicySharedActivationCanResume(t *testing.T) {
+	t.Parallel()
 	_, a, _ := sharedFixture(t)
 	stop := errors.New("interrupted legacy initialization")
 	_, err := enableSharedStep(a, false, func(at string) error {

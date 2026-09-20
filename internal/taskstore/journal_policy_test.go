@@ -31,6 +31,7 @@ func writeBoundPolicy(t *testing.T, dir string, d boardpolicy.Declaration) (boar
 }
 
 func TestBoundCompletedParkingReceiptRequiresDigest(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	_, digest := writeBoundPolicy(t, dir, boardpolicy.Declaration{Zones: []string{"manual"}, Transitions: []boardpolicy.Transition{{From: "manual", To: []string{"todo"}}}})
 	rec := transitionRecord{Kind: "completed", RequestID: strings.Repeat("a", 32), ID: "TASK-1", Owner: "worker", Token: strings.Repeat("b", 32), From: "manual", To: "todo", Source: "manual/TASK-1.md", Target: "todo/TASK-1.md", Mode: 0o644, Status: "completed"}
@@ -56,6 +57,7 @@ func TestBoundCompletedParkingReceiptRequiresDigest(t *testing.T) {
 }
 
 func TestCompletedReceiptDigestMustMatchRoot(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	_, digest := writeBoundPolicy(t, dir, boardpolicy.Declaration{})
 	rec := transitionRecord{PolicyDigest: strings.Repeat("f", 64), Kind: "completed", RequestID: strings.Repeat("a", 32), ID: "TASK-1", Owner: "worker", Token: strings.Repeat("b", 32), From: "todo", To: "doing", Source: "todo/TASK-1.md", Target: "doing/TASK-1.md", Mode: 0o644, Status: "completed"}
@@ -72,6 +74,7 @@ func TestCompletedReceiptDigestMustMatchRoot(t *testing.T) {
 }
 
 func TestPublishRejectsMalformedPolicyBinding(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	_, digest := writeBoundPolicy(t, dir, boardpolicy.Declaration{})
 	r, err := os.OpenRoot(dir)

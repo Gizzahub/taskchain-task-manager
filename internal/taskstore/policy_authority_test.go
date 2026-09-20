@@ -126,6 +126,7 @@ func policyCommonBytes(t *testing.T, dir string) []byte {
 }
 
 func TestPolicyAuthorityLocalAdmissionAndHistoricalReplay(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"pending", "missing", "wrong-owner", "different-authority", "journal-missing", "policy-missing"} {
 		t.Run(scenario, func(t *testing.T) {
 			dir, req, _, _ := transitionFixture(t)
@@ -172,6 +173,7 @@ func TestPolicyAuthorityLocalAdmissionAndHistoricalReplay(t *testing.T) {
 }
 
 func TestPolicyAuthorityWireShape(t *testing.T) {
+	t.Parallel()
 	p := boardpolicy.Default()
 	digest, err := p.Digest()
 	if err != nil {
@@ -214,6 +216,7 @@ func TestPolicyAuthorityWireShape(t *testing.T) {
 }
 
 func TestPolicyAuthorityCompletedSnapshotIsNotAdmissionCondition(t *testing.T) {
+	t.Parallel()
 	dir := claimBoard(t)
 	bindAuthorityFixture(t, dir, policyAuthorityBinding{AuthorityID: strings.Repeat("a", 32), Scope: "local"})
 	if _, err := Create(dir, CreateRequest{Title: "evolved board"}); err != nil {

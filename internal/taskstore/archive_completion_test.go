@@ -67,6 +67,7 @@ func archiveCompletionFieldJSON(t *testing.T, b archiveCompletionBinding, field,
 }
 
 func TestArchiveCompletionWorkflowBindingAndCurrentCard(t *testing.T) {
+	t.Parallel()
 	b, card, _, _ := archiveCompletionFixture(t)
 	raw, err := archiveCompletionBytes(b)
 	if err != nil {
@@ -82,6 +83,7 @@ func TestArchiveCompletionWorkflowBindingAndCurrentCard(t *testing.T) {
 }
 
 func TestArchiveCompletionDecodeRejectsStrictWireShapes(t *testing.T) {
+	t.Parallel()
 	b, _, _, _ := archiveCompletionFixture(t)
 	valid := archiveCompletionJSON(t, b)
 	legacy := b
@@ -121,6 +123,7 @@ func archiveCompletionArrayJSON(t *testing.T, b archiveCompletionBinding, field 
 }
 
 func TestArchiveCompletionRejectsMalformedBindingsAndAdmissionLoss(t *testing.T) {
+	t.Parallel()
 	b, card, policy, rules := archiveCompletionFixture(t)
 	cases := []struct {
 		name   string
@@ -166,6 +169,7 @@ func TestArchiveCompletionRejectsMalformedBindingsAndAdmissionLoss(t *testing.T)
 }
 
 func TestArchiveCompletionRequiresExactCurrentBoardPathAndBytes(t *testing.T) {
+	t.Parallel()
 	b, card, _, _ := archiveCompletionFixture(t)
 	cases := []struct {
 		name  string
@@ -193,6 +197,7 @@ func TestArchiveCompletionRequiresExactCurrentBoardPathAndBytes(t *testing.T) {
 }
 
 func TestArchiveCompletionLegacyAndArchivedPathRules(t *testing.T) {
+	t.Parallel()
 	b, card, _, _ := archiveCompletionFixture(t)
 	b.Provenance = "legacy-completion"
 	b.Source = "_archive/TASK-001.md"

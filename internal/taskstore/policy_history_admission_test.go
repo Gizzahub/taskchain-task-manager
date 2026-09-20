@@ -61,6 +61,7 @@ func assertHistoryFixture(t *testing.T, dir string, history map[string][]byte) {
 }
 
 func TestPolicyHistorySharedMigrationAndCopiedJoin(t *testing.T) {
+	t.Parallel()
 	repo, a, b := sharedFixture(t)
 	raw := defaultPolicyBytes(t)
 	histories := map[string]map[string][]byte{}
@@ -103,6 +104,7 @@ func TestPolicyHistorySharedMigrationAndCopiedJoin(t *testing.T) {
 }
 
 func TestPolicyHistoryStillRequiresActivationReceipt(t *testing.T) {
+	t.Parallel()
 	dir := claimBoard(t)
 	if _, err := ActivatePolicy(dir, defaultPolicyBytes(t), PolicyActivationOptions{}); err != nil {
 		t.Fatal(err)
@@ -128,6 +130,7 @@ func TestPolicyHistoryStillRequiresActivationReceipt(t *testing.T) {
 }
 
 func TestPolicyHistorySurvivesTransitionAndReplay(t *testing.T) {
+	t.Parallel()
 	dir, req, _, _ := transitionFixture(t)
 	claim := ClaimRequest{ID: req.ID, Owner: req.Owner, Token: req.Token}
 	if _, err := Release(dir, claim); err != nil {

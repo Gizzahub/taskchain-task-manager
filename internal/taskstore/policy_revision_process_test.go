@@ -23,6 +23,7 @@ type policyRevisionProcessRequest struct {
 }
 
 func TestPolicyRevisionProcessHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("TASKCHAIN_POLICY_REVISION_HELPER") == "" {
 		return
 	}
@@ -62,6 +63,7 @@ func TestPolicyRevisionProcessHelper(t *testing.T) {
 }
 
 func TestPolicyRevisionProcessKillAndContention(t *testing.T) {
+	t.Parallel()
 	local := []string{"after-local-pending", "after-policy", "after-policy-journal", "after-local-completed"}
 	shared := []string{"after-common-policy-pending", "board-0/after-policy-journal", "board-0/after-local-completed", "after-common-policy-active"}
 	for _, tc := range []struct {

@@ -15,6 +15,7 @@ const (
 )
 
 func TestOwnerRejoinTransformsOnlyCompletedBoardBindings(t *testing.T) {
+	t.Parallel()
 	repair := repairJournalFixture(t)
 	repair.BoardPath, repair.Records[0].BoardPath = ownerRejoinTransformSource, ownerRejoinTransformSource
 	repair.Records[0].Kind, repair.Records[0].Original, repair.Records[0].Patched = "completed", nil, nil
@@ -70,6 +71,7 @@ func TestOwnerRejoinTransformsOnlyCompletedBoardBindings(t *testing.T) {
 }
 
 func TestOwnerRejoinTransformsRejectPendingAndForeign(t *testing.T) {
+	t.Parallel()
 	repair := repairJournalFixture(t)
 	repair.BoardPath, repair.Records[0].BoardPath = ownerRejoinTransformSource, ownerRejoinTransformSource
 	raw, _ := repairJournalBytes(repair)
@@ -93,6 +95,7 @@ func TestOwnerRejoinTransformsRejectPendingAndForeign(t *testing.T) {
 }
 
 func TestOwnerRejoinCapacityPayloadAndReceiptCodecs(t *testing.T) {
+	t.Parallel()
 	archive, _, _, _ := archiveJournalFixture(t)
 	archive.SchemaVersion = 2
 	archive.BoardPath, archive.Records[0].BoardPath, archive.Records[0].State = ownerRejoinTransformSource, ownerRejoinTransformSource, "completed"
@@ -141,6 +144,7 @@ func TestOwnerRejoinCapacityPayloadAndReceiptCodecs(t *testing.T) {
 }
 
 func TestOwnerRejoinTransitionAndIDTransforms(t *testing.T) {
+	t.Parallel()
 	for schema := 1; schema <= 4; schema++ {
 		journal := transitionJournal{SchemaVersion: schema, Records: []transitionRecord{}, StorageProtocol: 5}
 		if schema >= 2 {
@@ -186,6 +190,7 @@ func TestOwnerRejoinTransitionAndIDTransforms(t *testing.T) {
 }
 
 func TestOwnerRejoinTransformsEmptyCompletedJournals(t *testing.T) {
+	t.Parallel()
 	repairRaw, err := repairJournalBytes(repairJournal{SchemaVersion: 1, BoardPath: ownerRejoinTransformSource, Records: []repairRecord{}})
 	if err != nil {
 		t.Fatal(err)
@@ -213,6 +218,7 @@ func TestOwnerRejoinTransformsEmptyCompletedJournals(t *testing.T) {
 }
 
 func TestOwnerRejoinCapacityPayloadAcceptsLargeSchemaTwoTarget(t *testing.T) {
+	t.Parallel()
 	journal, base, _, _ := archiveJournalFixture(t)
 	journal.SchemaVersion, journal.BoardPath = 2, ownerRejoinTransformSource
 	journal.Records = make([]archiveRecord, 1000)

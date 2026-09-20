@@ -12,6 +12,7 @@ import (
 )
 
 func TestPolicyActivationLocalPublicationResumesEveryBoundary(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-local-pending", "after-policy", "after-policy-journal", "after-local-completed"} {
 		t.Run(phase, func(t *testing.T) {
 			dir := claimBoard(t)
@@ -71,6 +72,7 @@ func TestPolicyActivationLocalPublicationResumesEveryBoundary(t *testing.T) {
 }
 
 func TestPolicyActivationResumePreservesConflicts(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"card-change", "missing-policy", "missing-receipt", "journal-change"} {
 		t.Run(scenario, func(t *testing.T) {
 			dir := claimBoard(t)
@@ -135,6 +137,7 @@ func TestPolicyActivationResumePreservesConflicts(t *testing.T) {
 }
 
 func TestPolicyActivationCustomPolicyTransitionRecovery(t *testing.T) {
+	t.Parallel()
 	dir := claimBoard(t)
 	p, err := boardpolicy.New(boardpolicy.Declaration{Transitions: []boardpolicy.Transition{{From: "todo", To: []string{"done"}}}})
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 )
 
 func TestModuleAdoptionLegacyBinaryBarrier(t *testing.T) {
+	t.Parallel()
 	binary := os.Getenv("TASKCHAIN_MODULE_LEGACY_BINARY")
 	if binary == "" {
 		t.Skip("set TASKCHAIN_MODULE_LEGACY_BINARY to verified pre-module executable")

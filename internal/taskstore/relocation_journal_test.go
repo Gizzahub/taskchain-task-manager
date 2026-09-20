@@ -34,6 +34,7 @@ func relocationJournalFixture(t *testing.T, board string) relocationJournal {
 }
 
 func TestRelocationJournalRoundtripAndPublication(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	r, err := os.OpenRoot(dir)
 	if err != nil {
@@ -61,6 +62,7 @@ func TestRelocationJournalRoundtripAndPublication(t *testing.T) {
 }
 
 func TestRelocationJournalRejectsInvalidRecords(t *testing.T) {
+	t.Parallel()
 	cases := map[string]func(*relocationJournal){
 		"duplicate": func(j *relocationJournal) { j.Records = append(j.Records, j.Records[0]) },
 		"multiple-pending": func(j *relocationJournal) {
@@ -90,6 +92,7 @@ func TestRelocationJournalRejectsInvalidRecords(t *testing.T) {
 }
 
 func TestRelocationJournalStrictWire(t *testing.T) {
+	t.Parallel()
 	j := relocationJournalFixture(t, t.TempDir())
 	raw, err := relocationJournalBytes(j)
 	if err != nil {

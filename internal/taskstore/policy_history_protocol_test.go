@@ -6,6 +6,7 @@ import (
 )
 
 func TestPolicyHistorySurvivesBundleAdoption(t *testing.T) {
+	t.Parallel()
 	board := configuredFixture(t)
 	if _, err := ActivatePolicy(board, defaultPolicyBytes(t), PolicyActivationOptions{}); err != nil {
 		t.Fatal(err)
@@ -19,6 +20,7 @@ func TestPolicyHistorySurvivesBundleAdoption(t *testing.T) {
 }
 
 func TestPolicyHistorySurvivesRepairAdoption(t *testing.T) {
+	t.Parallel()
 	board, req, _, _ := statusRepairFixture(t)
 	if _, err := ActivatePolicy(board, defaultPolicyBytes(t), PolicyActivationOptions{}); err != nil {
 		t.Fatal(err)
@@ -31,6 +33,7 @@ func TestPolicyHistorySurvivesRepairAdoption(t *testing.T) {
 }
 
 func TestPolicyHistorySurvivesRelocationAdoption(t *testing.T) {
+	t.Parallel()
 	board, req := relocationBoardFixture(t)
 	history := promoteHistoryFixture(t, board)
 	if _, err := Relocate(board, req, true); err != nil {
@@ -40,6 +43,7 @@ func TestPolicyHistorySurvivesRelocationAdoption(t *testing.T) {
 }
 
 func TestPolicyHistoryCanonicalBytesAndJournalAccounting(t *testing.T) {
+	t.Parallel()
 	j, current := historyJournalFixture(t)
 	oldDigest := j.Records[0].PolicyDigest
 	noncanonical := append(bytes.Clone(j.PolicyHistory[oldDigest]), '\n')

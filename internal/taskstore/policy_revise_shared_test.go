@@ -21,6 +21,7 @@ func sharedRevisionFixture(t *testing.T) (string, string, string, PolicyRevision
 }
 
 func TestPolicyRevisionSharedRecoveryEveryBoundary(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-common-policy-pending", "board-0/after-local-pending", "board-0/after-policy", "board-0/after-policy-ids", "board-0/after-policy-journal", "board-0/after-local-completed", "after-policy-board-0", "after-policy-board-1", "after-common-policy-active"} {
 		t.Run(phase, func(t *testing.T) {
 			_, a, b, options := sharedRevisionFixture(t)
@@ -68,6 +69,7 @@ func TestPolicyRevisionSharedRecoveryEveryBoundary(t *testing.T) {
 }
 
 func TestPolicyRevisionSharedPreflightAndJoin(t *testing.T) {
+	t.Parallel()
 	repo, a, b, options := sharedRevisionFixture(t)
 	raw := revisionPolicyBytes(t)
 	withoutAll := options

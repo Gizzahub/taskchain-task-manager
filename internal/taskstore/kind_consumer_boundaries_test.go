@@ -7,6 +7,7 @@ import (
 )
 
 func TestKindConsumerPlanIdentityAndParkingDirection(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ id, source, target, status string }{
 		{"PLAN-1", "backend/plan/auth/api/PLAN-1.md", "backend/todo/auth/api/PLAN-1.md", "pending"},
 		{"TASK-1", "backend/manual/auth/api/TASK-1.md", "backend/plan/auth/api/TASK-1.md", "pending"},
@@ -44,6 +45,7 @@ func TestKindConsumerPlanIdentityAndParkingDirection(t *testing.T) {
 }
 
 func TestKindConsumerSameZoneRequiresRepair(t *testing.T) {
+	t.Parallel()
 	board, repair := moduleRepairFixture(t)
 	req := kindConsumerMove(t, board, repair.ID, repair.Path, repair.Path, 'e')
 	before := boardBytes(t, board)

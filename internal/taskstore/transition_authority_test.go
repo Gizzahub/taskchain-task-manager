@@ -9,6 +9,7 @@ import (
 )
 
 func TestTransitionRechecksDependencies(t *testing.T) {
+	t.Parallel()
 	for _, edge := range [][2]string{{"todo", "doing"}, {"review", "done"}} {
 		t.Run(edge[0]+"-"+edge[1], func(t *testing.T) {
 			dir, req, raw, _ := transitionFixture(t)
@@ -50,6 +51,7 @@ func TestTransitionRechecksDependencies(t *testing.T) {
 }
 
 func TestClaimResumeZoneBoundary(t *testing.T) {
+	t.Parallel()
 	for _, zone := range []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "archive", "_archive", "doing/nested"} {
 		t.Run(zone, func(t *testing.T) {
 			dir, req, _, _ := transitionFixture(t)
@@ -83,6 +85,7 @@ func TestClaimResumeZoneBoundary(t *testing.T) {
 }
 
 func TestTransitionInvalidAuthorityPreservesBoard(t *testing.T) {
+	t.Parallel()
 	for name, mutate := range map[string]func(*TransitionRequest){
 		"owner":              func(r *TransitionRequest) { r.Owner = "another-worker" },
 		"token":              func(r *TransitionRequest) { r.Token = strings.Repeat("e", 32) },

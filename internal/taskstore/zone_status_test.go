@@ -26,6 +26,7 @@ func statusByID(t *testing.T, board string, policy boardpolicy.Policy) map[strin
 // the top-level scan derived status from any matching segment and so read an
 // archived card's provenance directory as its current status.
 func TestZoneStatusAgreesAcrossScansForArchiveProvenance(t *testing.T) {
+	t.Parallel()
 	board := claimBoard(t)
 	policy := moduleScanPolicyNamed(t, "backend")
 	writeModuleCard(t, board, "archive/done/TASK-91.md", "TASK-91", "pending")
@@ -40,6 +41,7 @@ func TestZoneStatusAgreesAcrossScansForArchiveProvenance(t *testing.T) {
 // A kind directory carries no status of its own, so a workflow-looking category
 // beneath it is filing, not a zone. Frontmatter is the only source there.
 func TestZoneStatusIgnoresWorkflowLookingCategoryUnderKindZone(t *testing.T) {
+	t.Parallel()
 	board := claimBoard(t)
 	policy := moduleScanPolicyNamed(t, "backend")
 	writeModuleCard(t, board, "plan/done/TASK-93.md", "TASK-93", "custom")
@@ -54,6 +56,7 @@ func TestZoneStatusIgnoresWorkflowLookingCategoryUnderKindZone(t *testing.T) {
 // held before the unification too; it is pinned so the unification cannot
 // quietly start inventing a status for a zone that declares none.
 func TestZoneStatusParkedWithoutDeclaredStatusKeepsFrontmatter(t *testing.T) {
+	t.Parallel()
 	board := claimBoard(t)
 	policy, err := boardpolicy.New(boardpolicy.Declaration{Zones: []string{"icebox"}, Modules: []string{"backend"}})
 	if err != nil {
@@ -72,6 +75,7 @@ func TestZoneStatusParkedWithoutDeclaredStatusKeepsFrontmatter(t *testing.T) {
 // test above, this passed before the unification -- it guards the branch the
 // unification replaced, not new behaviour.
 func TestZoneStatusParkedWithDeclaredStatusOverridesFrontmatter(t *testing.T) {
+	t.Parallel()
 	board := claimBoard(t)
 	policy, err := boardpolicy.New(boardpolicy.Declaration{
 		Zones: []string{"manual"}, ZoneStatus: map[string]string{"manual": "done"}, Modules: []string{"backend"},
@@ -91,6 +95,7 @@ func TestZoneStatusParkedWithDeclaredStatusOverridesFrontmatter(t *testing.T) {
 // The workflow zone still wins over frontmatter. This is the contract the
 // unification must not have weakened.
 func TestZoneStatusWorkflowZoneStillOverridesFrontmatter(t *testing.T) {
+	t.Parallel()
 	board := claimBoard(t)
 	policy := moduleScanPolicyNamed(t, "backend")
 	writeModuleCard(t, board, "done/TASK-98.md", "TASK-98", "open")

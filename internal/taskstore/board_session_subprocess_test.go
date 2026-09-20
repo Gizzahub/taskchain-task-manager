@@ -13,6 +13,7 @@ import (
 // prove that the namespace lock is observed across processes, not only by
 // two calls sharing one Go address space.
 func TestBoardSessionSubprocessHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("TASKCHAIN_SESSION_HELPER") != "1" {
 		return
 	}
@@ -27,6 +28,7 @@ func TestBoardSessionSubprocessHelper(t *testing.T) {
 }
 
 func TestSharedNamespaceLockObservedBySubprocess(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)

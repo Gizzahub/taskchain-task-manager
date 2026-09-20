@@ -42,6 +42,7 @@ func sharedFixture(t *testing.T) (string, string, string) {
 }
 
 func TestSharedEnableBothWorktreesAndNewMarkerlessWorktree(t *testing.T) {
+	t.Parallel()
 	repo, a, b := sharedFixture(t)
 	if _, err := Create(b, CreateRequest{ID: "TASK-090", Title: "uncommitted other"}); err != nil {
 		t.Fatal(err)
@@ -94,6 +95,7 @@ func TestSharedEnableBothWorktreesAndNewMarkerlessWorktree(t *testing.T) {
 }
 
 func TestSharedActivationInterruptedResume(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-initializing", "after-local-0", "after-local-1", "after-active"} {
 		t.Run(phase, func(t *testing.T) {
 			_, a, b := sharedFixture(t)
@@ -136,6 +138,7 @@ func TestSharedActivationInterruptedResume(t *testing.T) {
 }
 
 func TestSharedBurnAndMissingCommonState(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)

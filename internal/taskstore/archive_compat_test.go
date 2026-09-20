@@ -14,10 +14,12 @@ import (
 // built by the integration harness; the test must prove the old writer stops
 // at the storage-protocol barrier rather than merely rejecting the request.
 func TestArchiveStorageV2BinaryBarrier(t *testing.T) {
+	t.Parallel()
 	archiveStorageV2BinaryBarrier(t, false)
 }
 
 func TestLegacyAdoptionStorageV2BinaryBarrier(t *testing.T) {
+	t.Parallel()
 	archiveStorageV2BinaryBarrier(t, true)
 }
 
@@ -26,6 +28,7 @@ func TestArchiveStorageV3BinaryBarrier(t *testing.T) {
 }
 
 func TestArchiveStorageV4BinaryBarrierAfterCapacityAdoption(t *testing.T) {
+	t.Parallel()
 	binary := os.Getenv("TASKCHAIN_ARCHIVE_V4_BINARY")
 	if binary == "" {
 		t.Skip("set TASKCHAIN_ARCHIVE_V4_BINARY to storage-v4 executable")

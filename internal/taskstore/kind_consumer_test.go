@@ -53,6 +53,7 @@ func kindConsumerReady(t *testing.T, board, id string) bool {
 }
 
 func TestKindConsumerDoneToKindRevokesDependencyCompletion(t *testing.T) {
+	t.Parallel()
 	board := filepath.Join(t.TempDir(), "tasks")
 	writeModuleCard(t, board, "backend/done/auth/api/TASK-1.md", "TASK-1", "done")
 	if _, err := ActivatePolicy(board, kindConsumerPolicy(t), PolicyActivationOptions{AdoptModules: true}); err != nil {
@@ -79,6 +80,7 @@ func TestKindConsumerDoneToKindRevokesDependencyCompletion(t *testing.T) {
 }
 
 func TestKindConsumerHeldClaimPendingReleaseAndIdentity(t *testing.T) {
+	t.Parallel()
 	board := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(board); err != nil {
 		t.Fatal(err)

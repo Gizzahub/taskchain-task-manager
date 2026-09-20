@@ -10,6 +10,7 @@ import (
 )
 
 func TestModuleBundleRejectsUnsafePublicationBeforeReservation(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"component-length", "path-length", "symlink"} {
 		t.Run(scenario, func(t *testing.T) {
 			board := moduleAdoptionBoard(t)

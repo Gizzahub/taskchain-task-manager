@@ -52,6 +52,7 @@ func bundleRecordFixture(t *testing.T) bundleRecord {
 }
 
 func TestBundleRecordRejectsInconsistentEvidence(t *testing.T) {
+	t.Parallel()
 	changes := map[string]func(*bundleRecord){
 		"request-id":        func(r *bundleRecord) { r.RequestID = strings.Repeat("b", 32) },
 		"request-digest":    func(r *bundleRecord) { r.RequestDigest = strings.Repeat("0", 64) },

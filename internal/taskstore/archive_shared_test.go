@@ -35,6 +35,7 @@ func sharedArchiveFixture(t *testing.T) (sharedState, sharedRepairPending) {
 }
 
 func TestSharedArchiveReservationValidatesCanonicalScopeAndReceipts(t *testing.T) {
+	t.Parallel()
 	state, _ := sharedArchiveFixture(t)
 	if err := validateSharedState(state); err != nil {
 		t.Fatalf("valid archive reservation rejected: %v", err)
@@ -49,6 +50,7 @@ func TestSharedArchiveReservationValidatesCanonicalScopeAndReceipts(t *testing.T
 }
 
 func TestSharedArchiveReservationRejectsNumericPayload(t *testing.T) {
+	t.Parallel()
 	state, pending := sharedArchiveFixture(t)
 	raw, err := json.Marshal(state)
 	if err != nil {
@@ -95,6 +97,7 @@ func TestSharedArchiveReservationRejectsNumericPayload(t *testing.T) {
 }
 
 func TestSharedArchiveReservationRejectsConflictsAndDowngrade(t *testing.T) {
+	t.Parallel()
 	base, _ := sharedArchiveFixture(t)
 	for name, mutate := range map[string]func(*sharedState){
 		"protocol downgrade": func(s *sharedState) { s.StorageProtocol = 2 },
@@ -122,6 +125,7 @@ func TestSharedArchiveReservationRejectsConflictsAndDowngrade(t *testing.T) {
 }
 
 func TestSharedArchiveReservationRejectsScopeIDAndReceiptTampering(t *testing.T) {
+	t.Parallel()
 	base, _ := sharedArchiveFixture(t)
 	for name, mutate := range map[string]func(*sharedState){
 		"owner": func(s *sharedState) { p := *s.PendingArchive; p.Owner = "/other/tasks"; s.PendingArchive = &p },
@@ -158,6 +162,7 @@ func TestSharedArchiveReservationRejectsScopeIDAndReceiptTampering(t *testing.T)
 }
 
 func TestSharedRelocationReservationAcceptsProtocol3(t *testing.T) {
+	t.Parallel()
 	namespace := strings.Repeat("a", 32)
 	j := relocationJournalFixture(t, "/synthetic/tasks")
 	j.Records[0].Namespace = namespace
@@ -178,6 +183,7 @@ func TestSharedRelocationReservationAcceptsProtocol3(t *testing.T) {
 }
 
 func TestAcquireSharedArchiveRecoveryGate(t *testing.T) {
+	t.Parallel()
 	_, board, other := sharedFixture(t)
 	if _, err := EnableShared(board, false); err != nil {
 		t.Fatal(err)

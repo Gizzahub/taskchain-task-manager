@@ -14,6 +14,7 @@ func validSharedFixture() sharedState {
 }
 
 func TestSharedStateRoundTripAndAtomicPublish(t *testing.T) {
+	t.Parallel()
 	r, err := os.OpenRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -46,6 +47,7 @@ func TestSharedStateRoundTripAndAtomicPublish(t *testing.T) {
 }
 
 func TestSharedStateRejectsMalformedAndInvalid(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	r, err := os.OpenRoot(root)
 	if err != nil {
@@ -86,6 +88,7 @@ func TestSharedStateRejectsMalformedAndInvalid(t *testing.T) {
 }
 
 func TestSharedStateParticipantBound(t *testing.T) {
+	t.Parallel()
 	s := validSharedFixture()
 	s.Participants = make([]sharedParticipant, 257)
 	for i := range s.Participants {

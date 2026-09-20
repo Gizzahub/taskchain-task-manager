@@ -45,6 +45,7 @@ func parsedBundle(t *testing.T, req intentdoc.BundleRequest) intentdoc.BundleDoc
 }
 
 func TestPrepareBundleExplicitPrecedenceForwardKeysAndIsolation(t *testing.T) {
+	t.Parallel()
 	req, intent := bundleFixture(t)
 	req.Tasks[0].DependsOn = []intentdoc.TaskReference{{Key: "later"}, {TaskID: "TASK-001"}}
 	req.Tasks = append(req.Tasks, intentdoc.TaskDraft{Key: "later", ID: "TASK-010", Title: "Later", DependsOn: []intentdoc.TaskReference{}})
@@ -88,6 +89,7 @@ func TestPrepareBundleExplicitPrecedenceForwardKeysAndIsolation(t *testing.T) {
 }
 
 func TestPrepareBundleMatchesSingleCreate(t *testing.T) {
+	t.Parallel()
 	for _, configured := range []bool{false, true} {
 		t.Run(map[bool]string{false: "default", true: "configured"}[configured], func(t *testing.T) {
 			req, intent := bundleFixture(t)
@@ -122,6 +124,7 @@ func TestPrepareBundleMatchesSingleCreate(t *testing.T) {
 }
 
 func TestPrepareBundleFailureReturnsNoPartialProposal(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"missing-existing", "new-id-as-existing", "reserved-alias", "overflow", "long-filename", "late-invalid-template", "wrong-intent", "invalid-snapshot"} {
 		t.Run(scenario, func(t *testing.T) {
 			req, intent := bundleFixture(t)

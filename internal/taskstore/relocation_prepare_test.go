@@ -8,6 +8,7 @@ import (
 )
 
 func TestRelocationPreparationPreservesIdentityAndScopedPath(t *testing.T) {
+	t.Parallel()
 	p, err := boardpolicy.New(boardpolicy.Declaration{Relocations: []boardpolicy.Transition{{From: "plan", To: []string{"todo", "issue"}}}})
 	if err != nil {
 		t.Fatal(err)

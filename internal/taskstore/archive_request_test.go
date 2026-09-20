@@ -17,6 +17,7 @@ func archiveRequestFixture(t *testing.T) (ArchiveRequest, []byte, boardpolicy.Po
 }
 
 func TestPrepareArchiveRecordNormalAdmissionAndCompletion(t *testing.T) {
+	t.Parallel()
 	req, raw, policy := archiveRequestFixture(t)
 	rec, err := prepareArchiveRecord(req, raw, 0644, policy, "/synthetic/tasks", "", nil)
 	if err != nil {
@@ -34,6 +35,7 @@ func TestPrepareArchiveRecordNormalAdmissionAndCompletion(t *testing.T) {
 }
 
 func TestPrepareArchiveRecordDeniedAndExplicitOperations(t *testing.T) {
+	t.Parallel()
 	req, raw, policy := archiveRequestFixture(t)
 	denied := append([]byte(nil), raw...)
 	denied = bytes.Replace(denied, []byte("review-result: pass"), []byte("review-result: reject"), 1)
@@ -64,6 +66,7 @@ func TestPrepareArchiveRecordDeniedAndExplicitOperations(t *testing.T) {
 }
 
 func TestArchiveRequestStrictFieldsAndRulesReplay(t *testing.T) {
+	t.Parallel()
 	req, raw, policy := archiveRequestFixture(t)
 	for name, mutate := range map[string]func(*ArchiveRequest){
 		"id":               func(r *ArchiveRequest) { r.ID = "TASK-01" },
@@ -107,6 +110,7 @@ func TestArchiveRequestStrictFieldsAndRulesReplay(t *testing.T) {
 }
 
 func TestPrepareArchiveRecordPlanReferencesUseResolver(t *testing.T) {
+	t.Parallel()
 	req, _, policy := archiveRequestFixture(t)
 	req.ID = "PLAN-1"
 	req.Source = "plan/PLAN-1.md"
@@ -127,6 +131,7 @@ func TestPrepareArchiveRecordPlanReferencesUseResolver(t *testing.T) {
 }
 
 func TestArchiveRequestRejectsUnsafeSourceBeforeBoardAccess(t *testing.T) {
+	t.Parallel()
 	req, _, _ := archiveRequestFixture(t)
 	for _, source := range []string{"../done/TASK-001.md", "..", ".", "/done/TASK-001.md", "done/../TASK-001.md", "done\\TASK-001.md", "done/\x00.md", strings.Repeat("x", 1024)} {
 		x := req

@@ -9,6 +9,7 @@ import (
 )
 
 func TestRepairAdmissionFailuresDoNotAdopt(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"no-adopt", "resume-absent", "hash", "path", "owner", "request", "unreserved"} {
 		t.Run(kind, func(t *testing.T) {
 			board, req, _, _ := statusRepairFixture(t)
@@ -51,6 +52,7 @@ func TestRepairAdmissionFailuresDoNotAdopt(t *testing.T) {
 }
 
 func TestRepairCompletedReplayDoesNotRecreateDeletedCard(t *testing.T) {
+	t.Parallel()
 	board, req, _, _ := statusRepairFixture(t)
 	first, err := RepairStatus(board, req, true)
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 )
 
 func TestTransitionDecodeSeparatesWireAndPolicyValidation(t *testing.T) {
+	t.Parallel()
 	j := journalFixture(t)
 	raw, err := json.Marshal(j)
 	if err != nil {
@@ -40,6 +41,7 @@ func TestTransitionDecodeSeparatesWireAndPolicyValidation(t *testing.T) {
 }
 
 func TestTransitionPublishRejectsInvalidRecordCollection(t *testing.T) {
+	t.Parallel()
 	for _, duplicateID := range []bool{false, true} {
 		t.Run(map[bool]string{false: "multiple_pending", true: "duplicate_id"}[duplicateID], func(t *testing.T) {
 			dir := t.TempDir()
@@ -69,6 +71,7 @@ func TestTransitionPublishRejectsInvalidRecordCollection(t *testing.T) {
 }
 
 func TestTransitionTargetEncodingIsExactAndPolicyBound(t *testing.T) {
+	t.Parallel()
 	p := boardpolicy.Default()
 	digest, err := p.Digest()
 	if err != nil {
@@ -97,6 +100,7 @@ func TestTransitionTargetEncodingIsExactAndPolicyBound(t *testing.T) {
 }
 
 func TestTransitionLegacyEncodingDoesNotAdoptCustomSemantics(t *testing.T) {
+	t.Parallel()
 	p, err := boardpolicy.New(boardpolicy.Declaration{Transitions: []boardpolicy.Transition{{From: "todo", To: []string{"done"}}}})
 	if err != nil {
 		t.Fatal(err)

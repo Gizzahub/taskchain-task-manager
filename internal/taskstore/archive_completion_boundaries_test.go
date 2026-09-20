@@ -10,6 +10,7 @@ import (
 )
 
 func TestArchiveCompletionExactHistoricalCanonicalBindings(t *testing.T) {
+	t.Parallel()
 	b, raw, _, _ := archiveCompletionFixture(t)
 	for _, tc := range []struct {
 		name, want string
@@ -69,6 +70,7 @@ func TestArchiveCompletionExactHistoricalCanonicalBindings(t *testing.T) {
 }
 
 func TestArchiveCompletionStrictWireBoundaries(t *testing.T) {
+	t.Parallel()
 	b, _, _, _ := archiveCompletionFixture(t)
 	valid := archiveCompletionJSON(t, b)
 	var fields map[string]json.RawMessage

@@ -12,6 +12,7 @@ import (
 )
 
 func TestSharedCreateHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("TASKSTORE_SHARED_HELPER") != "1" {
 		return
 	}
@@ -51,6 +52,7 @@ func sharedCreateSubprocess(t *testing.T, board, id string) (string, error) {
 }
 
 func TestSharedCreateSubprocessesReserveUniqueAutomaticIDs(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)
@@ -84,6 +86,7 @@ func TestSharedCreateSubprocessesReserveUniqueAutomaticIDs(t *testing.T) {
 }
 
 func TestSharedCreateSubprocessSameAliasOnlyOneSucceeds(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	if _, err := EnableShared(a, false); err != nil {
 		t.Fatal(err)
@@ -110,6 +113,7 @@ func TestSharedCreateSubprocessSameAliasOnlyOneSucceeds(t *testing.T) {
 }
 
 func TestSharedCreateSubprocessDistinctExplicitHolesBothSucceed(t *testing.T) {
+	t.Parallel()
 	_, a, b := sharedFixture(t)
 	if _, err := ReserveIDs(a, []string{"TASK-1000"}, false); err != nil {
 		t.Fatal(err)

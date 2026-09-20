@@ -12,6 +12,7 @@ func archiveSessionRequest() ArchiveRequest {
 }
 
 func TestArchiveSessionExplicitAdoptionAndMissingJournal(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(dir); err != nil {
 		t.Fatal(err)
@@ -53,6 +54,7 @@ func TestArchiveSessionExplicitAdoptionAndMissingJournal(t *testing.T) {
 }
 
 func TestArchiveSessionAdoptionBoundaryResume(t *testing.T) {
+	t.Parallel()
 	for _, point := range []string{"after-relocation-empty-journal", "after-relocation-common-protocol", "after-relocation-local-protocol", "after-archive-empty-journal", "after-archive-common-protocol", "after-archive-local-protocol"} {
 		t.Run(point, func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "tasks")
@@ -88,6 +90,7 @@ func TestArchiveSessionAdoptionBoundaryResume(t *testing.T) {
 }
 
 func TestArchiveSessionSharedAdoptionResume(t *testing.T) {
+	t.Parallel()
 	for _, point := range []string{"after-archive-empty-journal", "after-archive-common-protocol", "after-archive-local-protocol"} {
 		t.Run(point, func(t *testing.T) {
 			_, board, other := sharedFixture(t)
@@ -126,6 +129,7 @@ func TestArchiveSessionSharedAdoptionResume(t *testing.T) {
 }
 
 func TestArchiveSessionRejectsOtherPendingStorage(t *testing.T) {
+	t.Parallel()
 	dir, req := relocationBoardFixture(t)
 	_, err := relocateWithStep(dir, req, true, false, repairStopAt("after-relocation-journal"))
 	if err == nil || !strings.Contains(err.Error(), "stop at") {
@@ -145,6 +149,7 @@ func TestArchiveSessionRejectsOtherPendingStorage(t *testing.T) {
 }
 
 func TestArchiveSessionSharedReservationRecovery(t *testing.T) {
+	t.Parallel()
 	t.Run("legacy-full-target", func(t *testing.T) { archiveSessionReservationRecovery(t, 3) })
 	t.Run("delta", func(t *testing.T) { archiveSessionReservationRecovery(t, 4) })
 }

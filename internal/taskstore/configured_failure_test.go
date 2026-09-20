@@ -10,6 +10,7 @@ import (
 )
 
 func TestConfiguredCreateUsesCommonReservationFailurePath(t *testing.T) {
+	t.Parallel()
 	for _, mode := range []string{"local", "shared"} {
 		t.Run(mode, func(t *testing.T) {
 			var board, other, reserved, next, point string
@@ -45,6 +46,7 @@ func TestConfiguredCreateUsesCommonReservationFailurePath(t *testing.T) {
 }
 
 func TestConfiguredInvalidInputsLeaveBoardBytesUntouched(t *testing.T) {
+	t.Parallel()
 	board := configuredFixture(t)
 	before := boardBytes(t, board)
 	for name, change := range map[string]func(*CreateRequest){

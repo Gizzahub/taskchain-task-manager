@@ -23,6 +23,7 @@ func archiveJournalFixture(t *testing.T) (archiveJournal, archiveRecord, archive
 }
 
 func TestArchiveJournalValidPendingAndCompletedBinding(t *testing.T) {
+	t.Parallel()
 	j, pending, b, cardRaw := archiveJournalFixture(t)
 	raw, err := archiveJournalBytes(j)
 	if err != nil {
@@ -73,6 +74,7 @@ func TestArchiveJournalValidPendingAndCompletedBinding(t *testing.T) {
 }
 
 func TestArchiveJournalScopeAndBindingMismatches(t *testing.T) {
+	t.Parallel()
 	j, pending, b, _ := archiveJournalFixture(t)
 	if _, err := archiveCompletedBindings(j, "/other/tasks", ""); err == nil || !strings.Contains(err.Error(), "current board") {
 		t.Fatalf("board mismatch accepted: %v", err)
@@ -107,6 +109,7 @@ func TestArchiveJournalScopeAndBindingMismatches(t *testing.T) {
 }
 
 func TestArchiveJournalRejectsOrderingDuplicatesAndCompletedPayload(t *testing.T) {
+	t.Parallel()
 	j, pending, _, _ := archiveJournalFixture(t)
 	notLast := j
 	notLast.Records = append([]archiveRecord{pending}, pending)
@@ -128,6 +131,7 @@ func TestArchiveJournalRejectsOrderingDuplicatesAndCompletedPayload(t *testing.T
 }
 
 func TestArchiveJournalForceSupersedeAndStatusPatchContracts(t *testing.T) {
+	t.Parallel()
 	_, pending, _, raw := archiveJournalFixture(t)
 	force := pending
 	force.Operation, force.Completion, force.Assertion = "force", nil, ""
@@ -168,6 +172,7 @@ func TestArchiveJournalForceSupersedeAndStatusPatchContracts(t *testing.T) {
 }
 
 func TestArchiveJournalStrictWireFailuresAreSingleCause(t *testing.T) {
+	t.Parallel()
 	j, _, _, _ := archiveJournalFixture(t)
 	valid, err := archiveJournalBytes(j)
 	if err != nil {

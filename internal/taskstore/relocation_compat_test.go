@@ -13,6 +13,7 @@ import (
 // Use the actual storage-v1 executable. Assert the storage-protocol diagnostic,
 // not just failure: rejection of policy v2 alone would not prove this barrier.
 func TestRelocationStorageV1BinaryBarrier(t *testing.T) {
+	t.Parallel()
 	binary := os.Getenv("TASKCHAIN_RELOCATION_LEGACY_BINARY")
 	if binary == "" {
 		t.Skip("set TASKCHAIN_RELOCATION_LEGACY_BINARY to storage-v1 executable")

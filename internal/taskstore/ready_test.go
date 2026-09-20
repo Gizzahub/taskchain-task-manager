@@ -9,6 +9,7 @@ import (
 )
 
 func TestNonWorkflowCompletionCannotUnblockDependency(t *testing.T) {
+	t.Parallel()
 	for _, zone := range []string{"plan", "plan/done", "issue", "archive", "archive/done", "_archive", "_archive/done", "done/nested"} {
 		t.Run(zone, func(t *testing.T) {
 			root := filepath.Join(t.TempDir(), "tasks")
@@ -33,6 +34,7 @@ func TestNonWorkflowCompletionCannotUnblockDependency(t *testing.T) {
 }
 
 func TestCreateRejectsExistingCycleWithoutPublishing(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(root); err != nil {
 		t.Fatal(err)

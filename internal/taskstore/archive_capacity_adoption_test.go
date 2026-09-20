@@ -10,6 +10,7 @@ import (
 )
 
 func TestArchiveCapacityAdoptionPublishesExactPayloadAndPermanentBarrier(t *testing.T) {
+	t.Parallel()
 	dir, r, before := archiveBoardFixture(t)
 	if err := os.Chmod(filepath.Join(dir, archivesFile), 0640); err != nil {
 		t.Fatal(err)
@@ -55,6 +56,7 @@ func TestArchiveCapacityAdoptionPublishesExactPayloadAndPermanentBarrier(t *test
 }
 
 func TestArchiveCapacityRecoveryLoadsSchema1OriginalAfterLocalProtocol5(t *testing.T) {
+	t.Parallel()
 	dir, r, _ := archiveBoardFixture(t)
 	original, err := os.ReadFile(filepath.Join(dir, archivesFile))
 	if err != nil {
@@ -92,6 +94,7 @@ func TestArchiveCapacityRecoveryLoadsSchema1OriginalAfterLocalProtocol5(t *testi
 }
 
 func TestArchiveCapacityIdentityBindingResolvesPendingOriginalAndTarget(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		point  string
@@ -115,6 +118,7 @@ func TestArchiveCapacityIdentityBindingResolvesPendingOriginalAndTarget(t *testi
 }
 
 func TestArchiveCapacityIdentityBindingRejectsIncompleteCompletedAuthority(t *testing.T) {
+	t.Parallel()
 	t.Run("missing payload", func(t *testing.T) {
 		dir, r, _ := archiveBoardFixture(t)
 		if err := AdoptArchiveCapacity(dir, strings.Repeat("2", 32)); err != nil {
@@ -158,6 +162,7 @@ func TestArchiveCapacityIdentityBindingRejectsIncompleteCompletedAuthority(t *te
 }
 
 func TestArchiveCapacityRecoveryRejectsThirdBytesWithoutMutation(t *testing.T) {
+	t.Parallel()
 	dir, r, _ := archiveBoardFixture(t)
 	original, err := boundedSnapshotFile(r, archivesFile, maxRepairsBytes)
 	if err != nil {
@@ -193,6 +198,7 @@ func TestArchiveCapacityRecoveryRejectsThirdBytesWithoutMutation(t *testing.T) {
 }
 
 func TestArchiveCapacityPayloadRejectsModeAndThirdTarget(t *testing.T) {
+	t.Parallel()
 	_, r, _ := archiveBoardFixture(t)
 	original, err := boundedSnapshotFile(r, archivesFile, maxRepairsBytes)
 	if err != nil {
@@ -218,6 +224,7 @@ func TestArchiveCapacityPayloadRejectsModeAndThirdTarget(t *testing.T) {
 }
 
 func TestArchiveCapacityAdoptionAllowsSubsequentArchive(t *testing.T) {
+	t.Parallel()
 	dir, first, _ := archiveWriterFixture(t)
 	if _, err := Archive(dir, first, true); err != nil {
 		t.Fatal(err)
@@ -256,6 +263,7 @@ func TestArchiveCapacityAdoptionAllowsSubsequentArchive(t *testing.T) {
 }
 
 func TestArchiveCapacityAdoptionSharedMarkerHasNoByteAuthority(t *testing.T) {
+	t.Parallel()
 	board, _, req := archiveProcessFixture(t, true)
 	if _, err := Archive(board, req, true); err != nil {
 		t.Fatal(err)
@@ -284,6 +292,7 @@ func TestArchiveCapacityAdoptionSharedMarkerHasNoByteAuthority(t *testing.T) {
 }
 
 func TestArchiveCapacityProtocol5PreservesRepairAndRelocation(t *testing.T) {
+	t.Parallel()
 	dir, r, _ := archiveBoardFixture(t)
 	if _, err := ActivatePolicy(dir, []byte(relocationPolicyFixture), PolicyActivationOptions{}); err != nil {
 		t.Fatal(err)
@@ -314,6 +323,7 @@ func TestArchiveCapacityProtocol5PreservesRepairAndRelocation(t *testing.T) {
 }
 
 func TestArchiveCapacityProtocol5PreservesSharedRepairAndRelocation(t *testing.T) {
+	t.Parallel()
 	board, _, first := archiveProcessFixture(t, true)
 	if _, err := ActivatePolicy(board, []byte(relocationPolicyFixture), PolicyActivationOptions{AllWorktrees: true}); err != nil {
 		t.Fatal(err)

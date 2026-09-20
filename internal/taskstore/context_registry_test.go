@@ -14,6 +14,7 @@ const testContextIntent = `{"schemaVersion":1,"kind":"intent","id":"INTENT-01234
 const testContextBatch = `{"schemaVersion":1,"kind":"batch","id":"BATCH-abcdef0123456789abcdef0123456789","revision":1,"intent":{"id":"INTENT-0123456789abcdef0123456789abcdef","revision":1,"digest":"04edcffd5de255854f0bdd4f68cc24e21ee8ad1d3a39b4645382f0d9066ad508"},"gap":"Publish the reviewed release","taskIds":["TASK-1"],"constraints":[],"authorizationRefs":[]}`
 
 func TestContextRegistrySparseReplaysAndConflicts(t *testing.T) {
+	t.Parallel()
 	board := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(board); err != nil {
 		t.Fatal(err)
@@ -39,6 +40,7 @@ func TestContextRegistrySparseReplaysAndConflicts(t *testing.T) {
 }
 
 func TestContextRegistryBatchReferencesAndHistoricalShow(t *testing.T) {
+	t.Parallel()
 	board := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(board); err != nil {
 		t.Fatal(err)
@@ -92,6 +94,7 @@ func TestContextRegistryBatchReferencesAndHistoricalShow(t *testing.T) {
 }
 
 func TestContextRegistryRejectsCorruptNoncanonicalAndSymlinkedPaths(t *testing.T) {
+	t.Parallel()
 	board := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(board); err != nil {
 		t.Fatal(err)

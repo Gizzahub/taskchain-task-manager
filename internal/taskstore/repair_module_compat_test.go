@@ -42,6 +42,7 @@ func moduleRepairLegacyBarrier(t *testing.T, binary, board, diagnostic string, b
 }
 
 func TestModuleRepairLegacyBinaryBarrier(t *testing.T) {
+	t.Parallel()
 	binary := moduleRepairLegacyBinary(t)
 	board, _ := moduleRepairFixture(t)
 	if out, err := runLegacyPolicyCommand(binary, "list", "--dir", board, "--json"); err != nil {
@@ -106,6 +107,7 @@ func sharedRepairState(t *testing.T, commonPath string) sharedState {
 }
 
 func TestModuleRepairLegacyBinarySharedBoundariesAndRecovery(t *testing.T) {
+	t.Parallel()
 	binary := moduleRepairLegacyBinary(t)
 	for _, phase := range []string{"after-common-pending", "after-journal", "after-replacement"} {
 		t.Run(phase, func(t *testing.T) {

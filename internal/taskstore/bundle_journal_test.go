@@ -18,6 +18,7 @@ func emptyBundleJournal() bundleJournal {
 }
 
 func TestBundleJournalRoundTripAndAtomicInitialUpdate(t *testing.T) {
+	t.Parallel()
 	r, err := os.OpenRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -53,6 +54,7 @@ func TestBundleJournalRoundTripAndAtomicInitialUpdate(t *testing.T) {
 }
 
 func TestBundleJournalMissingAndRejectsMalformedShape(t *testing.T) {
+	t.Parallel()
 	r, err := os.OpenRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -84,6 +86,7 @@ func TestBundleJournalMissingAndRejectsMalformedShape(t *testing.T) {
 }
 
 func TestBundleJournalRejectsRecordAndCardShape(t *testing.T) {
+	t.Parallel()
 	r, err := os.OpenRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -120,6 +123,7 @@ func TestBundleJournalRejectsRecordAndCardShape(t *testing.T) {
 }
 
 func TestBundleJournalSymlinkOversizeAndPublicationConflict(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	r, err := os.OpenRoot(root)
 	if err != nil {
@@ -165,6 +169,7 @@ func TestBundleJournalSymlinkOversizeAndPublicationConflict(t *testing.T) {
 }
 
 func TestBundleJournalBytesRejectsInvalidEmptyJournalAndIsJSON(t *testing.T) {
+	t.Parallel()
 	if _, err := bundleJournalBytes(bundleJournal{SchemaVersion: 1, BoardID: strings.Repeat("a", 32)}); err == nil {
 		t.Fatal("nil records accepted")
 	}
@@ -175,6 +180,7 @@ func TestBundleJournalBytesRejectsInvalidEmptyJournalAndIsJSON(t *testing.T) {
 }
 
 func TestBundleJournalRoundTripsValidPendingAndCompletedRecords(t *testing.T) {
+	t.Parallel()
 	record := bundleRecordFixture(t)
 	journal := bundleJournal{SchemaVersion: 1, BoardID: strings.Repeat("a", 32), Records: []bundleRecord{record}}
 	raw, err := bundleJournalBytes(journal)
@@ -205,6 +211,7 @@ func TestBundleJournalRoundTripsValidPendingAndCompletedRecords(t *testing.T) {
 }
 
 func TestBundleJournalRejectsDuplicateRequestAndMultiplePendingValidRecords(t *testing.T) {
+	t.Parallel()
 	record := bundleRecordFixture(t)
 	duplicate := bundleJournal{SchemaVersion: 1, BoardID: strings.Repeat("a", 32), Records: []bundleRecord{record, record}}
 	if _, err := bundleJournalBytes(duplicate); err == nil || !strings.Contains(err.Error(), "duplicate") {
@@ -238,6 +245,7 @@ func TestBundleJournalRejectsDuplicateRequestAndMultiplePendingValidRecords(t *t
 }
 
 func TestBundleJournalByteFieldsRequireJSONStrings(t *testing.T) {
+	t.Parallel()
 	record := bundleRecordFixture(t)
 	raw, err := json.Marshal(bundleJournal{SchemaVersion: 1, BoardID: strings.Repeat("a", 32), Records: []bundleRecord{record}})
 	if err != nil {

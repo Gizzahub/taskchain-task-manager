@@ -9,6 +9,7 @@ import (
 )
 
 func TestBundleAdmissionPreparesWithoutPublishing(t *testing.T) {
+	t.Parallel()
 	board := configuredFixture(t)
 	req, _ := bundleFixture(t)
 	if _, err := RegisterContext(board, []byte(testContextIntent)); err != nil {
@@ -36,6 +37,7 @@ func TestBundleAdmissionPreparesWithoutPublishing(t *testing.T) {
 }
 
 func TestBundleAdmissionFailureLeavesNoUpgradeOrReservation(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"missing-intent", "wrong-intent", "missing-task", "occupied-batch", "late-template"} {
 		t.Run(scenario, func(t *testing.T) {
 			board := configuredFixture(t)

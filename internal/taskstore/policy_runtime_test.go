@@ -40,6 +40,7 @@ func bindRuntimeFixture(t *testing.T, dir string, d boardpolicy.Declaration) []b
 }
 
 func TestBoundParkingDiscoveryAndReady(t *testing.T) {
+	t.Parallel()
 	dir := claimBoard(t)
 	bindRuntimeFixture(t, dir, boardpolicy.Declaration{Zones: []string{"manual"}, ZoneStatus: map[string]string{"manual": "done"}})
 	if err := os.MkdirAll(filepath.Join(dir, "manual/done"), 0o755); err != nil {
@@ -80,6 +81,7 @@ func TestBoundParkingDiscoveryAndReady(t *testing.T) {
 }
 
 func TestBoundParkingResumeAndMoveOutOnly(t *testing.T) {
+	t.Parallel()
 	dir := claimBoard(t)
 	bindRuntimeFixture(t, dir, boardpolicy.Declaration{Zones: []string{"manual"}, Transitions: []boardpolicy.Transition{{From: "manual", To: []string{"todo"}}}})
 	if err := os.Mkdir(filepath.Join(dir, "manual"), 0o755); err != nil {
@@ -114,6 +116,7 @@ func TestBoundParkingResumeAndMoveOutOnly(t *testing.T) {
 }
 
 func TestLegacyCompletedReplaySurvivesBoundGraph(t *testing.T) {
+	t.Parallel()
 	dir, req, _, _ := transitionFixture(t)
 	want, err := Transition(dir, req)
 	if err != nil {

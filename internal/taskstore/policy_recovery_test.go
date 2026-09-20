@@ -12,6 +12,7 @@ import (
 )
 
 func TestBoundTransitionRecoveryRequiresExactPolicy(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-journal", "after-target", "after-source", "after-receipt"} {
 		t.Run(phase, func(t *testing.T) {
 			dir, req, _, want := transitionFixture(t)
@@ -50,6 +51,7 @@ func TestBoundTransitionRecoveryRequiresExactPolicy(t *testing.T) {
 }
 
 func TestBoundPolicyChangeAfterTargetPreservesSource(t *testing.T) {
+	t.Parallel()
 	dir, req, original, _ := transitionFixture(t)
 	canonical := bindRuntimeFixture(t, dir, boardpolicy.Declaration{})
 	_, err := transitionWithStep(dir, req, func(at string) error {
@@ -74,6 +76,7 @@ func TestBoundPolicyChangeAfterTargetPreservesSource(t *testing.T) {
 }
 
 func TestParkedTransitionCrashRecovery(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-journal", "after-target", "after-source", "after-receipt"} {
 		t.Run(phase, func(t *testing.T) {
 			dir, req, original, _ := transitionFixture(t)
@@ -108,6 +111,7 @@ func TestParkedTransitionCrashRecovery(t *testing.T) {
 }
 
 func TestBrokenPolicyBindingBlocksBoardOperations(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"orphan", "legacy-journal", "missing", "changed", "noncanonical", "symlink"} {
 		t.Run(kind, func(t *testing.T) {
 			dir, req, _, _ := transitionFixture(t)

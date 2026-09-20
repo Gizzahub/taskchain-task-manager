@@ -50,6 +50,7 @@ func moduleTransitionFixture(t *testing.T) (string, TransitionRequest, []byte) {
 }
 
 func TestModuleTransitionPreservesPrefixAndRecovers(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-journal", "after-target", "after-source", "after-receipt"} {
 		t.Run(phase, func(t *testing.T) {
 			dir, req, raw := moduleTransitionFixture(t)
@@ -87,6 +88,7 @@ func TestModuleTransitionPreservesPrefixAndRecovers(t *testing.T) {
 }
 
 func TestModuleTransitionRejectsNestedAncestorSymlinkDuringRecovery(t *testing.T) {
+	t.Parallel()
 	for _, source := range []bool{true, false} {
 		dir, req, _ := moduleTransitionFixture(t)
 		stop := errors.New("stop before files")

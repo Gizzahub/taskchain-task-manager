@@ -10,6 +10,7 @@ import (
 )
 
 func TestInitListCreateAndAllocateAcrossArchive(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(root); err != nil {
 		t.Fatal(err)
@@ -52,6 +53,7 @@ func TestInitListCreateAndAllocateAcrossArchive(t *testing.T) {
 }
 
 func TestCreateRejectsInvalidDuplicateAndNoOverwrite(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(root); err != nil {
 		t.Fatal(err)
@@ -72,6 +74,7 @@ func TestCreateRejectsInvalidDuplicateAndNoOverwrite(t *testing.T) {
 }
 
 func TestListRejectsMalformedDuplicateAndSymlink(t *testing.T) {
+	t.Parallel()
 	for name, setup := range map[string]func(string) error{
 		"malformed": func(root string) error {
 			return os.WriteFile(filepath.Join(root, "todo/bad.md"), []byte("---\na: [\n---\n"), 0o644)
@@ -105,6 +108,7 @@ func TestListRejectsMalformedDuplicateAndSymlink(t *testing.T) {
 }
 
 func TestListRejectsUnsupportedRootLayout(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"todos", "root-card.md"} {
 		root := filepath.Join(t.TempDir(), "tasks")
 		if err := Init(root); err != nil {
@@ -124,6 +128,7 @@ func TestListRejectsUnsupportedRootLayout(t *testing.T) {
 }
 
 func TestLockIsFailFastAndNormalCleanup(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(root); err != nil {
 		t.Fatal(err)
@@ -146,6 +151,7 @@ func TestLockIsFailFastAndNormalCleanup(t *testing.T) {
 }
 
 func TestRootSymlinkWithTrailingSeparatorIsRejected(t *testing.T) {
+	t.Parallel()
 	parent := t.TempDir()
 	target := filepath.Join(parent, "target")
 	if err := os.Mkdir(target, 0o755); err != nil {
@@ -164,6 +170,7 @@ func TestRootSymlinkWithTrailingSeparatorIsRejected(t *testing.T) {
 }
 
 func TestStageWriteFailureRemovesOwnedStage(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(root); err != nil {
 		t.Fatal(err)
@@ -190,6 +197,7 @@ func TestStageWriteFailureRemovesOwnedStage(t *testing.T) {
 }
 
 func TestConcurrentCreateProducesDistinctIDs(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(root); err != nil {
 		t.Fatal(err)
@@ -223,6 +231,7 @@ func TestConcurrentCreateProducesDistinctIDs(t *testing.T) {
 }
 
 func TestReadyDAGDonePrerequisiteAndKindExclusion(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(root); err != nil {
 		t.Fatal(err)
@@ -289,6 +298,7 @@ func TestReadyDAGDonePrerequisiteAndKindExclusion(t *testing.T) {
 }
 
 func TestDependencyValidationRejectsMissingSelfDuplicateAndCycle(t *testing.T) {
+	t.Parallel()
 	for name, deps := range map[string][]string{
 		"missing": {"TASK-99"}, "self": {"TASK-1"}, "duplicate": {"TASK-2", "TASK-2"},
 	} {
@@ -335,6 +345,7 @@ func TestDependencyValidationRejectsMissingSelfDuplicateAndCycle(t *testing.T) {
 }
 
 func TestCreateDependenciesRoundTripAndEmptyReady(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(root); err != nil {
 		t.Fatal(err)
@@ -361,6 +372,7 @@ func TestCreateDependenciesRoundTripAndEmptyReady(t *testing.T) {
 }
 
 func TestCreateInvalidDependencyLeavesBoardUnchanged(t *testing.T) {
+	t.Parallel()
 	root := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(root); err != nil {
 		t.Fatal(err)

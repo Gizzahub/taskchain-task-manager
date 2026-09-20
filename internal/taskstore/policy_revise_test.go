@@ -33,6 +33,7 @@ func localRevisionFixture(t *testing.T) (string, PolicyRevisionOptions) {
 }
 
 func TestPolicyRevisionLocalPublicationRecovery(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-local-pending", "after-policy", "after-policy-ids", "after-policy-journal", "after-local-completed"} {
 		t.Run(phase, func(t *testing.T) {
 			dir, options := localRevisionFixture(t)
@@ -82,6 +83,7 @@ func TestPolicyRevisionLocalPublicationRecovery(t *testing.T) {
 }
 
 func TestPolicyRevisionCASAndStaleReplay(t *testing.T) {
+	t.Parallel()
 	dir, options := localRevisionFixture(t)
 	raw := revisionPolicyBytes(t)
 	for _, bad := range []PolicyRevisionOptions{{}, {ExpectedAuthorityID: strings.Repeat("f", 32), ExpectedDigest: options.ExpectedDigest}, {ExpectedAuthorityID: options.ExpectedAuthorityID, ExpectedDigest: strings.Repeat("f", 64)}, {ExpectedAuthorityID: options.ExpectedAuthorityID, ExpectedDigest: options.ExpectedDigest, Resume: true}} {
@@ -111,6 +113,7 @@ func TestPolicyRevisionCASAndStaleReplay(t *testing.T) {
 }
 
 func TestPolicyRevisionPreservesHistoricalTransition(t *testing.T) {
+	t.Parallel()
 	dir, req, _, _ := transitionFixture(t)
 	claim := ClaimRequest{ID: req.ID, Owner: req.Owner, Token: req.Token}
 	if _, err := Release(dir, claim); err != nil {
@@ -144,6 +147,7 @@ func TestPolicyRevisionPreservesHistoricalTransition(t *testing.T) {
 }
 
 func TestPolicyRevisionEnablesV2Relocation(t *testing.T) {
+	t.Parallel()
 	dir, options := localRevisionFixture(t)
 	if _, err := RevisePolicy(dir, []byte(relocationPolicyFixture), options); err != nil {
 		t.Fatal(err)

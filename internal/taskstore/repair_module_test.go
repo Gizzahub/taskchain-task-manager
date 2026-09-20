@@ -10,6 +10,7 @@ import (
 )
 
 func TestRepairRejectsExplicitEmptyPolicyBinding(t *testing.T) {
+	t.Parallel()
 	board, req, _, _ := statusRepairFixture(t)
 	if _, err := RepairStatus(board, req, true); err != nil {
 		t.Fatal(err)
@@ -66,6 +67,7 @@ func moduleRepairFixture(t *testing.T) (string, RepairRequest) {
 }
 
 func TestModuleRepairRecoveryAndHistoricalReplay(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-journal", "after-stage", "after-replacement", "after-receipt"} {
 		t.Run(phase, func(t *testing.T) {
 			board, req := moduleRepairFixture(t)
@@ -93,6 +95,7 @@ func TestModuleRepairRecoveryAndHistoricalReplay(t *testing.T) {
 }
 
 func TestModuleRepairJournalRequiresExactHistoricalPolicy(t *testing.T) {
+	t.Parallel()
 	board, req := moduleRepairFixture(t)
 	if _, err := RepairStatus(board, req, true); err != nil {
 		t.Fatal(err)

@@ -11,6 +11,7 @@ import (
 )
 
 func TestArchiveRebindArtifactPublishLoadRetryAndInertness(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	r, err := os.OpenRoot(root)
 	if err != nil {
@@ -46,6 +47,7 @@ func TestArchiveRebindArtifactPublishLoadRetryAndInertness(t *testing.T) {
 }
 
 func TestArchiveRebindArtifactPublicationCutpoints(t *testing.T) {
+	t.Parallel()
 	t.Run("stage failure cleans staging", func(t *testing.T) {
 		root := t.TempDir()
 		r, err := os.OpenRoot(root)
@@ -171,6 +173,7 @@ func TestArchiveRebindArtifactPublicationCutpoints(t *testing.T) {
 }
 
 func TestArchiveRebindArtifactRejectsDigestNamesAndAbsentLoad(t *testing.T) {
+	t.Parallel()
 	r, err := os.OpenRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -207,6 +210,7 @@ func TestArchiveRebindArtifactRejectsDigestNamesAndAbsentLoad(t *testing.T) {
 }
 
 func TestArchiveRebindArtifactRejectsTamperModeLinksAndDirectories(t *testing.T) {
+	t.Parallel()
 	plan := archiveRebindPayloadFixture(t)
 	payload, err := archiveRebindPayloadBytes(plan)
 	if err != nil {
@@ -355,6 +359,7 @@ func TestArchiveRebindArtifactRejectsTamperModeLinksAndDirectories(t *testing.T)
 }
 
 func TestArchiveRebindArtifactRejectsMalformedAndOversizedWithoutStages(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	r, err := os.OpenRoot(root)
 	if err != nil {

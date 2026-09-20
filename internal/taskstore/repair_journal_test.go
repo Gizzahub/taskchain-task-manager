@@ -35,6 +35,7 @@ func repairJournalFixture(t *testing.T) repairJournal {
 func parseRepairFixture(raw []byte) (*card.Document, error) { return card.Parse(raw) }
 
 func TestDecodeRepairJournalRoundTripAndMissing(t *testing.T) {
+	t.Parallel()
 	j := repairJournalFixture(t)
 	raw, err := json.Marshal(j)
 	if err != nil {
@@ -59,6 +60,7 @@ func TestDecodeRepairJournalRoundTripAndMissing(t *testing.T) {
 }
 
 func TestDecodeRepairJournalRejectsWireAndPayloadTampering(t *testing.T) {
+	t.Parallel()
 	base := repairJournalFixture(t)
 	valid, err := json.Marshal(base)
 	if err != nil {
@@ -104,6 +106,7 @@ func TestDecodeRepairJournalRejectsWireAndPayloadTampering(t *testing.T) {
 }
 
 func TestRepairJournalCompletionCapacityAndCompletedShape(t *testing.T) {
+	t.Parallel()
 	j := repairJournalFixture(t)
 	j.Records[0].Kind = "completed"
 	j.Records[0].Original = nil
@@ -130,6 +133,7 @@ func completedRepairRecord(board, id string, n int) repairRecord {
 }
 
 func TestRepairJournalSizeLimitPreservesExistingJournal(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	board, err := filepath.Abs(dir)
 	if err != nil {

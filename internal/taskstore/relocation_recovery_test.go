@@ -33,6 +33,7 @@ func relocationRequestFor(t *testing.T, dir string) RelocationRequest {
 }
 
 func TestRelocationWriterRecoveryAndGates(t *testing.T) {
+	t.Parallel()
 	for _, point := range []string{"after-relocation-empty-journal", "after-relocation-common-protocol", "after-relocation-local-protocol", "after-relocation-common-pending", "after-relocation-journal", "after-stage", "after-target", "after-source", "after-relocation-receipt"} {
 		t.Run(point, func(t *testing.T) {
 			dir, req := relocationBoardFixture(t)
@@ -65,6 +66,7 @@ func TestRelocationWriterRecoveryAndGates(t *testing.T) {
 }
 
 func TestRelocationWriterPreservesRepairReceipts(t *testing.T) {
+	t.Parallel()
 	dir, req := relocationBoardFixture(t)
 	repair := storageRepairRequest(t, dir, 'b')
 	if _, err := RepairStatus(dir, repair, true); err != nil {
@@ -104,6 +106,7 @@ func TestRelocationWriterPreservesRepairReceipts(t *testing.T) {
 }
 
 func TestRelocationWriterRequiresAdoptionAndAbsentTarget(t *testing.T) {
+	t.Parallel()
 	dir, req := relocationBoardFixture(t)
 	before := boardBytes(t, dir)
 	if _, err := Relocate(dir, req, false); err == nil {
@@ -132,6 +135,7 @@ func TestRelocationWriterRequiresAdoptionAndAbsentTarget(t *testing.T) {
 }
 
 func TestRelocationWriterSourceReappearingCannotComplete(t *testing.T) {
+	t.Parallel()
 	dir, req := relocationBoardFixture(t)
 	raw, err := os.ReadFile(filepath.Join(dir, req.Source))
 	if err != nil {
@@ -158,6 +162,7 @@ func TestRelocationWriterSourceReappearingCannotComplete(t *testing.T) {
 }
 
 func TestRelocationWriterHeldClaimAndHistoricalReplay(t *testing.T) {
+	t.Parallel()
 	dir, req := relocationBoardFixture(t)
 	claim := ClaimRequest{ID: req.ID, Owner: req.Owner, Token: testToken}
 	if _, err := Claim(dir, claim); err != nil {

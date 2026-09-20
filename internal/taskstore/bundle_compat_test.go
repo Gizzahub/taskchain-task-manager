@@ -12,6 +12,7 @@ import (
 // This opt-in check executes a separately built pre-bundle release, not a
 // simulated reader. CI without that binary does not prove backwards fencing.
 func TestBundleLegacyBinaryBarrier(t *testing.T) {
+	t.Parallel()
 	binary := os.Getenv("TASKCHAIN_LEGACY_BINARY")
 	if binary == "" {
 		t.Skip("set TASKCHAIN_LEGACY_BINARY to a pre-bundle executable")

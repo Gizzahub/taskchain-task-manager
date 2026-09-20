@@ -8,6 +8,7 @@ import (
 )
 
 func TestBundleSessionAdoptionRequiresExplicitUpgrade(t *testing.T) {
+	t.Parallel()
 	dir := configuredFixture(t)
 	before := boardBytes(t, dir)
 	s, err := openBundleSession(dir)
@@ -45,6 +46,7 @@ func TestBundleSessionAdoptionRequiresExplicitUpgrade(t *testing.T) {
 }
 
 func TestBundleSessionResumesAdoptionInterruption(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-empty-journal", "after-local-protocol", "after-common-protocol"} {
 		t.Run(phase, func(t *testing.T) {
 			_, dir, _ := sharedFixture(t)
@@ -97,6 +99,7 @@ func TestBundleSessionResumesAdoptionInterruption(t *testing.T) {
 }
 
 func TestBundleSessionCannotBypassPendingTransition(t *testing.T) {
+	t.Parallel()
 	dir, req, _, _ := transitionFixture(t)
 	stop := errors.New("synthetic interruption")
 	_, err := transitionWithStep(dir, req, func(at string) error {
@@ -120,6 +123,7 @@ func TestBundleSessionCannotBypassPendingTransition(t *testing.T) {
 }
 
 func TestBundleIdentityRejectsBoardDifferentFromLockedLocation(t *testing.T) {
+	t.Parallel()
 	_, owner, other := sharedFixture(t)
 	s, release, err := acquireSharedForBundle(owner, false, true)
 	if err != nil {

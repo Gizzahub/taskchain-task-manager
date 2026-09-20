@@ -29,6 +29,7 @@ func publicationRequest(t *testing.T, board string) []byte {
 }
 
 func TestBundlePublishAndHistoricalReplay(t *testing.T) {
+	t.Parallel()
 	board := configuredFixture(t)
 	raw := publicationRequest(t, board)
 	before := boardBytes(t, board)
@@ -86,6 +87,7 @@ func TestBundlePublishAndHistoricalReplay(t *testing.T) {
 }
 
 func TestBundlePublishResumesEveryPhase(t *testing.T) {
+	t.Parallel()
 	phases := []string{"after-empty-journal", "after-local-protocol", "after-pending-journal", "after-shared-reservation", "after-local-reservation", "after-card-0", "after-card-1", "after-batch", "after-completed-receipt", "after-common-clear"}
 	for _, shared := range []bool{false, true} {
 		for _, phase := range phases {
@@ -141,6 +143,7 @@ func TestBundlePublishResumesEveryPhase(t *testing.T) {
 }
 
 func TestBundleResumePreservesPublicationConflict(t *testing.T) {
+	t.Parallel()
 	for _, scenario := range []string{"card", "card-mode", "card-symlink", "batch", "ledger", "intent-missing"} {
 		t.Run(scenario, func(t *testing.T) {
 			board := configuredFixture(t)
@@ -201,6 +204,7 @@ func TestBundleResumePreservesPublicationConflict(t *testing.T) {
 }
 
 func TestBundleCleanupFailurePreservesReceiptAndReplay(t *testing.T) {
+	t.Parallel()
 	board := configuredFixture(t)
 	raw := publicationRequest(t, board)
 	result, err := publishBundleWithStep(board, raw, BundleOptions{Adopt: true}, func(at string) error {
@@ -223,6 +227,7 @@ func TestBundleCleanupFailurePreservesReceiptAndReplay(t *testing.T) {
 }
 
 func TestBundleCopiedPendingJournalCannotAcquireCommonReservation(t *testing.T) {
+	t.Parallel()
 	_, owner, other := sharedFixture(t)
 	if _, err := EnableShared(owner, false); err != nil {
 		t.Fatal(err)
@@ -261,6 +266,7 @@ func TestBundleCopiedPendingJournalCannotAcquireCommonReservation(t *testing.T) 
 }
 
 func TestBundlePendingAllocationCannotChangeAfterForeignReservation(t *testing.T) {
+	t.Parallel()
 	_, owner, other := sharedFixture(t)
 	if _, err := EnableShared(owner, false); err != nil {
 		t.Fatal(err)
@@ -290,6 +296,7 @@ func TestBundlePendingAllocationCannotChangeAfterForeignReservation(t *testing.T
 }
 
 func TestBundlePublicExample(t *testing.T) {
+	t.Parallel()
 	board := configuredFixture(t)
 	intent, err := os.ReadFile("../../examples/context/intent.json")
 	if err != nil {

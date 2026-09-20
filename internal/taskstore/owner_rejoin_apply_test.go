@@ -162,6 +162,7 @@ func writeOwnerRejoinFixtureFile(t *testing.T, name string, raw []byte, mode os.
 }
 
 func TestSameCommonOwnerRejoinResumesEveryPhaseAndClass(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinApplyFixture(t, false, []ReservationFloor{{Prefix: "TASK", Through: 1}})
 	points := []string{
 		"after-owner-rejoin-plan", "after-owner-rejoin-payload", "after-owner-rejoin-local-pending",
@@ -194,6 +195,7 @@ func TestSameCommonOwnerRejoinResumesEveryPhaseAndClass(t *testing.T) {
 }
 
 func TestSameCommonOwnerRejoinPolicyAndEmptyReservationFloors(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinApplyFixture(t, true, []ReservationFloor{})
 	if err := applyOwnerRejoinSameCommon(fx.target, fx.plan, fx.payload, nil); err != nil {
 		t.Fatal(err)
@@ -228,6 +230,7 @@ func mustOwnerRejoinRoot(t *testing.T, dir string) *os.Root {
 }
 
 func TestSameCommonOwnerRejoinTamperStopsBeforeFurtherMutation(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name   string
 		mutate func(string) error

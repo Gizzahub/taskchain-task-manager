@@ -15,6 +15,7 @@ import (
 )
 
 func TestArchiveCapacityProcessHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("TASKCHAIN_CAPACITY_HELPER") == "" {
 		return
 	}
@@ -47,6 +48,7 @@ func TestArchiveCapacityProcessHelper(t *testing.T) {
 }
 
 func TestArchiveCapacitySIGKILLContentionAndRecovery(t *testing.T) {
+	t.Parallel()
 	points := []string{"after-capacity-common-protocol", "after-capacity-local-protocol", "after-capacity-target", "after-capacity-completed", "after-capacity-common-clear"}
 	for _, point := range points {
 		t.Run(point, func(t *testing.T) { runArchiveCapacityCrash(t, point) })

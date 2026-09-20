@@ -12,6 +12,7 @@ import (
 )
 
 func TestPolicyProcessHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("TASKSTORE_POLICY_HELPER") != "1" {
 		return
 	}
@@ -48,6 +49,7 @@ func policyChild(t *testing.T, board, phase string) *exec.Cmd {
 }
 
 func TestPolicyProcessCrashAndExplicitRecovery(t *testing.T) {
+	t.Parallel()
 	for _, shared := range []bool{false, true} {
 		phases := []string{"after-local-pending", "after-policy", "after-policy-ids", "after-policy-journal", "after-local-completed"}
 		if shared {
@@ -141,6 +143,7 @@ func savedPolicyAuthority(t *testing.T, board string, shared bool) string {
 }
 
 func TestPolicyJoinProcessCrashWithIDReplacement(t *testing.T) {
+	t.Parallel()
 	for _, phase := range []string{"after-common-policy-pending", "board-0/after-policy-ids", "board-0/after-policy-journal"} {
 		t.Run(phase, func(t *testing.T) {
 			repo, a, _ := sharedFixture(t)
@@ -199,6 +202,7 @@ func TestPolicyJoinProcessCrashWithIDReplacement(t *testing.T) {
 }
 
 func TestPolicyConcurrentProcesses(t *testing.T) {
+	t.Parallel()
 	for _, shared := range []bool{false, true} {
 		t.Run(fmt.Sprintf("shared-%t", shared), func(t *testing.T) {
 			board := claimBoard(t)

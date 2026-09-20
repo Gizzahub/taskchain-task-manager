@@ -16,6 +16,7 @@ import (
 
 // Run against an actual pre-maintenance executable, not a simulated codec.
 func TestIterationLegacyBinaryCompatibility(t *testing.T) {
+	t.Parallel()
 	binary := os.Getenv("TASKCHAIN_ITERATION_LEGACY_BINARY")
 	if binary == "" {
 		t.Skip("set TASKCHAIN_ITERATION_LEGACY_BINARY to a pre-maintenance executable")

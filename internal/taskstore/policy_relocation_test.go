@@ -19,6 +19,7 @@ board-policy:
 `
 
 func TestRelocationPolicyDoesNotExpandExecutionTransitions(t *testing.T) {
+	t.Parallel()
 	board := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(board); err != nil {
 		t.Fatal(err)
@@ -49,6 +50,7 @@ func TestRelocationPolicyDoesNotExpandExecutionTransitions(t *testing.T) {
 
 // Policy revisions need a separate durable operation, never implicit overwrite.
 func TestRelocationPolicyCannotOverwriteActivatedV1(t *testing.T) {
+	t.Parallel()
 	board := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(board); err != nil {
 		t.Fatal(err)

@@ -34,6 +34,7 @@ func sharedBundleRecordFixture(t *testing.T, s *sharedSession, reserved []string
 }
 
 func TestSharedBundleReserveFinishAndIdempotentCompletion(t *testing.T) {
+	t.Parallel()
 	_, board, _ := sharedFixture(t)
 	if _, err := EnableShared(board, false); err != nil {
 		t.Fatal(err)
@@ -109,6 +110,7 @@ func TestSharedBundleReserveFinishAndIdempotentCompletion(t *testing.T) {
 }
 
 func TestSharedBundleCopiedOwnerAndCollisionRejected(t *testing.T) {
+	t.Parallel()
 	_, board, other := sharedFixture(t)
 	if _, err := EnableShared(board, false); err != nil {
 		t.Fatal(err)
@@ -170,6 +172,7 @@ func TestSharedBundleCopiedOwnerAndCollisionRejected(t *testing.T) {
 }
 
 func TestSharedBundleCopiedOwnerRejectedBeforePending(t *testing.T) {
+	t.Parallel()
 	_, board, other := sharedFixture(t)
 	if _, err := EnableShared(board, false); err != nil {
 		t.Fatal(err)
@@ -233,6 +236,7 @@ func TestSharedBundleCopiedOwnerRejectedBeforePending(t *testing.T) {
 }
 
 func TestLocalBundleSharedPrimitivesDoNotMutateOrAcceptNamespace(t *testing.T) {
+	t.Parallel()
 	var s *sharedSession
 	record := bundleRecordFixture(t)
 	journal := bundleJournal{SchemaVersion: 1, BoardID: strings.Repeat("d", 32), Records: []bundleRecord{record}}
@@ -254,6 +258,7 @@ func TestLocalBundleSharedPrimitivesDoNotMutateOrAcceptNamespace(t *testing.T) {
 }
 
 func TestPrepareBundleReservationIsPureAndUpgradesOnlyReturnedState(t *testing.T) {
+	t.Parallel()
 	_, board, _ := sharedFixture(t)
 	if _, err := EnableShared(board, false); err != nil {
 		t.Fatal(err)

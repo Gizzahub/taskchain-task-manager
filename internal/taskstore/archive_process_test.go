@@ -17,6 +17,7 @@ import (
 )
 
 func TestArchiveProcessHelper(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("TASKCHAIN_ARCHIVE_HELPER") == "" {
 		return
 	}
@@ -53,6 +54,7 @@ func TestArchiveProcessHelper(t *testing.T) {
 }
 
 func TestArchiveProcessKillAndContention(t *testing.T) {
+	t.Parallel()
 	for _, shared := range []bool{false, true} {
 		points := []string{"after-archive-journal", "after-target", "after-source", "after-archive-receipt"}
 		if shared {

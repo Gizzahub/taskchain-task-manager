@@ -27,6 +27,7 @@ func legacyCommonPath(t *testing.T, board string, req LegacyArchiveRequest) stri
 }
 
 func TestLegacyArchiveRecoveryCutpointsAndExactReplay(t *testing.T) {
+	t.Parallel()
 	for _, point := range []string{"after-archive-common-pending", "after-archive-journal", "after-archive-receipt"} {
 		t.Run(point, func(t *testing.T) {
 			dir, req, raw := legacyArchiveWriterFixture(t)
@@ -67,6 +68,7 @@ func TestLegacyArchiveRecoveryCutpointsAndExactReplay(t *testing.T) {
 }
 
 func TestLegacyArchiveChangedApprovalOrModeLeavesPendingBytes(t *testing.T) {
+	t.Parallel()
 	dir, req, _ := legacyArchiveWriterFixture(t)
 	commonPath := ""
 	stop := errors.New("pause common pending")
@@ -202,6 +204,7 @@ func TestLegacyArchiveChangedApprovalOrModeLeavesPendingBytes(t *testing.T) {
 }
 
 func TestLegacyArchiveRecoveryRejectsAncestorSymlinkAndChangedSource(t *testing.T) {
+	t.Parallel()
 	dir, req, raw := legacyArchiveWriterFixture(t)
 	stop := errors.New("pause journal")
 	if _, err := legacyArchiveWithStep(dir, req, true, false, func(point string) error {
@@ -248,6 +251,7 @@ func TestLegacyArchiveRecoveryRejectsAncestorSymlinkAndChangedSource(t *testing.
 }
 
 func TestLegacyArchiveReplayAfterClaimRelease(t *testing.T) {
+	t.Parallel()
 	dir, _, _ := archiveWriterFixture(t)
 	if err := os.Rename(filepath.Join(dir, "done", "TASK-1.md"), filepath.Join(dir, "todo", "TASK-1.md")); err != nil {
 		t.Fatal(err)

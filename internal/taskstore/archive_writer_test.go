@@ -44,6 +44,7 @@ func archiveWriterFixture(t *testing.T) (string, ArchiveRequest, []byte) {
 }
 
 func TestArchiveWriterMovesNormalCardAndReplays(t *testing.T) {
+	t.Parallel()
 	dir, req, raw := archiveWriterFixture(t)
 	beforeReady, err := Ready(dir)
 	if err != nil || !readyHasID(beforeReady, "TASK-2") {
@@ -84,6 +85,7 @@ func readyHasID(entries []Entry, id string) bool {
 }
 
 func TestArchiveWriterRequiresExplicitAdoptionAndPreservesHashFailures(t *testing.T) {
+	t.Parallel()
 	dir, req, _ := archiveWriterFixture(t)
 	before := boardBytes(t, dir)
 	if _, err := Archive(dir, req, false); err == nil {
@@ -103,6 +105,7 @@ func TestArchiveWriterRequiresExplicitAdoptionAndPreservesHashFailures(t *testin
 }
 
 func TestArchiveWriterHeldClaimMismatchPreservesBoard(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(dir); err != nil {
 		t.Fatal(err)
@@ -125,6 +128,7 @@ func TestArchiveWriterHeldClaimMismatchPreservesBoard(t *testing.T) {
 }
 
 func TestArchiveWriterRecoveryBoundaries(t *testing.T) {
+	t.Parallel()
 	points := []string{"after-relocation-empty-journal", "after-relocation-common-protocol", "after-relocation-local-protocol", "after-archive-empty-journal", "after-archive-common-protocol", "after-archive-local-protocol", "after-archive-common-pending", "after-archive-journal", "after-stage", "after-target", "after-source", "after-archive-receipt"}
 	for _, point := range points {
 		t.Run(point, func(t *testing.T) {
@@ -151,6 +155,7 @@ func TestArchiveWriterRecoveryBoundaries(t *testing.T) {
 }
 
 func TestRecoverArchiveAbsentRefusesAndPreservesBoard(t *testing.T) {
+	t.Parallel()
 	dir, req, _ := archiveWriterFixture(t)
 	before := boardBytes(t, dir)
 	if _, err := RecoverArchive(dir, req); err == nil {
@@ -162,6 +167,7 @@ func TestRecoverArchiveAbsentRefusesAndPreservesBoard(t *testing.T) {
 }
 
 func TestArchiveWriterAlteredTargetRecoveryRefuses(t *testing.T) {
+	t.Parallel()
 	dir, req, _ := archiveWriterFixture(t)
 	if _, err := archiveWithStep(dir, req, true, false, repairStopAt("after-target")); err == nil {
 		t.Fatal("target boundary not reached")
@@ -189,6 +195,7 @@ func mustReadFile(t *testing.T, path string) []byte {
 }
 
 func TestArchiveWriterCollisionAndNonNormalOperations(t *testing.T) {
+	t.Parallel()
 	dir, req, raw := archiveWriterFixture(t)
 	target := filepath.Join(dir, "_archive", "done")
 	if err := os.MkdirAll(target, 0755); err != nil {
@@ -229,6 +236,7 @@ func TestArchiveWriterCollisionAndNonNormalOperations(t *testing.T) {
 }
 
 func TestArchiveWriterPreservesCategoryPath(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(dir); err != nil {
 		t.Fatal(err)

@@ -16,6 +16,7 @@ import (
 // binary it is intentionally skipped; the in-process tests do not prove that
 // an old writer observes the new policy barriers.
 func TestPolicyLegacyBinaryBarrier(t *testing.T) {
+	t.Parallel()
 	binary := os.Getenv("TASKCHAIN_POLICY_LEGACY_BINARY")
 	if binary == "" {
 		t.Skip("set TASKCHAIN_POLICY_LEGACY_BINARY to a pre-policy executable")

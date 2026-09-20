@@ -35,6 +35,7 @@ func historyJournalFixture(t *testing.T) (transitionJournal, boardpolicy.Policy)
 }
 
 func TestTransitionHistorySelectsReceiptPolicy(t *testing.T) {
+	t.Parallel()
 	j, current := historyJournalFixture(t)
 	if err := validateTransitionRecordWithPolicy(j.Records[0], current); err == nil {
 		t.Fatal("fixture does not distinguish historical and active semantics")
@@ -79,6 +80,7 @@ func TestTransitionHistorySelectsReceiptPolicy(t *testing.T) {
 }
 
 func TestTransitionHistoryRejectsMalformedWire(t *testing.T) {
+	t.Parallel()
 	j, current := historyJournalFixture(t)
 	raw, err := encodeTransitionJournal(j, current)
 	if err != nil {
@@ -119,6 +121,7 @@ func TestTransitionHistoryRejectsMalformedWire(t *testing.T) {
 }
 
 func TestTransitionHistoryValidatesUnreferencedEntries(t *testing.T) {
+	t.Parallel()
 	j, current := historyJournalFixture(t)
 	bad := []byte(`{"schemaVersion":99}`)
 	j.PolicyHistory[bytesDigest(bad)] = bad

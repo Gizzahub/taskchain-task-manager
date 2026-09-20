@@ -12,6 +12,7 @@ import (
 // the floor is the only thing standing between it and reissuing IDs the source
 // already handed out.
 func TestCloneOwnerRejoinFloorGovernsAllocation(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinCloneFixture(t, false, []ReservationFloor{{Prefix: "TASK", Through: 9}}, []string{})
 	if err := applyOwnerRejoinIndependentClone(fx.target, fx.plan, fx.payload, nil); err != nil {
 		t.Fatal(err)
@@ -31,6 +32,7 @@ func TestCloneOwnerRejoinFloorGovernsAllocation(t *testing.T) {
 // them would otherwise restart at TASK-1 and hand back IDs the source holds --
 // a silent collision, with nothing refusing anything.
 func TestCloneOwnerRejoinFloorSurvivesAStrippedLedger(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinCloneFixture(t, false, []ReservationFloor{{Prefix: "TASK", Through: 9}}, []string{})
 	if err := applyOwnerRejoinIndependentClone(fx.target, fx.plan, fx.payload, nil); err != nil {
 		t.Fatal(err)
@@ -57,6 +59,7 @@ func TestCloneOwnerRejoinFloorSurvivesAStrippedLedger(t *testing.T) {
 // a floor is only durable once the common directory carries it, because that
 // copy is what survives the local file being lost or rewritten.
 func TestCloneOwnerRejoinFloorIsPublishedToCommonState(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinCloneFixture(t, false, []ReservationFloor{{Prefix: "TASK", Through: 9}}, []string{})
 	if err := applyOwnerRejoinIndependentClone(fx.target, fx.plan, fx.payload, nil); err != nil {
 		t.Fatal(err)
@@ -121,6 +124,7 @@ func readOwnerRejoinCommonState(t *testing.T, dir string) sharedState {
 // board claiming to be finished while the transaction is not -- fails loudly
 // instead of quietly satisfying the sweep.
 func TestCloneOwnerRejoinResumesFromHalfBuiltCommonAuthority(t *testing.T) {
+	t.Parallel()
 	fx := newOwnerRejoinCloneFixture(t, false, []ReservationFloor{{Prefix: "TASK", Through: 9}}, []string{})
 	stop := errors.New("stop at the clone's common authority")
 	err := applyOwnerRejoinIndependentClone(fx.target, fx.plan, fx.payload, func(point string) error {

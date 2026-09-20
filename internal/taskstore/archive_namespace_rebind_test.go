@@ -9,6 +9,7 @@ import (
 )
 
 func TestArchiveNamespaceRebindPlanPreservesRecordsAndInventory(t *testing.T) {
+	t.Parallel()
 	j, rec, completion, raw := archiveJournalFixture(t)
 	j.Namespace = ""
 	rec.Namespace = ""
@@ -37,6 +38,7 @@ func TestArchiveNamespaceRebindPlanPreservesRecordsAndInventory(t *testing.T) {
 }
 
 func TestArchiveNamespaceRebindRejectsPendingScopeAndInventoryTamper(t *testing.T) {
+	t.Parallel()
 	j, rec, _, _ := archiveJournalFixture(t)
 	j.Records[0].State, j.Records[0].Original, j.Records[0].Patched = "completed", nil, nil
 	original, err := archiveJournalBytes(j)
@@ -82,6 +84,7 @@ func TestArchiveNamespaceRebindRejectsPendingScopeAndInventoryTamper(t *testing.
 }
 
 func TestArchiveNamespaceRebindRejectsHashModeAndTargetMutation(t *testing.T) {
+	t.Parallel()
 	j, _, _, _ := archiveJournalFixture(t)
 	j.Records[0].State, j.Records[0].Original, j.Records[0].Patched = "completed", nil, nil
 	original, err := archiveJournalBytes(j)
@@ -108,6 +111,7 @@ func TestArchiveNamespaceRebindRejectsHashModeAndTargetMutation(t *testing.T) {
 }
 
 func TestArchiveNamespaceRebindAcceptsOperationDialectsAndEmptyJournal(t *testing.T) {
+	t.Parallel()
 	base, pending, _, raw := archiveJournalFixture(t)
 	base.Records = nil
 	base.Records = []archiveRecord{}
@@ -158,6 +162,7 @@ func TestArchiveNamespaceRebindAcceptsOperationDialectsAndEmptyJournal(t *testin
 }
 
 func TestArchiveNamespaceRebindRejectsForgedPlanAndCardBindings(t *testing.T) {
+	t.Parallel()
 	j, rec, completion, raw := archiveJournalFixture(t)
 	j.Namespace, rec.Namespace = "", ""
 	rec.State, rec.Original, rec.Patched, rec.Completion = "completed", nil, nil, &completion
@@ -235,6 +240,7 @@ func TestArchiveNamespaceRebindRejectsForgedPlanAndCardBindings(t *testing.T) {
 }
 
 func TestArchiveNamespaceRebindRejectsCurrentCompletionTamper(t *testing.T) {
+	t.Parallel()
 	j, rec, completion, raw := archiveJournalFixture(t)
 	j.Namespace, rec.Namespace = "", ""
 	rec.State, rec.Original, rec.Patched, rec.Completion = "completed", nil, nil, &completion
@@ -276,6 +282,7 @@ func TestArchiveNamespaceRebindRejectsCurrentCompletionTamper(t *testing.T) {
 }
 
 func TestArchiveNamespaceRebindRejectsOversizedForceCard(t *testing.T) {
+	t.Parallel()
 	j, rec, _, _ := archiveJournalFixture(t)
 	j.Namespace, rec.Namespace = "", ""
 	over := []byte("---\nid: TASK-001\ntitle: oversized\n---\n")

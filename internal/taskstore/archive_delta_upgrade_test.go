@@ -6,6 +6,7 @@ import (
 )
 
 func TestArchiveDeltaUpgradeFromProtocol3ResumesCommonFirst(t *testing.T) {
+	t.Parallel()
 	_, board, _ := sharedFixture(t)
 	if _, err := EnableShared(board, false); err != nil {
 		t.Fatal(err)

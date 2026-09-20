@@ -22,6 +22,7 @@ func legacyArchiveRequestFixture(t *testing.T, raw []byte) (LegacyArchiveRequest
 }
 
 func TestPrepareLegacyArchiveRecordPreservesRawCardWithoutCompletion(t *testing.T) {
+	t.Parallel()
 	_, raw, _, _ := archiveCompletionFixture(t)
 	req, policy := legacyArchiveRequestFixture(t, raw)
 	rec, err := prepareLegacyArchiveRecord(req, raw, 0o644, policy, "/synthetic/tasks", "")
@@ -37,6 +38,7 @@ func TestPrepareLegacyArchiveRecordPreservesRawCardWithoutCompletion(t *testing.
 }
 
 func TestPrepareLegacyArchiveApprovedTaskCreatesLegacyCompletion(t *testing.T) {
+	t.Parallel()
 	_, raw, _, _ := archiveCompletionFixture(t)
 	req, policy := legacyArchiveRequestFixture(t, raw)
 	req.ApproveCompletion = true
@@ -53,6 +55,7 @@ func TestPrepareLegacyArchiveApprovedTaskCreatesLegacyCompletion(t *testing.T) {
 }
 
 func TestPrepareLegacyArchiveRejectsMalformedAdmission(t *testing.T) {
+	t.Parallel()
 	_, raw, _, _ := archiveCompletionFixture(t)
 	base, policy := legacyArchiveRequestFixture(t, raw)
 	if _, err := prepareLegacyArchiveRecord(base, raw, base.ExpectedMode, policy, "/synthetic/tasks", ""); err != nil {
@@ -101,6 +104,7 @@ func TestPrepareLegacyArchiveRejectsMalformedAdmission(t *testing.T) {
 }
 
 func TestPrepareLegacyArchiveRejectsApprovedSupersededAndNonTask(t *testing.T) {
+	t.Parallel()
 	_, raw, _, _ := archiveCompletionFixture(t)
 	req, policy := legacyArchiveRequestFixture(t, raw)
 	req.ApproveCompletion = true
@@ -120,6 +124,7 @@ func TestPrepareLegacyArchiveRejectsApprovedSupersededAndNonTask(t *testing.T) {
 }
 
 func TestSameLegacyArchiveBindsApprovalAndMode(t *testing.T) {
+	t.Parallel()
 	_, raw, _, _ := archiveCompletionFixture(t)
 	req, policy := legacyArchiveRequestFixture(t, raw)
 	rec, err := prepareLegacyArchiveRecord(req, raw, 0o644, policy, "/synthetic/tasks", "")

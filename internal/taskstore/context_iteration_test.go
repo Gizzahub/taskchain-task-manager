@@ -56,6 +56,7 @@ func maintenanceIterationRaw(t *testing.T, intent intentdoc.Document, id, decisi
 }
 
 func TestContextIterationIdlePathReplayAndHistoricalRead(t *testing.T) {
+	t.Parallel()
 	board := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(board); err != nil {
 		t.Fatal(err)
@@ -95,6 +96,7 @@ func TestContextIterationIdlePathReplayAndHistoricalRead(t *testing.T) {
 }
 
 func TestContextIterationReferenceFailuresPreserveBoard(t *testing.T) {
+	t.Parallel()
 	board := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(board); err != nil {
 		t.Fatal(err)
@@ -143,6 +145,7 @@ func TestContextIterationReferenceFailuresPreserveBoard(t *testing.T) {
 }
 
 func TestContextMaintenanceBatchRules(t *testing.T) {
+	t.Parallel()
 	board := filepath.Join(t.TempDir(), "tasks")
 	if err := Init(board); err != nil {
 		t.Fatal(err)

@@ -11,6 +11,7 @@ import (
 )
 
 func TestModuleBundleIntermediateSharedBarrier(t *testing.T) {
+	t.Parallel()
 	binary := os.Getenv("TASKCHAIN_MODULE_BUNDLE_LEGACY_BINARY")
 	if binary == "" {
 		t.Skip("set TASKCHAIN_MODULE_BUNDLE_LEGACY_BINARY to module-aware pre-destination executable")

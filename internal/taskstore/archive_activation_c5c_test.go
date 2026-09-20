@@ -72,6 +72,7 @@ func c5cCommonBytes(t *testing.T, board string) []byte {
 }
 
 func TestProtocol5EnableSharedResumesOriginalAndMixedTargetCutpoints(t *testing.T) {
+	t.Parallel()
 	for _, point := range []string{"after-initializing", "after-local-0"} {
 		t.Run(point, func(t *testing.T) {
 			_, first, second := protocol5SharedFixture(t)
@@ -119,6 +120,7 @@ func TestProtocol5EnableSharedResumesOriginalAndMixedTargetCutpoints(t *testing.
 }
 
 func TestProtocol5EnableSharedBindsCurrentModeAfterCapacityHistory(t *testing.T) {
+	t.Parallel()
 	_, first, second := protocol5SharedFixture(t)
 	for _, dir := range []string{first, second} {
 		if err := os.Chmod(filepath.Join(dir, archivesFile), 0600); err != nil {
@@ -137,6 +139,7 @@ func TestProtocol5EnableSharedBindsCurrentModeAfterCapacityHistory(t *testing.T)
 }
 
 func TestProtocol5EnableSharedPendingTamperIsNoMutation(t *testing.T) {
+	t.Parallel()
 	for _, kind := range []string{"receipt", "missing-receipt", "payload", "missing-payload", "artifact", "missing-artifact", "mode", "hash", "third-state"} {
 		t.Run(kind, func(t *testing.T) {
 			_, first, _ := protocol5SharedFixture(t)
@@ -238,6 +241,7 @@ func TestProtocol5EnableSharedPendingTamperIsNoMutation(t *testing.T) {
 }
 
 func TestProtocol5EnableSharedRejectsPendingCapacityAndForeignNamespace(t *testing.T) {
+	t.Parallel()
 	t.Run("pending capacity", func(t *testing.T) {
 		_, first, _ := protocol5SharedFixture(t)
 		r, err := openBoard(first)
@@ -294,6 +298,7 @@ func TestProtocol5EnableSharedRejectsPendingCapacityAndForeignNamespace(t *testi
 }
 
 func TestProtocol5SharedPolicyInitialJoinRevisionAndCompletedReplay(t *testing.T) {
+	t.Parallel()
 	repo, first, second := protocol5SharedFixture(t)
 	if _, err := EnableShared(first, false); err != nil {
 		t.Fatal(err)

@@ -10,6 +10,7 @@ import (
 )
 
 func TestPolicyRevisionPreservesStorageReceipts(t *testing.T) {
+	t.Parallel()
 	dir, _ := relocationBoardFixture(t)
 	active, err := ActivatePolicy(dir, []byte(relocationPolicyFixture), PolicyActivationOptions{})
 	if err != nil {
@@ -53,6 +54,7 @@ func TestPolicyRevisionPreservesStorageReceipts(t *testing.T) {
 }
 
 func TestPolicyRevisionRejectsPendingRelocation(t *testing.T) {
+	t.Parallel()
 	dir, req := relocationBoardFixture(t)
 	active, err := ActivatePolicy(dir, []byte(relocationPolicyFixture), PolicyActivationOptions{})
 	if err != nil {

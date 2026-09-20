@@ -10,6 +10,7 @@ import (
 )
 
 func TestLegacyDocumentationTransitionPreserved(t *testing.T) {
+	t.Parallel()
 	dir, req, _, _ := transitionFixture(t)
 	stop := errors.New("interrupt before publish")
 	if _, err := transitionWithStep(dir, req, func(at string) error {
@@ -58,6 +59,7 @@ func discoveryFile(t *testing.T, root, name, content string) {
 }
 
 func TestDiscoveryArchivesAndNonCards(t *testing.T) {
+	t.Parallel()
 	// Exclusion names apply below the board, never to the board's ancestors.
 	root := filepath.Join(t.TempDir(), "evidence", "tasks")
 	if err := Init(root); err != nil {
@@ -86,6 +88,7 @@ func TestDiscoveryArchivesAndNonCards(t *testing.T) {
 }
 
 func TestArchiveDuplicateAndAdoption(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	discoveryFile(t, root, "_archive/card.md", "---\nid: TASK-090\n---\n")
 	result, err := ReserveIDs(root, nil, true)
@@ -99,6 +102,7 @@ func TestArchiveDuplicateAndAdoption(t *testing.T) {
 }
 
 func TestDiscoveryDoesNotOverexclude(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"todo/INDEX-extra.md", "todo/Evidence/card.md", "todo/template/card.md", "INDEX.md/card.md", "todo/evidence.md"} {
 		t.Run(name, func(t *testing.T) {
 			root := filepath.Join(t.TempDir(), "tasks")
@@ -114,6 +118,7 @@ func TestDiscoveryDoesNotOverexclude(t *testing.T) {
 }
 
 func TestExcludedEntrySymlinksStillRejected(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"evidence", "INDEX.md", "_archive", "todo/evidence", "todo/TEMPLATE.md"} {
 		t.Run(name, func(t *testing.T) {
 			root := filepath.Join(t.TempDir(), "tasks")

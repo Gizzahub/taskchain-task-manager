@@ -8,6 +8,7 @@ import (
 )
 
 func TestRelocationSharedRecoveryAndOtherBoardGate(t *testing.T) {
+	t.Parallel()
 	for _, point := range []string{"after-relocation-empty-journal", "after-relocation-common-protocol", "after-relocation-local-protocol", "after-relocation-common-pending", "after-relocation-journal", "after-target", "after-source", "after-relocation-receipt"} {
 		t.Run(point, func(t *testing.T) {
 			_, board, other := sharedFixture(t)
@@ -61,6 +62,7 @@ func TestRelocationSharedRecoveryAndOtherBoardGate(t *testing.T) {
 }
 
 func TestRelocationKindIdentityDoesNotBecomeExecutable(t *testing.T) {
+	t.Parallel()
 	board, _ := relocationBoardFixture(t)
 	entry, err := Create(board, CreateRequest{Kind: "plan", Title: "planning"})
 	if err != nil {

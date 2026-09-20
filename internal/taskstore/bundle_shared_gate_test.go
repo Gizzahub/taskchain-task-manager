@@ -8,6 +8,7 @@ import (
 )
 
 func TestSharedBundlePendingBlocksMarkerlessWorktree(t *testing.T) {
+	t.Parallel()
 	repo, owner, _ := sharedFixture(t)
 	if _, err := EnableShared(owner, false); err != nil {
 		t.Fatal(err)
@@ -72,6 +73,7 @@ func TestSharedBundlePendingBlocksMarkerlessWorktree(t *testing.T) {
 }
 
 func TestSharedBundleProtocolRejectsInvalidPendingEvidence(t *testing.T) {
+	t.Parallel()
 	_, owner, _ := sharedFixture(t)
 	if _, err := EnableShared(owner, false); err != nil {
 		t.Fatal(err)

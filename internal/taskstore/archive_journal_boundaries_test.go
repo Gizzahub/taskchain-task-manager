@@ -10,6 +10,7 @@ import (
 )
 
 func TestArchiveJournalIndependentDuplicateKeys(t *testing.T) {
+	t.Parallel()
 	j, first, b, raw := archiveJournalFixture(t)
 	first.State, first.Original, first.Patched = "completed", nil, nil
 	for _, same := range []string{"request", "identity"} {
@@ -41,6 +42,7 @@ func TestArchiveJournalIndependentDuplicateKeys(t *testing.T) {
 }
 
 func TestArchiveJournalCrossBindingWithIndependentlyValidPolicies(t *testing.T) {
+	t.Parallel()
 	_, r, b, raw := archiveJournalFixture(t)
 	for _, which := range []string{"policy", "rules"} {
 		t.Run(which, func(t *testing.T) {

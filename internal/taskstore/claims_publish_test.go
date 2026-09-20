@@ -11,6 +11,7 @@ import (
 )
 
 func TestClaimPublishFailureCleansStageAndPreservesDestination(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	// A nonempty directory cannot be replaced by the staged regular file.
 	// Exercise the publication failure directly, independent of input validation.
@@ -40,6 +41,7 @@ func TestClaimPublishFailureCleansStageAndPreservesDestination(t *testing.T) {
 }
 
 func TestClaimTokenBindingAndBoardLock(t *testing.T) {
+	t.Parallel()
 	root := claimBoard(t)
 	if _, err := Create(root, CreateRequest{ID: "TASK-2", Title: "second"}); err != nil {
 		t.Fatal(err)
@@ -85,6 +87,7 @@ func TestClaimTokenBindingAndBoardLock(t *testing.T) {
 }
 
 func TestClaimRejectsReservationOverflowEvenWhenHeldBytesFit(t *testing.T) {
+	t.Parallel()
 	root := claimBoard(t)
 	if _, err := Create(root, CreateRequest{ID: "TASK-2", Title: "second"}); err != nil {
 		t.Fatal(err)

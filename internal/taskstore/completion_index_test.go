@@ -21,6 +21,7 @@ func cardViewForCompletion(id, status string, deps []string) card.View {
 }
 
 func TestCompletionIndexBaselineArchivedBindingAndReady(t *testing.T) {
+	t.Parallel()
 	b, raw, _, _ := archiveCompletionFixture(t)
 	entries, archived := completionIndexEntries(b)
 	policy := boardpolicy.Default()
@@ -65,6 +66,7 @@ func TestCompletionIndexBaselineArchivedBindingAndReady(t *testing.T) {
 }
 
 func TestCompletionIndexDoesNotResurrectMissingCards(t *testing.T) {
+	t.Parallel()
 	b, _, _, _ := archiveCompletionFixture(t)
 	policy := boardpolicy.Default()
 	missingReference := []Entry{{Path: "todo/TASK-2.md", Card: cardViewForCompletion("TASK-2", "pending", []string{"TASK-1"})}}
@@ -79,6 +81,7 @@ func TestCompletionIndexDoesNotResurrectMissingCards(t *testing.T) {
 }
 
 func TestCompletionIndexRejectsDuplicatesTamperingReadErrorsAndSuperseded(t *testing.T) {
+	t.Parallel()
 	b, raw, _, _ := archiveCompletionFixture(t)
 	entries, _ := completionIndexEntries(b)
 	policy := boardpolicy.Default()

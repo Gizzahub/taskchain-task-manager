@@ -51,6 +51,7 @@ func moduleWorkflowRelocationFixture(t *testing.T) (string, string, RelocationRe
 }
 
 func TestModuleRelocationProcessKillAndContention(t *testing.T) {
+	t.Parallel()
 	for _, point := range []string{"after-target", "after-source"} {
 		t.Run("local/"+point, func(t *testing.T) {
 			board, _, req := moduleWorkflowRelocationFixture(t)
@@ -60,6 +61,7 @@ func TestModuleRelocationProcessKillAndContention(t *testing.T) {
 }
 
 func TestModuleRelocationSharedProcessKillAndContention(t *testing.T) {
+	t.Parallel()
 	for _, point := range []string{"after-relocation-common-pending", "after-target", "after-source"} {
 		t.Run(point, func(t *testing.T) {
 			_, board, other := sharedFixture(t)
