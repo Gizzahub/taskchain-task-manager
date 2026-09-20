@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/card"
 	"testing"
 )
 
@@ -175,5 +177,111 @@ func TestPlanProgressRefusesNonPlanCard(t *testing.T) {
 	_, err := ReadPlanProgress(root, PlanProgressRequest{ID: "TASK-1", Rules: []byte(archiveCompletionRulesFixture)})
 	if err == nil || !strings.Contains(err.Error(), "not a plan") {
 		t.Fatalf("work card accepted as a plan: %v", err)
+	}
+}
+
+// A child the board has never heard of is indistinguishable from an unfinished
+// one by Complete alone — both are false. Present is the only thing that tells
+// a typo in the children list apart from outstanding work, so it is pinned
+// here rather than left as an unasserted field nobody can rely on.
+func TestPlanProgressSeparatesAbsentChildFromUnfinishedOne(t *testing.T) {
+	root := planProgressBoard(t, "TASK-1, TASK-404")
+	markDone(t, root, "todo/TASK-1.md", "done/TASK-1.md")
+	got, err := ReadPlanProgress(root, PlanProgressRequest{ID: "PLAN-1", Rules: []byte(archiveCompletionRulesFixture)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Total != 2 || got.Done != 1 {
+		t.Fatalf("progress = %d/%d, want 1/2", got.Done, got.Total)
+	}
+	byID := map[string]ChildProgress{}
+	for _, child := range got.Children {
+		byID[child.ID] = child
+	}
+	if done := byID["TASK-1"]; !done.Complete || !done.Present {
+		t.Fatalf("TASK-1 = %+v, want complete and present", done)
+	}
+	missing, ok := byID["TASK-404"]
+	if !ok {
+		t.Fatalf("a declared child vanished from the report: %+v", got.Children)
+	}
+	if missing.Complete {
+		t.Fatalf("TASK-404 = %+v, want incomplete", missing)
+	}
+	if missing.Present {
+		t.Fatal("TASK-404 is not on this board, so Present must be false; otherwise a typo in the children list is silently counted as work in progress")
+	}
+	// TASK-2 was never declared, so the count must ignore it even though it
+	// sits on the board. The census counts what the plan declares, not what
+	// the directory happens to hold.
+	if _, declared := byID["TASK-2"]; declared {
+		t.Fatal("TASK-2 was not declared as a child but was counted")
+	}
+}
+
+// List and Ready refuse to read a board with an unsettled transition, and
+// archive admission only consults the completion index after resumeArchive has
+// settled one. A census that answered anyway would be the one reader whose
+// number could disagree with the verdict it claims to share.
+func TestPlanProgressRefusesWhileATransitionIsPending(t *testing.T) {
+	root := planProgressBoard(t, "TASK-1, TASK-2")
+	rules := []byte(archiveCompletionRulesFixture)
+	if _, err := ReadPlanProgress(root, PlanProgressRequest{ID: "PLAN-1", Rules: rules}); err != nil {
+		t.Fatalf("board is settled, so the census should answer: %v", err)
+	}
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	j, err := loadTransitionsForStorage(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j.Records = append(j.Records, pendingTransitionFor(t, r, "TASK-1"))
+	if err := publishTransitionJournal(r, j); err != nil {
+		t.Fatal(err)
+	}
+	_, err = ReadPlanProgress(root, PlanProgressRequest{ID: "PLAN-1", Rules: rules})
+	if err == nil {
+		t.Fatal("census answered while a transition was pending; TASK-1 has no settled zone to be counted in")
+	}
+	if !strings.Contains(err.Error(), "pending transition") {
+		t.Fatalf("error = %v, want one naming the pending transition", err)
+	}
+}
+
+// pendingTransitionFor builds the record a prepared-but-uncommitted todo→doing
+// move leaves behind. The journal validates every field against the board's
+// policy on publish, so this mirrors prepareTransition rather than inventing a
+// stub the journal would reject.
+func pendingTransitionFor(t *testing.T, r *os.Root, id string) transitionRecord {
+	t.Helper()
+	source := "todo/" + id + ".md"
+	raw, err := readTransitionCard(r, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := card.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := policyForBoard(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, ok := policy.Status("doing")
+	if !ok {
+		t.Fatal("board policy gives the doing zone no status")
+	}
+	patched, _, err := doc.SetStatusCell(status)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return transitionRecord{
+		Kind: "pending", RequestID: strings.Repeat("a", 32), ID: id,
+		Owner: "tester", Token: strings.Repeat("b", 32),
+		From: "todo", To: "doing", Source: source, Target: "doing/" + id + ".md",
+		Mode: 0o644, Original: raw, Patched: patched, Status: "pending",
 	}
 }
