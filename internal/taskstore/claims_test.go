@@ -153,6 +153,57 @@ func TestMissingHeldReferenceBlocksCreate(t *testing.T) {
 	}
 }
 
+// TestClaimStatusVocabularyExhaustive exercises the real check that
+// consumes ClaimStatus end to end: validateClaims's
+// "record.Status != outputvocab.ClaimHeld && record.Status !=
+// outputvocab.ClaimReleased" guard in claims.go, reached through loadClaims
+// on every claim/release call. It drives both outputvocab.AllClaimStatuses()
+// members through that guard via a raw on-disk ledger (mirroring
+// TestMissingHeldReferenceBlocksCreate's approach, since the ledger's wire
+// shape is what a real consumer would produce) and confirms a status
+// outside the declared vocabulary is rejected rather than silently
+// accepted.
+func TestClaimStatusVocabularyExhaustive(t *testing.T) {
+	t.Parallel()
+	t.Run("held", func(t *testing.T) {
+		t.Parallel()
+		root := claimBoard(t)
+		raw := `{"schemaVersion":1,"records":[{"id":"TASK-1","owner":"worker","token":"0123456789abcdef0123456789abcdef","status":"held"}]}`
+		if err := os.WriteFile(filepath.Join(root, claimsFile), []byte(raw), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		// Release (rather than a fresh Claim) proves the held-status ledger
+		// loads and validates cleanly: it must pass validateClaims's guard
+		// before Release can find and flip the matching record at all.
+		if _, err := Release(root, ClaimRequest{ID: "TASK-1", Owner: "worker", Token: testToken}); err != nil {
+			t.Fatalf("held-status ledger rejected as invalid: %v", err)
+		}
+	})
+	t.Run("released", func(t *testing.T) {
+		t.Parallel()
+		root := claimBoard(t)
+		raw := `{"schemaVersion":1,"records":[{"id":"TASK-1","owner":"worker","token":"0123456789abcdef0123456789abcdef","status":"released"}]}`
+		if err := os.WriteFile(filepath.Join(root, claimsFile), []byte(raw), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Claim(root, ClaimRequest{ID: "TASK-1", Owner: "worker", Token: "abcdef0123456789abcdef0123456789"}); err != nil {
+			t.Fatalf("released-status ledger rejected as invalid: %v", err)
+		}
+	})
+	t.Run("unknown", func(t *testing.T) {
+		t.Parallel()
+		root := claimBoard(t)
+		raw := `{"schemaVersion":1,"records":[{"id":"TASK-1","owner":"worker","token":"0123456789abcdef0123456789abcdef","status":"bogus-status"}]}`
+		if err := os.WriteFile(filepath.Join(root, claimsFile), []byte(raw), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		_, err := Claim(root, ClaimRequest{ID: "TASK-1", Owner: "worker", Token: "abcdef0123456789abcdef0123456789"})
+		if err == nil || !strings.Contains(err.Error(), "invalid claim status") {
+			t.Fatalf("validateClaims accepted a status outside the declared ClaimStatus vocabulary: err=%v", err)
+		}
+	})
+}
+
 func TestClaimValidationAndLedgerPreservedOnFailure(t *testing.T) {
 	t.Parallel()
 	root := claimBoard(t)

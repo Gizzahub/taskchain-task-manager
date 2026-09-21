@@ -8,6 +8,7 @@ import (
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 const (
@@ -18,12 +19,12 @@ const (
 
 type TransitionRequest struct{ ID, Owner, Token, RequestID, From, To string }
 type TransitionResult struct {
-	RequestID string `json:"requestId"`
-	ID        string `json:"id"`
-	From      string `json:"from"`
-	To        string `json:"to"`
-	Path      string `json:"path"`
-	Status    string `json:"status"`
+	RequestID string                   `json:"requestId"`
+	ID        string                   `json:"id"`
+	From      string                   `json:"from"`
+	To        string                   `json:"to"`
+	Path      string                   `json:"path"`
+	Status    outputvocab.ResultStatus `json:"status"`
 }
 
 type transitionRecord struct {
@@ -154,14 +155,14 @@ func ClaimResume(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 	}
 	for _, rec := range j.Records {
 		if rec.Token == req.Token {
-			if rec.ID == req.ID && rec.Owner == req.Owner && rec.Status == "held" {
+			if rec.ID == req.ID && rec.Owner == req.Owner && rec.Status == outputvocab.ClaimHeld {
 				return rec, nil
 			}
 			return ClaimRecord{}, errors.New("claim token already used")
 		}
 	}
 	for _, rec := range j.Records {
-		if rec.Status == "held" && sameIdentity(rec.ID, req.ID) {
+		if rec.Status == outputvocab.ClaimHeld && sameIdentity(rec.ID, req.ID) {
 			return ClaimRecord{}, fmt.Errorf("task %s is already claimed", req.ID)
 		}
 	}
@@ -180,7 +181,7 @@ func ClaimResume(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 	if found.Card.ID == "" {
 		return ClaimRecord{}, fmt.Errorf("task %s is not resumable", req.ID)
 	}
-	rec := ClaimRecord{ID: req.ID, Owner: req.Owner, Token: req.Token, Status: "held"}
+	rec := ClaimRecord{ID: req.ID, Owner: req.Owner, Token: req.Token, Status: outputvocab.ClaimHeld}
 	j.Records = append(j.Records, rec)
 	if err := ensureReleaseCapacity(j); err != nil {
 		return ClaimRecord{}, err
@@ -215,7 +216,7 @@ func sameTransition(rec transitionRecord, req TransitionRequest) bool {
 	return rec.ID == req.ID && rec.Owner == req.Owner && rec.Token == req.Token && rec.From == req.From && rec.To == req.To
 }
 func transitionResult(rec transitionRecord) TransitionResult {
-	return TransitionResult{RequestID: rec.RequestID, ID: rec.ID, From: rec.From, To: rec.To, Path: rec.Target, Status: "completed"}
+	return TransitionResult{RequestID: rec.RequestID, ID: rec.ID, From: rec.From, To: rec.To, Path: rec.Target, Status: outputvocab.Completed}
 }
 
 func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest, policy boardpolicy.Policy, digest string) (transitionRecord, error) {
@@ -251,7 +252,7 @@ func prepareTransition(r *os.Root, entries []Entry, req TransitionRequest, polic
 		return transitionRecord{}, err
 	}
 	for i := range claims.Records {
-		if sameIdentity(claims.Records[i].ID, req.ID) && claims.Records[i].Status == "held" {
+		if sameIdentity(claims.Records[i].ID, req.ID) && claims.Records[i].Status == outputvocab.ClaimHeld {
 			held = &claims.Records[i]
 		}
 	}

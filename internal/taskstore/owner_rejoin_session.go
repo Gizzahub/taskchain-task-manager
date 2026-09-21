@@ -205,6 +205,8 @@ func ensureOwnerRejoinCommonPending(s *sharedSession, p OwnerRejoinPlan, digest 
 	if next.ReservationFloors == nil {
 		next.ReservationFloors = []ReservationFloor{}
 	}
+	// The shared-state journal is an on-disk contract distinct from stdout; it
+	// deliberately does not read the stdout vocabulary.
 	next.SchemaVersion, next.Phase, next.StorageProtocol = 4, "initializing", 6
 	next.PendingOwnerRejoin = &sharedOwnerRejoinPending{RejoinID: p.RejoinID, Owner: p.TargetOwner, PlanSHA256: digest, PayloadSHA256: p.PayloadSHA256}
 	return s.saveStorageState(next)

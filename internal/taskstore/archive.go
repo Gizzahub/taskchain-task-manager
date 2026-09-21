@@ -3,17 +3,19 @@ package taskstore
 import (
 	"errors"
 	"io/fs"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type ArchiveResult struct {
-	SchemaVersion      int    `json:"schemaVersion"`
-	RequestID          string `json:"requestId"`
-	ID                 string `json:"id"`
-	Source             string `json:"source"`
-	Target             string `json:"target"`
-	Status             string `json:"status"`
-	Operation          string `json:"operation"`
-	CompletionEligible bool   `json:"completionEligible"`
+	SchemaVersion      int                          `json:"schemaVersion"`
+	RequestID          string                       `json:"requestId"`
+	ID                 string                       `json:"id"`
+	Source             string                       `json:"source"`
+	Target             string                       `json:"target"`
+	Status             outputvocab.ResultStatus     `json:"status"`
+	Operation          outputvocab.ArchiveOperation `json:"operation"`
+	CompletionEligible bool                         `json:"completionEligible"`
 }
 
 func Archive(dir string, req ArchiveRequest, adopt bool) (ArchiveResult, error) {
@@ -25,7 +27,7 @@ func RecoverArchive(dir string, req ArchiveRequest) (ArchiveResult, error) {
 }
 
 func archiveResult(rec archiveRecord) ArchiveResult {
-	return ArchiveResult{SchemaVersion: 1, RequestID: rec.RequestID, ID: rec.ID, Source: rec.Source, Target: rec.Target, Status: "completed", Operation: rec.Operation, CompletionEligible: rec.Completion != nil}
+	return ArchiveResult{SchemaVersion: 1, RequestID: rec.RequestID, ID: rec.ID, Source: rec.Source, Target: rec.Target, Status: outputvocab.Completed, Operation: outputvocab.ArchiveOperation(rec.Operation), CompletionEligible: rec.Completion != nil}
 }
 
 func archiveWithStep(dir string, req ArchiveRequest, adopt, recoverOnly bool, step func(string) error) (result ArchiveResult, err error) {

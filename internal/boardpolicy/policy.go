@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type Declaration struct {
@@ -183,11 +185,22 @@ func relocationTarget(zone string, workflow map[string]string) bool {
 }
 
 func baseDirs() []string {
-	return []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "archive", "_archive"}
+	zones := outputvocab.AllZones()
+	dirs := make([]string, len(zones))
+	for i, z := range zones {
+		dirs[i] = string(z)
+	}
+	return dirs
 }
 
 func defaultStatuses() map[string]string {
-	return map[string]string{"todo": "pending", "doing": "in-progress", "review": "review", "blocked": "blocked", "done": "done"}
+	return map[string]string{
+		string(outputvocab.ZoneTodo):    string(outputvocab.StatusPending),
+		string(outputvocab.ZoneDoing):   string(outputvocab.StatusInProgress),
+		string(outputvocab.ZoneReview):  string(outputvocab.StatusReview),
+		string(outputvocab.ZoneBlocked): string(outputvocab.StatusBlocked),
+		string(outputvocab.ZoneDone):    string(outputvocab.StatusDone),
+	}
 }
 
 func validParkedName(zone string) bool {
@@ -219,8 +232,9 @@ func isReserved(zone string) bool {
 }
 
 func knownStatus(status string) bool {
-	switch status {
-	case "pending", "in-progress", "review", "blocked", "done", "cancelled":
+	switch outputvocab.Status(status) {
+	case outputvocab.StatusPending, outputvocab.StatusInProgress, outputvocab.StatusReview,
+		outputvocab.StatusBlocked, outputvocab.StatusDone, outputvocab.StatusCancelled:
 		return true
 	}
 	return false

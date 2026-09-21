@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 func AdoptLegacyArchive(dir string, req LegacyArchiveRequest, adopt bool) (ArchiveResult, error) {
@@ -22,7 +23,7 @@ func legacyArchiveWithStep(dir string, req LegacyArchiveRequest, adopt, recoverO
 		return result, fmt.Errorf("legacy archive operation is required")
 	}
 	common := req.ArchiveRequest
-	common.Operation = "force"
+	common.Operation = string(outputvocab.Force)
 	if err := validateArchiveRequest(common); err != nil {
 		return result, err
 	}

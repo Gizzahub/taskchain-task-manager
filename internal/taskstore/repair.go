@@ -10,16 +10,17 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardpath"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type RepairRequest struct{ ID, Owner, Token, RequestID, Path, ExpectedSHA256 string }
 type RepairResult struct {
-	SchemaVersion int    `json:"schemaVersion"`
-	RequestID     string `json:"requestId"`
-	ID            string `json:"id"`
-	Path          string `json:"path"`
-	Status        string `json:"status"`
-	Changed       bool   `json:"changed"`
+	SchemaVersion int                      `json:"schemaVersion"`
+	RequestID     string                   `json:"requestId"`
+	ID            string                   `json:"id"`
+	Path          string                   `json:"path"`
+	Status        outputvocab.ResultStatus `json:"status"`
+	Changed       bool                     `json:"changed"`
 }
 
 func RepairStatus(dir string, req RepairRequest, adopt bool) (RepairResult, error) {
@@ -173,7 +174,7 @@ func prepareRepair(s *repairSession, req RepairRequest) (repairRecord, error) {
 	return rec, validateRepairRecord(rec)
 }
 func repairResult(rec repairRecord) RepairResult {
-	return RepairResult{SchemaVersion: 1, RequestID: rec.RequestID, ID: rec.ID, Path: rec.Path, Status: "completed", Changed: rec.Changed}
+	return RepairResult{SchemaVersion: 1, RequestID: rec.RequestID, ID: rec.ID, Path: rec.Path, Status: outputvocab.Completed, Changed: rec.Changed}
 }
 func sameRepair(rec repairRecord, req RepairRequest) bool {
 	return rec.ID == req.ID && rec.Owner == req.Owner && rec.Token == req.Token && rec.Path == req.Path && rec.ExpectedSHA256 == req.ExpectedSHA256
@@ -193,7 +194,7 @@ func validateRepairRequest(req RepairRequest) error {
 func validateRepairClaim(j claimsLedger, req RepairRequest) error {
 	held := false
 	for _, c := range j.Records {
-		if sameIdentity(c.ID, req.ID) && c.Status == "held" {
+		if sameIdentity(c.ID, req.ID) && c.Status == outputvocab.ClaimHeld {
 			held = true
 			if c.Owner != req.Owner || c.Token != req.Token {
 				return errors.New("repair requires the exact held claim")

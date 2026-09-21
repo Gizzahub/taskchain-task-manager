@@ -168,6 +168,8 @@ func ensureCloneOwnerRejoinCommonPending(s *sharedSession, p OwnerRejoinPlan, di
 		if floors == nil {
 			floors = []ReservationFloor{}
 		}
+		// The shared-state journal is an on-disk contract distinct from stdout; it
+		// deliberately does not read the stdout vocabulary.
 		next := sharedState{
 			SchemaVersion: 4, NamespaceID: p.TargetNamespace, BoardPath: p.BoardPath, Phase: "initializing",
 			Reserved: unionIDs(cloneOwnerRejoinLedgerIDs(p, files), p.AdditionalReservedIDs), ReservationFloors: floors,

@@ -8,6 +8,7 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/archivepolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 // LegacyArchiveRequest records an operator's explicit observation of an
@@ -23,7 +24,7 @@ func validateLegacyArchiveRequest(req LegacyArchiveRequest, actualMode uint32, p
 		return nil, fmt.Errorf("legacy archive operation is required")
 	}
 	common := req.ArchiveRequest
-	common.Operation = "force"
+	common.Operation = string(outputvocab.Force)
 	if err := validateArchiveRequest(common); err != nil {
 		return nil, err
 	}
@@ -82,7 +83,7 @@ func prepareLegacyArchiveRecord(req LegacyArchiveRequest, raw []byte, actualMode
 		return zero, err
 	}
 	record := archiveRecord{
-		State: "pending", Operation: "legacy-adoption", RequestID: req.RequestID, ID: req.ID,
+		State: "pending", Operation: string(outputvocab.LegacyAdoption), RequestID: req.RequestID, ID: req.ID,
 		Owner: req.Owner, Token: req.Token, BoardPath: board, Namespace: namespace,
 		Source: req.Source, Target: req.Source, OriginalSHA256: bytesDigest(raw), FinalSHA256: bytesDigest(raw),
 		Mode: actualMode, PolicyCanonical: append([]byte(nil), pCanonical...), PolicyDigest: bytesDigest(pCanonical),

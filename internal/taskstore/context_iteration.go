@@ -5,9 +5,10 @@ import (
 	"os"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/intentdoc"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
-func validateIterationContextReferences(r *os.Root, doc intentdoc.Document) (string, error) {
+func validateIterationContextReferences(r *os.Root, doc intentdoc.Document) (outputvocab.ReferenceCheckState, error) {
 	d, err := doc.IterationSnapshot()
 	if err != nil {
 		return "", err
@@ -34,7 +35,7 @@ func validateIterationContextReferences(r *os.Root, doc intentdoc.Document) (str
 	if err := intentdoc.ValidateIterationReferences(doc, intent, previous, batch); err != nil {
 		return "", err
 	}
-	return "verified", nil
+	return outputvocab.ReferenceVerified, nil
 }
 
 func requiredContext(r *os.Root, kind string, ref intentdoc.ContextRef) (intentdoc.Document, error) {

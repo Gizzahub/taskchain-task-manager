@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 const (
@@ -30,10 +31,10 @@ type ClaimRequest struct {
 }
 
 type ClaimRecord struct {
-	ID     string `json:"id"`
-	Owner  string `json:"owner"`
-	Token  string `json:"token"`
-	Status string `json:"status"`
+	ID     string                  `json:"id"`
+	Owner  string                  `json:"owner"`
+	Token  string                  `json:"token"`
+	Status outputvocab.ClaimStatus `json:"status"`
 }
 
 type claimsLedger struct {
@@ -66,13 +67,13 @@ func Claim(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 		if record.Token != req.Token {
 			continue
 		}
-		if record.ID == req.ID && record.Owner == req.Owner && record.Status == "held" {
+		if record.ID == req.ID && record.Owner == req.Owner && record.Status == outputvocab.ClaimHeld {
 			return record, nil
 		}
 		return ClaimRecord{}, fmt.Errorf("claim token already used")
 	}
 	for _, record := range ledger.Records {
-		if record.Status == "held" && sameIdentity(record.ID, req.ID) {
+		if record.Status == outputvocab.ClaimHeld && sameIdentity(record.ID, req.ID) {
 			return ClaimRecord{}, fmt.Errorf("task %s is already claimed", req.ID)
 		}
 	}
@@ -94,7 +95,7 @@ func Claim(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 	if !found {
 		return ClaimRecord{}, fmt.Errorf("task %s is not ready", req.ID)
 	}
-	record = ClaimRecord{ID: req.ID, Owner: req.Owner, Token: req.Token, Status: "held"}
+	record = ClaimRecord{ID: req.ID, Owner: req.Owner, Token: req.Token, Status: outputvocab.ClaimHeld}
 	ledger.Records = append(ledger.Records, record)
 	if err := ensureReleaseCapacity(ledger); err != nil {
 		return ClaimRecord{}, err
@@ -131,10 +132,10 @@ func Release(dir string, req ClaimRequest) (record ClaimRecord, err error) {
 		if record.Token != req.Token || record.ID != req.ID || record.Owner != req.Owner {
 			continue
 		}
-		if record.Status == "released" {
+		if record.Status == outputvocab.ClaimReleased {
 			return *record, nil
 		}
-		record.Status = "released"
+		record.Status = outputvocab.ClaimReleased
 		if err := saveClaims(r, ledger); err != nil {
 			return ClaimRecord{}, err
 		}
@@ -321,14 +322,14 @@ func validateClaims(ledger claimsLedger, entries []Entry) (claimsLedger, error) 
 		if !validClaimID(record.ID) || !validClaimOwner(record.Owner) || !claimToken.MatchString(record.Token) {
 			return claimsLedger{}, errors.New("invalid claims ledger record")
 		}
-		if record.Status != "held" && record.Status != "released" {
+		if record.Status != outputvocab.ClaimHeld && record.Status != outputvocab.ClaimReleased {
 			return claimsLedger{}, fmt.Errorf("invalid claim status %q", record.Status)
 		}
 		if tokens[record.Token] {
 			return claimsLedger{}, errors.New("duplicate claim token")
 		}
 		tokens[record.Token] = true
-		if record.Status == "held" {
+		if record.Status == outputvocab.ClaimHeld {
 			if !ids[identityKey(record.ID)] {
 				return claimsLedger{}, fmt.Errorf("held claim references missing task %s", record.ID)
 			}
@@ -367,8 +368,8 @@ func ensureReleaseCapacity(ledger claimsLedger) error {
 	reserved := ledger
 	reserved.Records = append([]ClaimRecord(nil), ledger.Records...)
 	for i := range reserved.Records {
-		if reserved.Records[i].Status == "held" {
-			reserved.Records[i].Status = "released"
+		if reserved.Records[i].Status == outputvocab.ClaimHeld {
+			reserved.Records[i].Status = outputvocab.ClaimReleased
 		}
 	}
 	raw, err := json.MarshalIndent(reserved, "", "  ")
@@ -396,7 +397,7 @@ func readyLockedWithPolicy(entries []Entry, ledger claimsLedger, policy boardpol
 func readyWithCompletion(entries []Entry, ledger claimsLedger, policy boardpolicy.Policy, completion completionIndex) []Entry {
 	held := map[string]bool{}
 	for _, record := range ledger.Records {
-		if record.Status == "held" {
+		if record.Status == outputvocab.ClaimHeld {
 			held[identityKey(record.ID)] = true
 		}
 	}

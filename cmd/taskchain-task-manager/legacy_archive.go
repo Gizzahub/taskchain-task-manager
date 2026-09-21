@@ -8,6 +8,7 @@ import (
 	"io"
 	"strconv"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
 )
 
@@ -51,7 +52,7 @@ func runLegacyArchive(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "legacy archive rules:", err)
 		return 1
 	}
-	req := taskstore.LegacyArchiveRequest{ArchiveRequest: taskstore.ArchiveRequest{ID: *id, Owner: *owner, Token: *token, RequestID: *request, Source: *source, ExpectedSHA256: *digest, Operation: "legacy-adoption", Assertion: *assertion, Rules: raw}, ExpectedMode: uint32(bits), ApproveCompletion: *approve}
+	req := taskstore.LegacyArchiveRequest{ArchiveRequest: taskstore.ArchiveRequest{ID: *id, Owner: *owner, Token: *token, RequestID: *request, Source: *source, ExpectedSHA256: *digest, Operation: string(outputvocab.LegacyAdoption), Assertion: *assertion, Rules: raw}, ExpectedMode: uint32(bits), ApproveCompletion: *approve}
 	var result taskstore.ArchiveResult
 	if *resume {
 		result, err = taskstore.RecoverLegacyArchive(*dir, req)

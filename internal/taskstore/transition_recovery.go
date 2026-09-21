@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardpath"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 func finishTransition(r *os.Root, j transitionJournal, rec transitionRecord, req TransitionRequest, step func(string) error) (TransitionResult, error) {
@@ -49,7 +50,7 @@ func finishTransition(r *os.Root, j transitionJournal, rec transitionRecord, req
 	}
 	held := false
 	for _, claim := range claims.Records {
-		if sameIdentity(claim.ID, req.ID) && claim.Owner == req.Owner && claim.Token == req.Token && claim.Status == "held" {
+		if sameIdentity(claim.ID, req.ID) && claim.Owner == req.Owner && claim.Token == req.Token && claim.Status == outputvocab.ClaimHeld {
 			held = true
 		}
 	}

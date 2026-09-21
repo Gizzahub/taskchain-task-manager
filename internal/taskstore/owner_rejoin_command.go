@@ -10,6 +10,7 @@ import (
 	"sort"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/githistory"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 // RejoinBoardOptions is the complete operator instruction for one owner-rejoin
@@ -33,30 +34,30 @@ type RejoinBoardOptions struct {
 // the board now binds, never advice; diagnostics belong on the caller's error
 // channel.
 type RejoinBoardResult struct {
-	Mode                  string                `json:"mode"`
-	Phase                 string                `json:"phase"`
-	RejoinID              string                `json:"rejoinId"`
-	SourceOwner           string                `json:"sourceOwner"`
-	TargetOwner           string                `json:"targetOwner"`
-	SourceNamespace       string                `json:"sourceNamespace"`
-	TargetNamespace       string                `json:"targetNamespace"`
-	SourcePolicyAuthority string                `json:"sourcePolicyAuthority"`
-	TargetPolicyAuthority string                `json:"targetPolicyAuthority"`
-	SourceStorageProtocol int                   `json:"sourceStorageProtocol"`
-	TargetStorageProtocol int                   `json:"targetStorageProtocol"`
-	PlanSHA256            string                `json:"planSha256"`
-	PayloadSHA256         string                `json:"payloadSha256"`
-	ReservationFloors     []ReservationFloor    `json:"reservationFloors"`
-	AdditionalReservedIDs []string              `json:"additionalReservedIds"`
-	Files                 []OwnerRejoinFile     `json:"files"`
-	Artifacts             []OwnerRejoinArtifact `json:"artifacts"`
+	Mode                  outputvocab.RejoinMode  `json:"mode"`
+	Phase                 outputvocab.RejoinPhase `json:"phase"`
+	RejoinID              string                  `json:"rejoinId"`
+	SourceOwner           string                  `json:"sourceOwner"`
+	TargetOwner           string                  `json:"targetOwner"`
+	SourceNamespace       string                  `json:"sourceNamespace"`
+	TargetNamespace       string                  `json:"targetNamespace"`
+	SourcePolicyAuthority string                  `json:"sourcePolicyAuthority"`
+	TargetPolicyAuthority string                  `json:"targetPolicyAuthority"`
+	SourceStorageProtocol int                     `json:"sourceStorageProtocol"`
+	TargetStorageProtocol int                     `json:"targetStorageProtocol"`
+	PlanSHA256            string                  `json:"planSha256"`
+	PayloadSHA256         string                  `json:"payloadSha256"`
+	ReservationFloors     []ReservationFloor      `json:"reservationFloors"`
+	AdditionalReservedIDs []string                `json:"additionalReservedIds"`
+	Files                 []OwnerRejoinFile       `json:"files"`
+	Artifacts             []OwnerRejoinArtifact   `json:"artifacts"`
 }
 
-func rejoinMode(clone bool) string {
+func rejoinMode(clone bool) outputvocab.RejoinMode {
 	if clone {
-		return "independent-clone"
+		return outputvocab.IndependentClone
 	}
-	return "same-common"
+	return outputvocab.SameCommon
 }
 
 // PrepareRejoinBoard derives the immutable plan, payload and capacity artifact
@@ -88,7 +89,7 @@ func PrepareRejoinBoard(opts RejoinBoardOptions) (RejoinBoardResult, []byte, []b
 	if err != nil {
 		return zero, nil, nil, nil, err
 	}
-	return rejoinBoardResult(plan, "prepared"), planRaw, payload, capacity, nil
+	return rejoinBoardResult(plan, outputvocab.RejoinPrepared), planRaw, payload, capacity, nil
 }
 
 // rejoinBoardPlanHeader assembles the plan header from what can be observed
@@ -296,7 +297,7 @@ func ApplyRejoinBoard(dir string, planRaw, payload []byte) (RejoinBoardResult, e
 	if err := apply(dir, plan, payload, nil); err != nil {
 		return zero, err
 	}
-	return rejoinBoardResult(plan, "completed"), nil
+	return rejoinBoardResult(plan, outputvocab.RejoinCompleted), nil
 }
 
 // RejoinBoardStatus reports the board's own recorded rejoin evidence without
@@ -311,15 +312,15 @@ func RejoinBoardStatus(dir string) (RejoinBoardResult, error) {
 	defer r.Close()
 	plan, err := ownerRejoinCompletedLocal(r)
 	if errors.Is(err, errOwnerRejoinAbsent) {
-		return RejoinBoardResult{Phase: "absent", ReservationFloors: []ReservationFloor{}, AdditionalReservedIDs: []string{}, Files: []OwnerRejoinFile{}, Artifacts: []OwnerRejoinArtifact{}}, nil
+		return RejoinBoardResult{Phase: outputvocab.RejoinAbsent, ReservationFloors: []ReservationFloor{}, AdditionalReservedIDs: []string{}, Files: []OwnerRejoinFile{}, Artifacts: []OwnerRejoinArtifact{}}, nil
 	}
 	if err != nil {
 		return zero, err
 	}
-	return rejoinBoardResult(plan, "completed"), nil
+	return rejoinBoardResult(plan, outputvocab.RejoinCompleted), nil
 }
 
-func rejoinBoardResult(plan OwnerRejoinPlan, phase string) RejoinBoardResult {
+func rejoinBoardResult(plan OwnerRejoinPlan, phase outputvocab.RejoinPhase) RejoinBoardResult {
 	planRaw, _ := OwnerRejoinPlanBytes(plan)
 	result := RejoinBoardResult{
 		Mode: rejoinMode(!plan.SourceCommonAvailable), Phase: phase, RejoinID: plan.RejoinID,

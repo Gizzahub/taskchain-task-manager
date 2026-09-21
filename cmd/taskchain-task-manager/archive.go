@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
 )
 
@@ -28,7 +29,7 @@ func runArchive(args []string, out, errOut io.Writer) int {
 	token := f.String("token", "", "existing held claim token")
 	request := f.String("request-id", "", "unique retry identifier")
 	digest := f.String("expected-sha256", "", "SHA-256 of original bytes")
-	operation := f.String("operation", "archive", "archive, supersede, or force")
+	operation := f.String("operation", string(outputvocab.ArchiveOp), "archive, supersede, or force")
 	assertion := f.String("assertion", "", "required reason for force")
 	adopt := f.Bool("adopt", false, "adopt storage v3 after upgrading every writer")
 	resume := f.Bool("resume", false, "recover the exact recorded request")

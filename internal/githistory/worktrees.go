@@ -13,16 +13,18 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type WorktreeReport struct {
-	SchemaVersion   int        `json:"schemaVersion"`
-	Repository      string     `json:"repository"`
-	CommonDirectory string     `json:"commonDirectory"`
-	Board           string     `json:"board"`
-	NamespaceKey    string     `json:"namespaceKey"`
-	Worktrees       []Worktree `json:"worktrees"`
-	SharedReadiness string     `json:"sharedReadiness"`
+	SchemaVersion   int                         `json:"schemaVersion"`
+	Repository      string                      `json:"repository"`
+	CommonDirectory string                      `json:"commonDirectory"`
+	Board           string                      `json:"board"`
+	NamespaceKey    string                      `json:"namespaceKey"`
+	Worktrees       []Worktree                  `json:"worktrees"`
+	SharedReadiness outputvocab.ValidationState `json:"sharedReadiness"`
 }
 
 // InspectWorktrees observes topology, not card state or readiness to enable sharing.
@@ -97,7 +99,7 @@ func inspectWorktrees(ctx context.Context, repo, board string, afterRead func() 
 	}
 	key := fmt.Sprintf("%x", sha256.Sum256([]byte(s.board)))
 	return WorktreeReport{SchemaVersion: 1, Repository: s.root, CommonDirectory: common,
-		Board: s.board, NamespaceKey: key, Worktrees: worktrees, SharedReadiness: "not_evaluated"}, nil
+		Board: s.board, NamespaceKey: key, Worktrees: worktrees, SharedReadiness: outputvocab.NotEvaluated}, nil
 }
 
 func (s scanner) commonDirectory(ctx context.Context) (string, fs.FileInfo, error) {

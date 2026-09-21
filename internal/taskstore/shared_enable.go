@@ -8,13 +8,14 @@ import (
 	"path/filepath"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/githistory"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type SharedResult struct {
-	NamespaceID   string `json:"namespaceId"`
-	Phase         string `json:"phase"`
-	Worktrees     int    `json:"worktrees"`
-	ReservedCount int    `json:"reservedCount"`
+	NamespaceID   string                  `json:"namespaceId"`
+	Phase         outputvocab.SharedPhase `json:"phase"`
+	Worktrees     int                     `json:"worktrees"`
+	ReservedCount int                     `json:"reservedCount"`
 }
 
 func EnableShared(dir string, resume bool) (SharedResult, error) {
@@ -98,6 +99,8 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 		if _, err := rand.Read(token[:]); err != nil {
 			return result, err
 		}
+		// The shared-state journal is an on-disk contract distinct from stdout; it
+		// deliberately does not read the stdout vocabulary.
 		state = sharedState{SchemaVersion: 1, NamespaceID: fmt.Sprintf("%x", token), BoardPath: s.location.Board, Phase: "initializing", Reserved: []string{}, Participants: []sharedParticipant{}}
 		state.StorageProtocol = storageProtocol
 		for _, b := range boards {
@@ -193,6 +196,8 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 	if err := verifyActivationBoards(boards, state); err != nil {
 		return result, err
 	}
+	// The shared-state journal is an on-disk contract distinct from stdout; it
+	// deliberately does not read the stdout vocabulary.
 	state.Phase = "active"
 	if err := verifyActivationHandles(boards, state.BoardPath); err != nil {
 		return result, err
@@ -255,5 +260,5 @@ func verifyActivationBoards(boards []activationBoard, state sharedState) error {
 }
 
 func sharedResult(s sharedState) SharedResult {
-	return SharedResult{NamespaceID: s.NamespaceID, Phase: s.Phase, Worktrees: len(s.Participants), ReservedCount: len(s.Reserved)}
+	return SharedResult{NamespaceID: s.NamespaceID, Phase: outputvocab.SharedPhase(s.Phase), Worktrees: len(s.Participants), ReservedCount: len(s.Reserved)}
 }

@@ -8,6 +8,8 @@ import (
 	"io"
 	"sort"
 	"unicode/utf8"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 // OwnerRejoinPlan is a pure, content-addressed preparation record.  It grants
@@ -45,25 +47,25 @@ type ReservationFloor struct {
 }
 
 type OwnerRejoinFile struct {
-	Role            string `json:"role"`
-	Path            string `json:"path"`
-	OriginalPresent bool   `json:"originalPresent"`
-	TargetPresent   bool   `json:"targetPresent"`
-	Mode            uint32 `json:"mode"`
-	OriginalLength  int    `json:"originalLength"`
-	OriginalSHA256  string `json:"originalSha256"`
-	TargetLength    int    `json:"targetLength"`
-	TargetSHA256    string `json:"targetSha256"`
+	Role            outputvocab.RejoinRole `json:"role"`
+	Path            string                 `json:"path"`
+	OriginalPresent bool                   `json:"originalPresent"`
+	TargetPresent   bool                   `json:"targetPresent"`
+	Mode            uint32                 `json:"mode"`
+	OriginalLength  int                    `json:"originalLength"`
+	OriginalSHA256  string                 `json:"originalSha256"`
+	TargetLength    int                    `json:"targetLength"`
+	TargetSHA256    string                 `json:"targetSha256"`
 }
 
 // OwnerRejoinArtifact inventories immutable content-addressed bytes that are
 // transported separately from the bounded owner payload.
 type OwnerRejoinArtifact struct {
-	Role   string `json:"role"`
-	Path   string `json:"path"`
-	Mode   uint32 `json:"mode"`
-	Length int    `json:"length"`
-	SHA256 string `json:"sha256"`
+	Role   outputvocab.RejoinRole `json:"role"`
+	Path   string                 `json:"path"`
+	Mode   uint32                 `json:"mode"`
+	Length int                    `json:"length"`
+	SHA256 string                 `json:"sha256"`
 }
 
 type OwnerRejoinReceipt struct {
@@ -115,16 +117,16 @@ func validateOwnerRejoinPlan(p OwnerRejoinPlan, requirePayload bool) error {
 	}
 	seenRole, seenPath := map[string]bool{}, map[string]bool{}
 	for i, f := range p.Files {
-		if f.Role == "" || len(f.Role) > 255 || seenRole[f.Role] || seenPath[f.Path] || !validRejoinPath(f.Path) || f.Mode == 0 || f.Mode&^0777 != 0 || f.OriginalLength < 0 || f.TargetLength < 0 || f.OriginalLength > maxArchiveCapacityBytes || f.TargetLength > maxArchiveCapacityBytes || (!f.OriginalPresent && (f.OriginalLength != 0 || f.OriginalSHA256 != "")) || (!f.TargetPresent && (f.TargetLength != 0 || f.TargetSHA256 != "")) || (f.OriginalPresent && !sharedHex64.MatchString(f.OriginalSHA256)) || (f.TargetPresent && !sharedHex64.MatchString(f.TargetSHA256)) || (i > 0 && p.Files[i-1].Role >= f.Role) {
+		if f.Role == "" || len(f.Role) > 255 || seenRole[string(f.Role)] || seenPath[f.Path] || !validRejoinPath(f.Path) || f.Mode == 0 || f.Mode&^0777 != 0 || f.OriginalLength < 0 || f.TargetLength < 0 || f.OriginalLength > maxArchiveCapacityBytes || f.TargetLength > maxArchiveCapacityBytes || (!f.OriginalPresent && (f.OriginalLength != 0 || f.OriginalSHA256 != "")) || (!f.TargetPresent && (f.TargetLength != 0 || f.TargetSHA256 != "")) || (f.OriginalPresent && !sharedHex64.MatchString(f.OriginalSHA256)) || (f.TargetPresent && !sharedHex64.MatchString(f.TargetSHA256)) || (i > 0 && p.Files[i-1].Role >= f.Role) {
 			return errors.New("invalid owner rejoin file inventory")
 		}
-		seenRole[f.Role], seenPath[f.Path] = true, true
+		seenRole[string(f.Role)], seenPath[f.Path] = true, true
 	}
 	for i, a := range p.Artifacts {
-		if a.Role == "" || len(a.Role) > 255 || seenRole[a.Role] || seenPath[a.Path] || !validRejoinPath(a.Path) || a.Mode == 0 || a.Mode&^0777 != 0 || a.Length <= 0 || a.Length > maxOwnerRejoinCapacityArtifactBytes || !sharedHex64.MatchString(a.SHA256) || (i > 0 && p.Artifacts[i-1].Role >= a.Role) {
+		if a.Role == "" || len(a.Role) > 255 || seenRole[string(a.Role)] || seenPath[a.Path] || !validRejoinPath(a.Path) || a.Mode == 0 || a.Mode&^0777 != 0 || a.Length <= 0 || a.Length > maxOwnerRejoinCapacityArtifactBytes || !sharedHex64.MatchString(a.SHA256) || (i > 0 && p.Artifacts[i-1].Role >= a.Role) {
 			return errors.New("invalid owner rejoin artifact inventory")
 		}
-		seenRole[a.Role], seenPath[a.Path] = true, true
+		seenRole[string(a.Role)], seenPath[a.Path] = true, true
 	}
 	if len(p.Files) == 0 || len(p.Files) > 64 || !sortedArchiveCards(p.ArchiveCards) || (requirePayload && !sharedHex64.MatchString(p.PayloadSHA256)) || (!requirePayload && p.PayloadSHA256 != "" && !sharedHex64.MatchString(p.PayloadSHA256)) {
 		return errors.New("invalid owner rejoin plan inventory or payload")
@@ -235,9 +237,9 @@ func ownerRejoinAggregate(files []OwnerRejoinFile, target bool) string {
 	h := make([]string, 0, len(files))
 	for _, f := range files {
 		if target {
-			h = append(h, f.Role+":"+f.TargetSHA256)
+			h = append(h, string(f.Role)+":"+f.TargetSHA256)
 		} else {
-			h = append(h, f.Role+":"+f.OriginalSHA256)
+			h = append(h, string(f.Role)+":"+f.OriginalSHA256)
 		}
 	}
 	sort.Strings(h)
