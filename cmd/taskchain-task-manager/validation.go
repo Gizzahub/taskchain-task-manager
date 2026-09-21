@@ -11,6 +11,36 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
 )
 
+// Exit codes for this command. 0 (success) and 2 (usage) follow the
+// conventional meanings and are returned as bare literals below; the two
+// non-obvious codes are named here.
+const (
+	// exitValidationError is returned for every failure that happens before
+	// a result document is successfully written to stdout: unreadable
+	// input, malformed YAML/config, or a failure while encoding the result
+	// itself. stdout carries no COMPLETE result document when this is
+	// returned, but it is not guaranteed to be empty: the encode-failure
+	// path below returns this code after Encode has already written part
+	// of a document. A consumer must treat stdout as unparseable here, not
+	// as absent.
+	exitValidationError = 1
+	// exitRuleViolation is returned only after the result document has
+	// already been encoded to stdout successfully and that document reports
+	// an invalid card or incomplete/malformed completion observation.
+	// stdout always carries a valid, parseable result document when this is
+	// returned.
+	//
+	// This code is command-local. Only the validate and validate-completion
+	// commands can return it, because they are the only ones that encode a
+	// document and then judge it. Other commands report a rule violation as
+	// a Go error and so exit 1 with nothing on stdout: an archive-policy
+	// refusal (archive.go, via archivepolicy.Decision.Allowed) and the
+	// validate-policy / validate-context commands, which hardcode
+	// Valid: true and turn an invalid document into a parse error. A
+	// consumer must not generalize "3 means rule violation" across this CLI.
+	exitRuleViolation = 3
+)
+
 // Configured validation is deliberately explicit and card-scoped. It must not
 // discover repository policies or execute commands embedded in a document.
 func runValidation(args []string, out, errOut io.Writer) int {
@@ -64,18 +94,18 @@ func runValidation(args []string, out, errOut io.Writer) int {
 		}
 		if err != nil {
 			fmt.Fprintln(errOut, "validation config:", err)
-			return 1
+			return exitValidationError
 		}
 	}
 	raw, err := readValidationInput(args[1], 1<<20)
 	if err != nil {
 		fmt.Fprintln(errOut, "read card:", err)
-		return 1
+		return exitValidationError
 	}
 	doc, err := card.Parse(raw)
 	if err != nil {
 		fmt.Fprintln(errOut, "parse card:", err)
-		return 1
+		return exitValidationError
 	}
 	var result any = struct {
 		Valid bool `json:"valid"`
@@ -85,20 +115,20 @@ func runValidation(args []string, out, errOut io.Writer) int {
 		report, err := doc.ValidateCompletion(args[1], rules)
 		if err != nil {
 			fmt.Fprintln(errOut, "observe completion:", err)
-			return 1
+			return exitValidationError
 		}
 		result, valid = report, report.Valid
 	} else if configured {
 		report, err := doc.ValidateCard(args[1], rules)
 		if err != nil {
 			fmt.Fprintln(errOut, "validate card:", err)
-			return 1
+			return exitValidationError
 		}
 		result, valid = report, report.Valid
 	}
 	if err := json.NewEncoder(out).Encode(result); err != nil {
 		fmt.Fprintln(errOut, "write validation result:", err)
-		return 1
+		return exitValidationError
 	}
 	if !valid {
 		if completion {
@@ -106,7 +136,7 @@ func runValidation(args []string, out, errOut io.Writer) int {
 		} else {
 			fmt.Fprintln(errOut, "card validation failed; see JSON findings")
 		}
-		return 1
+		return exitRuleViolation
 	}
 	return 0
 }

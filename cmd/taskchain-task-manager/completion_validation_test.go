@@ -39,9 +39,9 @@ func TestValidateCompletionCLIObservesCriteriaAndMetadataSeparately(t *testing.T
 		wantFinding   string
 	}{
 		{"checked", validCompletionCard("P1", "- [x] done\n"), 0, true, true, true, ""},
-		{"unchecked", validCompletionCard("P1", "- [ ] done\n"), 1, false, false, true, "completion"},
-		{"unsupported marker mixed with valid", validCompletionCard("P1", "* [x] unsupported\n- [x] valid\n"), 1, false, false, true, "malformed"},
-		{"metadata invalid independently", validCompletionCard("P9", "- [x] done\n"), 1, false, true, false, "priority"},
+		{"unchecked", validCompletionCard("P1", "- [ ] done\n"), 3, false, false, true, "completion"},
+		{"unsupported marker mixed with valid", validCompletionCard("P1", "* [x] unsupported\n- [x] valid\n"), 3, false, false, true, "malformed"},
+		{"metadata invalid independently", validCompletionCard("P9", "- [x] done\n"), 3, false, true, false, "priority"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

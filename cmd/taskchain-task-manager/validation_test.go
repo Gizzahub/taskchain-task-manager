@@ -61,7 +61,7 @@ func TestConfiguredCardValidation(t *testing.T) {
 	}
 	out.Reset()
 	diagnostics.Reset()
-	if code := run([]string{"validate", path, "--config", config, "--json"}, &out, &diagnostics); code != 1 || !json.Valid(out.Bytes()) || !strings.Contains(out.String(), `"valid":false`) || diagnostics.Len() == 0 {
+	if code := run([]string{"validate", path, "--config", config, "--json"}, &out, &diagnostics); code != 3 || !json.Valid(out.Bytes()) || !strings.Contains(out.String(), `"valid":false`) || diagnostics.Len() == 0 {
 		t.Fatalf("invalid card: %d %s %s", code, &out, &diagnostics)
 	}
 }
@@ -100,6 +100,43 @@ func TestValidationReadLimitsAndOutputFailure(t *testing.T) {
 	diagnostics.Reset()
 	if code := run([]string{"validate", path, "--json"}, &out, &diagnostics); code != 1 || out.Len() != 0 || !strings.Contains(diagnostics.String(), "1048576") {
 		t.Fatalf("oversize=%d %s %s", code, &out, &diagnostics)
+	}
+}
+
+func TestExitCodeDistinguishesRuleViolationFromInputError(t *testing.T) {
+	dir := t.TempDir()
+	config := filepath.Join(dir, "validation.yaml")
+	path := filepath.Join(dir, "P4-example.md")
+	policy := []byte("schema-version: 1\ncard-dialect:\n  id-required: false\n  criteria-heading: Acceptance Criteria\n  priority-values: [P4]\n  filename-prefixes: [P4]\n  task-types: [audit]\n")
+	// priority P9 is not in priority-values, so the check runs and finds a
+	// rule violation: the result document is still valid JSON.
+	raw := []byte("---\ntitle: Example\ntype: audit\npriority: P9\n---\n## Summary\nExample.\n## Acceptance Criteria\n- [ ] inspect | verify: echo not-executed\n")
+	for file, data := range map[string][]byte{config: policy, path: raw} {
+		if err := os.WriteFile(file, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out, diagnostics bytes.Buffer
+	if code := run([]string{"validate", path, "--config", config, "--json"}, &out, &diagnostics); code != 3 {
+		t.Fatalf("rule violation: code=%d diagnostics=%s output=%s", code, &diagnostics, &out)
+	}
+	var result struct {
+		Valid bool `json:"valid"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.Valid {
+		t.Fatalf("rule violation: expected parseable invalid result, got err=%v out=%s", err, &out)
+	}
+
+	// A missing input file is an input error, not a rule violation: no
+	// result document is ever encoded to stdout.
+	missing := filepath.Join(dir, "does-not-exist.md")
+	out.Reset()
+	diagnostics.Reset()
+	if code := run([]string{"validate", missing, "--config", config, "--json"}, &out, &diagnostics); code != 1 {
+		t.Fatalf("input error: code=%d diagnostics=%s output=%s", code, &diagnostics, &out)
+	}
+	if err := json.Unmarshal(out.Bytes(), &result); err == nil {
+		t.Fatalf("input error: expected no parseable result document, got out=%s", &out)
 	}
 }
 

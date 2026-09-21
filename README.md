@@ -131,9 +131,16 @@ staged write 뒤 rename으로 교체하며 전원 손실이나 잠금을 무시�
 
 - 성공: exit 0, stdout에 JSON 한 개. config 없는 `validate`는 `{"valid":true}`인 구문 검사입니다.
 - `validate FILE --config RULES --json`은 명시적 단일 카드 규칙과 criteria를 검사합니다.
-  규칙 위반은 exit 1과 JSON findings를 반환하며 전체 보드나 완료 증거의 검증이 아닙니다.
-- 파일/구문/출력 오류: exit 1, stderr에 원인, 입력 오류 시 stdout은 비어 있음.
-- 잘못된 명령/인자: exit 2. `--help`는 exit 0.
+  규칙 위반은 exit 3과 JSON findings를 반환하며 전체 보드나 완료 증거의 검증이 아닙니다.
+- 오류: exit 1, stderr에 원인. stdout이 계약상 비어 있는 것은 아닙니다 — 결과 JSON을
+  encode하던 중 실패하는 경로가 있어, 부분적으로 쓰인 stdout이 남을 수 있습니다.
+- 잘못된 명령/인자: exit 2, 어떤 도메인 동작도 실행되기 전에 발견된 usage/인자 형태·값
+  문제입니다. `--help`는 exit 0.
+- 검사가 실행되어 규칙 위반을 발견한 경우: exit 3, stdout에 유효한(파싱 가능한) 결과
+  JSON 문서가 있습니다. **이 코드는 명령마다 다릅니다** — 문서를 먼저 내보내고 그
+  문서를 판정하는 `validate`·`validate-completion`만 3을 반환합니다. `archive`의
+  정책 거부, `validate-policy`·`validate-context`의 무효 문서는 Go 오류로 처리되어
+  exit 1과 빈 stdout이 됩니다. 「3 = 규칙 위반」을 CLI 전체로 일반화하지 마십시오.
 - `show`는 알려진 메타데이터의 view이며 전체 원본 문서가 아닙니다.
 - `tasks/` 아래 workflow 경로의 상태가 frontmatter보다 우선합니다. 다른 경로에서는
   frontmatter 상태를 사용합니다. 원본 파일은 수정하지 않습니다.
