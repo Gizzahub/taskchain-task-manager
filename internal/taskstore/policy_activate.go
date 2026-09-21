@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type PolicyActivationOptions struct {
@@ -16,13 +17,13 @@ type PolicyActivationOptions struct {
 }
 
 type PolicyActivationResult struct {
-	SchemaVersion int    `json:"schemaVersion"`
-	AuthorityID   string `json:"authorityId"`
-	Scope         string `json:"scope"`
-	Digest        string `json:"digest"`
-	Status        string `json:"status"`
-	Replayed      bool   `json:"replayed"`
-	Boards        int    `json:"boards"`
+	SchemaVersion int                        `json:"schemaVersion"`
+	AuthorityID   string                     `json:"authorityId"`
+	Scope         outputvocab.AuthorityScope `json:"scope"`
+	Digest        string                     `json:"digest"`
+	Status        outputvocab.ResultStatus   `json:"status"`
+	Replayed      bool                       `json:"replayed"`
+	Boards        int                        `json:"boards"`
 }
 
 // ActivatePolicy explicitly adopts an immutable policy. Shared-ID namespaces
@@ -56,7 +57,7 @@ func activatePolicyWithStep(dir string, raw []byte, options PolicyActivationOpti
 
 func finishPolicyActivation(result PolicyActivationResult, operationErr, cleanupErr error) error {
 	err := errors.Join(operationErr, cleanupErr)
-	if err != nil && result.Status == "completed" {
+	if err != nil && result.Status == outputvocab.Completed {
 		return fmt.Errorf("policy activation may already be completed; preserve state and retry the identical policy to confirm the result: %w", err)
 	}
 	return err
@@ -71,5 +72,5 @@ func newPolicyAuthorityID() (string, error) {
 }
 
 func policyActivationResult(state policyActivationState, replayed bool, boards int) PolicyActivationResult {
-	return PolicyActivationResult{SchemaVersion: 1, AuthorityID: state.AuthorityID, Scope: state.Scope, Digest: state.Digest, Status: "completed", Replayed: replayed, Boards: boards}
+	return PolicyActivationResult{SchemaVersion: 1, AuthorityID: state.AuthorityID, Scope: outputvocab.AuthorityScope(state.Scope), Digest: state.Digest, Status: outputvocab.Completed, Replayed: replayed, Boards: boards}
 }

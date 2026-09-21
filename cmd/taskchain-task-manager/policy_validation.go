@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 func runPolicyValidation(args []string, out, errOut io.Writer) int {
@@ -54,14 +55,14 @@ func runPolicyValidation(args []string, out, errOut io.Writer) int {
 		return 1
 	}
 	result := struct {
-		SchemaVersion   int             `json:"schemaVersion"`
-		Scope           string          `json:"scope"`
-		Valid           bool            `json:"valid"`
-		Activated       bool            `json:"activated"`
-		BoardValidation string          `json:"boardValidation"`
-		Digest          string          `json:"digest"`
-		Canonical       json.RawMessage `json:"canonical"`
-	}{1, "policy-document", true, false, "not_evaluated", digest, canonical}
+		SchemaVersion   int                         `json:"schemaVersion"`
+		Scope           outputvocab.Scope           `json:"scope"`
+		Valid           bool                        `json:"valid"`
+		Activated       bool                        `json:"activated"`
+		BoardValidation outputvocab.ValidationState `json:"boardValidation"`
+		Digest          string                      `json:"digest"`
+		Canonical       json.RawMessage             `json:"canonical"`
+	}{1, outputvocab.ScopePolicyDocument, true, false, outputvocab.NotEvaluated, digest, canonical}
 	if err := json.NewEncoder(out).Encode(result); err != nil {
 		fmt.Fprintln(errOut, "write policy result:", err)
 		return 1

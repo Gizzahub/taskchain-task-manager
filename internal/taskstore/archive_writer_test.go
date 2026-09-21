@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 func archiveWriterFixture(t *testing.T) (string, ArchiveRequest, []byte) {
@@ -219,7 +221,7 @@ func TestArchiveWriterCollisionAndNonNormalOperations(t *testing.T) {
 				req.Assertion = "operator override"
 			}
 			result, err := Archive(dir, req, true)
-			if err != nil || result.CompletionEligible || result.Operation != operation {
+			if err != nil || result.CompletionEligible || result.Operation != outputvocab.ArchiveOperation(operation) {
 				t.Fatalf("result=%+v err=%v", result, err)
 			}
 			if ready, readyErr := Ready(dir); readyErr != nil || readyHasID(ready, "TASK-2") {
@@ -233,6 +235,43 @@ func TestArchiveWriterCollisionAndNonNormalOperations(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestArchiveOperationVocabularyExhaustive exercises the real switch that
+// consumes ArchiveOperation end to end: validateArchiveRecord's
+// "switch r.Operation" in archive_record.go. Together with
+// TestArchiveWriterCollisionAndNonNormalOperations (which already covers
+// "supersede" and "force"), this drives every outputvocab.AllArchiveOperations()
+// member through Archive or AdoptLegacyArchive and checks the resulting
+// ArchiveResult.Operation round-trips to the matching constant, then checks
+// that a value outside the vocabulary hits the switch's default case and is
+// rejected rather than silently accepted.
+func TestArchiveOperationVocabularyExhaustive(t *testing.T) {
+	t.Parallel()
+	t.Run("archive", func(t *testing.T) {
+		t.Parallel()
+		dir, req, _ := archiveWriterFixture(t)
+		result, err := Archive(dir, req, true)
+		if err != nil || result.Operation != outputvocab.ArchiveOp {
+			t.Fatalf("result=%+v err=%v", result, err)
+		}
+	})
+	t.Run("legacy-adoption", func(t *testing.T) {
+		t.Parallel()
+		dir, req, _ := legacyArchiveWriterFixture(t)
+		result, err := AdoptLegacyArchive(dir, req, true)
+		if err != nil || result.Operation != outputvocab.LegacyAdoption {
+			t.Fatalf("result=%+v err=%v", result, err)
+		}
+	})
+	t.Run("unknown", func(t *testing.T) {
+		t.Parallel()
+		_, r, _, _ := archiveJournalFixture(t)
+		r.Operation = "bogus-operation"
+		if err := validateArchiveRecord(r); err == nil {
+			t.Fatal("validateArchiveRecord accepted an operation outside the declared ArchiveOperation vocabulary; the switch may have grown a default case")
+		}
+	})
 }
 
 func TestArchiveWriterPreservesCategoryPath(t *testing.T) {

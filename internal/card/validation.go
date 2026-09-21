@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 	"gopkg.in/yaml.v3"
 )
 
@@ -14,24 +15,24 @@ type CriterionReport struct {
 	Checked bool   `json:"checked"`
 }
 type ValidationFinding struct {
-	Severity string `json:"severity"`
-	Field    string `json:"field"`
-	Message  string `json:"message"`
+	Severity outputvocab.Severity `json:"severity"`
+	Field    string               `json:"field"`
+	Message  string               `json:"message"`
 }
 type ValidationReport struct {
-	SchemaVersion   int                 `json:"schemaVersion"`
-	Scope           string              `json:"scope"`
-	BoardValidation string              `json:"boardValidation"`
-	Valid           bool                `json:"valid"`
-	Criteria        []CriterionReport   `json:"criteria"`
-	Findings        []ValidationFinding `json:"findings"`
+	SchemaVersion   int                         `json:"schemaVersion"`
+	Scope           outputvocab.Scope           `json:"scope"`
+	BoardValidation outputvocab.ValidationState `json:"boardValidation"`
+	Valid           bool                        `json:"valid"`
+	Criteria        []CriterionReport           `json:"criteria"`
+	Findings        []ValidationFinding         `json:"findings"`
 }
 
 var validationFilenameNumber = regexp.MustCompile(`^\d{2,3}[a-z]?-[a-z0-9-]+(?:\.\d{2})?\.md$`)
 
 // ValidateCard validates a work-task card without executing commands or writing bytes.
 func (d *Document) ValidateCard(path string, r ValidationRules) (ValidationReport, error) {
-	report := ValidationReport{SchemaVersion: 1, Scope: "card", BoardValidation: "not_evaluated", Valid: true, Criteria: []CriterionReport{}, Findings: []ValidationFinding{}}
+	report := ValidationReport{SchemaVersion: 1, Scope: outputvocab.ScopeCard, BoardValidation: outputvocab.NotEvaluated, Valid: true, Criteria: []CriterionReport{}, Findings: []ValidationFinding{}}
 	fm, body, err := splitFrontmatter(d.raw)
 	if err != nil {
 		return report, err
@@ -42,7 +43,7 @@ func (d *Document) ValidateCard(path string, r ValidationRules) (ValidationRepor
 	}
 	add := func(field, message string) {
 		report.Valid = false
-		report.Findings = append(report.Findings, ValidationFinding{Severity: "error", Field: field, Message: message})
+		report.Findings = append(report.Findings, ValidationFinding{Severity: outputvocab.SeverityError, Field: field, Message: message})
 	}
 	if err := validateRules(r); err != nil {
 		return report, err
@@ -99,7 +100,7 @@ func (d *Document) ValidateCard(path string, r ValidationRules) (ValidationRepor
 		add("criteria", "criteria checkbox must use [ ], [x], [X], or [>] followed by nonempty text")
 	}
 	if !filenameMatches(lastPath(path), r) {
-		report.Findings = append(report.Findings, ValidationFinding{Severity: "warning", Field: "filename", Message: "filename is outside the CE card pattern"})
+		report.Findings = append(report.Findings, ValidationFinding{Severity: outputvocab.SeverityWarning, Field: "filename", Message: "filename is outside the CE card pattern"})
 	}
 	return report, nil
 }

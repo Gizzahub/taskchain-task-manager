@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type OwnerRejoinSourceFile struct {
@@ -87,7 +88,7 @@ func validateSameCommonOwnerRejoinPlan(p OwnerRejoinPlan, files []OwnerRejoinFil
 	sources := make(map[string]OwnerRejoinSourceFile, len(files))
 	for i, role := range roles {
 		meta, file := p.Files[i], files[i]
-		if meta.Role != role || file.Role != role || meta.Path != sameCommonOwnerRejoinPaths[role] || !meta.OriginalPresent || !meta.TargetPresent || file.Original == nil || file.Target == nil {
+		if meta.Role != outputvocab.RejoinRole(role) || file.Role != role || meta.Path != sameCommonOwnerRejoinPaths[role] || !meta.OriginalPresent || !meta.TargetPresent || file.Original == nil || file.Target == nil {
 			return errors.New("same-common owner rejoin role or path invalid")
 		}
 		sources[role] = OwnerRejoinSourceFile{Role: role, Mode: meta.Mode, Raw: file.Original}
@@ -154,7 +155,7 @@ func deriveSameCommonOwnerRejoin(p OwnerRejoinPlan, sources map[string]OwnerRejo
 	roles := sameCommonOwnerRejoinRoles(p.SourcePolicyAuthority != "")
 	for _, role := range roles {
 		source, target := sources[role], targets[role]
-		meta := OwnerRejoinFile{Role: role, Path: sameCommonOwnerRejoinPaths[role], OriginalPresent: true, TargetPresent: true, Mode: source.Mode, OriginalLength: len(source.Raw), OriginalSHA256: bytesDigest(source.Raw), TargetLength: len(target), TargetSHA256: bytesDigest(target)}
+		meta := OwnerRejoinFile{Role: outputvocab.RejoinRole(role), Path: sameCommonOwnerRejoinPaths[role], OriginalPresent: true, TargetPresent: true, Mode: source.Mode, OriginalLength: len(source.Raw), OriginalSHA256: bytesDigest(source.Raw), TargetLength: len(target), TargetSHA256: bytesDigest(target)}
 		out.metadata = append(out.metadata, meta)
 		out.files = append(out.files, OwnerRejoinFileBytes{Role: role, Original: append([]byte(nil), source.Raw...), Target: append([]byte(nil), target...)})
 	}

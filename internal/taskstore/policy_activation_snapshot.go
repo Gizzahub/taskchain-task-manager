@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 // policyActivationSnapshot hashes only board inputs that the activation
@@ -57,7 +58,7 @@ func policyActivationSnapshotForBinding(r *os.Root, policy boardpolicy.Policy, j
 		return "", err
 	}
 	for _, claim := range claims.Records {
-		if claim.Status == "held" {
+		if claim.Status == outputvocab.ClaimHeld {
 			return "", fmt.Errorf("held claim blocks policy activation: %s", claim.ID)
 		}
 	}

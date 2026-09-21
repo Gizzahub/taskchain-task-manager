@@ -1,17 +1,19 @@
 package card
 
+import "github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
+
 // CompletionReport observes a single card. It does not grant permission to
 // transition, authenticate evidence, or attest that implementation is complete.
 type CompletionReport struct {
-	SchemaVersion      int                 `json:"schemaVersion"`
-	Scope              string              `json:"scope"`
-	CardValid          bool                `json:"cardValid"`
-	CriteriaComplete   bool                `json:"criteriaComplete"`
-	Valid              bool                `json:"valid"`
-	EvidenceValidation string              `json:"evidenceValidation"`
-	BoardValidation    string              `json:"boardValidation"`
-	Criteria           []CriterionReport   `json:"criteria"`
-	Findings           []ValidationFinding `json:"findings"`
+	SchemaVersion      int                         `json:"schemaVersion"`
+	Scope              outputvocab.Scope           `json:"scope"`
+	CardValid          bool                        `json:"cardValid"`
+	CriteriaComplete   bool                        `json:"criteriaComplete"`
+	Valid              bool                        `json:"valid"`
+	EvidenceValidation outputvocab.ValidationState `json:"evidenceValidation"`
+	BoardValidation    outputvocab.ValidationState `json:"boardValidation"`
+	Criteria           []CriterionReport           `json:"criteria"`
+	Findings           []ValidationFinding         `json:"findings"`
 }
 
 func (d *Document) ValidateCompletion(path string, rules ValidationRules) (CompletionReport, error) {
@@ -30,15 +32,15 @@ func (d *Document) ValidateCompletion(path string, rules ValidationRules) (Compl
 	}
 	findings := append([]ValidationFinding{}, card.Findings...)
 	if malformed {
-		findings = append(findings, ValidationFinding{Severity: "error", Field: "completion-criteria", Message: "unsupported or malformed checkbox syntax in criteria section"})
+		findings = append(findings, ValidationFinding{Severity: outputvocab.SeverityError, Field: "completion-criteria", Message: "unsupported or malformed checkbox syntax in criteria section"})
 	}
 	if !complete {
-		findings = append(findings, ValidationFinding{Severity: "error", Field: "completion", Message: "completion requires nonempty, well-formed criteria with every item checked"})
+		findings = append(findings, ValidationFinding{Severity: outputvocab.SeverityError, Field: "completion", Message: "completion requires nonempty, well-formed criteria with every item checked"})
 	}
 	return CompletionReport{
-		SchemaVersion: 1, Scope: "card-completion-observation", CardValid: card.Valid,
+		SchemaVersion: 1, Scope: outputvocab.ScopeCardCompletionObservation, CardValid: card.Valid,
 		CriteriaComplete: complete, Valid: card.Valid && complete,
-		EvidenceValidation: "not_evaluated", BoardValidation: "not_evaluated",
+		EvidenceValidation: outputvocab.NotEvaluated, BoardValidation: outputvocab.NotEvaluated,
 		Criteria: criteria, Findings: findings,
 	}, nil
 }

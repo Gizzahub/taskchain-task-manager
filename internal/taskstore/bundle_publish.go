@@ -8,6 +8,7 @@ import (
 	"path"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/intentdoc"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type BundleOptions struct{ Adopt, Resume bool }
@@ -19,13 +20,13 @@ type BundleTaskResult struct {
 }
 
 type BundleResult struct {
-	SchemaVersion int                `json:"schemaVersion"`
-	RequestID     string             `json:"requestId"`
-	Digest        string             `json:"digest"`
-	Status        string             `json:"status"`
-	Replayed      bool               `json:"replayed"`
-	Tasks         []BundleTaskResult `json:"tasks"`
-	Batch         json.RawMessage    `json:"batch"`
+	SchemaVersion int                      `json:"schemaVersion"`
+	RequestID     string                   `json:"requestId"`
+	Digest        string                   `json:"digest"`
+	Status        outputvocab.ResultStatus `json:"status"`
+	Replayed      bool                     `json:"replayed"`
+	Tasks         []BundleTaskResult       `json:"tasks"`
+	Batch         json.RawMessage          `json:"batch"`
 }
 
 // PublishBundle records one immutable allocation and publishes its cards and
@@ -117,7 +118,7 @@ func publishBundleWithStep(dir string, raw []byte, options BundleOptions, step f
 
 func bundleResult(record bundleRecord, replayed bool) BundleResult {
 	result := BundleResult{SchemaVersion: 1, RequestID: record.RequestID, Digest: record.RequestDigest,
-		Status: record.Status, Replayed: replayed, Tasks: []BundleTaskResult{}, Batch: append(json.RawMessage(nil), record.Batch...)}
+		Status: outputvocab.ResultStatus(record.Status), Replayed: replayed, Tasks: []BundleTaskResult{}, Batch: append(json.RawMessage(nil), record.Batch...)}
 	for _, card := range record.Cards {
 		result.Tasks = append(result.Tasks, BundleTaskResult{card.Key, card.ID, card.Path})
 	}
@@ -185,6 +186,8 @@ func (s *bundleSession) publishRecord(index int, step func(string) error) error 
 	if err := bundleStep(step, "after-batch"); err != nil {
 		return err
 	}
+	// The bundle journal is an on-disk contract distinct from stdout; it
+	// deliberately does not read the stdout vocabulary.
 	s.journal.Records[index].Status = "completed"
 	if err := saveBundles(s.root, s.journal, false); err != nil {
 		return err

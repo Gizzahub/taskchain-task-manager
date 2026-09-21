@@ -38,7 +38,7 @@ func OwnerRejoinPayloadBytes(p OwnerRejoinPlan, files []OwnerRejoinFileBytes) ([
 	binary.BigEndian.PutUint32(raw[8:12], uint32(len(files)))
 	for i, f := range files {
 		meta := p.Files[i]
-		if f.Role != meta.Role || len(f.Role) == 0 || len(f.Role) > 255 || (!meta.OriginalPresent && f.Original != nil) || (!meta.TargetPresent && f.Target != nil) || len(f.Original) != meta.OriginalLength || len(f.Target) != meta.TargetLength || (meta.OriginalPresent && bytesDigest(f.Original) != meta.OriginalSHA256) || (meta.TargetPresent && bytesDigest(f.Target) != meta.TargetSHA256) {
+		if f.Role != string(meta.Role) || len(f.Role) == 0 || len(f.Role) > 255 || (!meta.OriginalPresent && f.Original != nil) || (!meta.TargetPresent && f.Target != nil) || len(f.Original) != meta.OriginalLength || len(f.Target) != meta.TargetLength || (meta.OriginalPresent && bytesDigest(f.Original) != meta.OriginalSHA256) || (meta.TargetPresent && bytesDigest(f.Target) != meta.TargetSHA256) {
 			return nil, errors.New("owner rejoin payload differs from plan")
 		}
 		if len(raw) > maxOwnerRejoinPayloadBytes-len(f.Role)-25 || len(f.Original) > maxOwnerRejoinPayloadBytes-len(raw)-len(f.Role)-25 || len(f.Target) > maxOwnerRejoinPayloadBytes-len(raw)-len(f.Role)-25-len(f.Original) {
@@ -91,7 +91,7 @@ func DecodeOwnerRejoinPayload(raw []byte, p OwnerRejoinPlan) ([]OwnerRejoinFileB
 		off += n
 		flags := raw[off]
 		off++
-		if flags&^3 != 0 || (flags&1 != 0) != meta.OriginalPresent || (flags&2 != 0) != meta.TargetPresent || role != meta.Role {
+		if flags&^3 != 0 || (flags&1 != 0) != meta.OriginalPresent || (flags&2 != 0) != meta.TargetPresent || role != string(meta.Role) {
 			return nil, errors.New("owner rejoin payload role or presence mismatch")
 		}
 		mode := binary.BigEndian.Uint32(raw[off : off+4])

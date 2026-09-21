@@ -8,24 +8,25 @@ import (
 	"os"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/intentdoc"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type ContextResult struct {
-	SchemaVersion        int             `json:"schemaVersion"`
-	Scope                string          `json:"scope"`
-	Kind                 string          `json:"kind"`
-	ID                   string          `json:"id"`
-	Revision             uint32          `json:"revision"`
-	Digest               string          `json:"digest"`
-	Path                 string          `json:"path"`
-	Status               string          `json:"status"`
-	Registered           bool            `json:"registered"`
-	ReferenceValidation  string          `json:"referenceValidation"`
-	EvaluationValidation string          `json:"evaluationValidation"`
-	Canonical            json.RawMessage `json:"canonical"`
+	SchemaVersion        int                             `json:"schemaVersion"`
+	Scope                outputvocab.Scope               `json:"scope"`
+	Kind                 string                          `json:"kind"`
+	ID                   string                          `json:"id"`
+	Revision             uint32                          `json:"revision"`
+	Digest               string                          `json:"digest"`
+	Path                 string                          `json:"path"`
+	Status               outputvocab.ContextStatus       `json:"status"`
+	Registered           bool                            `json:"registered"`
+	ReferenceValidation  outputvocab.ReferenceCheckState `json:"referenceValidation"`
+	EvaluationValidation outputvocab.ValidationState     `json:"evaluationValidation"`
+	Canonical            json.RawMessage                 `json:"canonical"`
 }
 
-func contextResult(doc intentdoc.Document, path, status, references string) (ContextResult, error) {
+func contextResult(doc intentdoc.Document, path string, status outputvocab.ContextStatus, references outputvocab.ReferenceCheckState) (ContextResult, error) {
 	canonical, err := doc.Canonical()
 	if err != nil {
 		return ContextResult{}, err
@@ -34,7 +35,7 @@ func contextResult(doc intentdoc.Document, path, status, references string) (Con
 	if err != nil {
 		return ContextResult{}, err
 	}
-	return ContextResult{1, "board-context", doc.Kind(), doc.ID(), doc.Revision(), digest, path, status, true, references, "not_evaluated", canonical}, nil
+	return ContextResult{1, outputvocab.ScopeBoardContext, doc.Kind(), doc.ID(), doc.Revision(), digest, path, status, true, references, outputvocab.NotEvaluated, canonical}, nil
 }
 
 // RegisterContext publishes exactly one immutable document. It creates no
@@ -85,7 +86,7 @@ func registerContextWithStep(dir string, raw []byte, step func(string) error) (r
 			return result, errors.New("context key already contains different immutable content")
 		}
 		registeredPath = path
-		return contextResult(existing, path, "unchanged", "not_rechecked")
+		return contextResult(existing, path, outputvocab.ContextUnchanged, outputvocab.ReferenceNotRechecked)
 	}
 	references, err := validateContextReferences(r, doc)
 	if err != nil {
@@ -122,7 +123,7 @@ func registerContextWithStep(dir string, raw []byte, step func(string) error) (r
 			return result, contextPublishedError(path, err)
 		}
 	}
-	return contextResult(doc, path, "registered", references)
+	return contextResult(doc, path, outputvocab.ContextRegistered, references)
 }
 
 func contextPublishedError(path string, err error) error {
@@ -149,12 +150,12 @@ func ShowContext(dir, kind, id string, revision uint32) (result ContextResult, e
 	if !found {
 		return result, fmt.Errorf("context document not found: %s", path)
 	}
-	return contextResult(doc, path, "stored", "not_rechecked")
+	return contextResult(doc, path, outputvocab.ContextStored, outputvocab.ReferenceNotRechecked)
 }
 
-func validateContextReferences(r *os.Root, doc intentdoc.Document) (string, error) {
+func validateContextReferences(r *os.Root, doc intentdoc.Document) (outputvocab.ReferenceCheckState, error) {
 	if doc.Kind() == "intent" {
-		return "not_applicable", nil
+		return outputvocab.ReferenceNotApplicable, nil
 	}
 	if doc.Kind() == "iteration" {
 		return validateIterationContextReferences(r, doc)
@@ -199,5 +200,5 @@ func validateContextReferences(r *os.Root, doc intentdoc.Document) (string, erro
 			return "", fmt.Errorf("referenced TASK is not present: %s", id)
 		}
 	}
-	return "verified", nil
+	return outputvocab.ReferenceVerified, nil
 }

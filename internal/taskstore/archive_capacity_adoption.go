@@ -9,6 +9,8 @@ import (
 	"io"
 	"io/fs"
 	"os"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 const (
@@ -131,7 +133,7 @@ func prepareOwnerRejoinArchiveCapacity(sourceReceipt, sourceArchive []byte, sour
 		return nil, nil, zero, err
 	}
 	digest := bytesDigest(payload)
-	artifact := OwnerRejoinArtifact{Role: "archive-capacity-payload", Path: ownerRejoinCapacityArtifactPath(digest), Mode: 0o600, Length: len(payload), SHA256: digest}
+	artifact := OwnerRejoinArtifact{Role: outputvocab.RejoinRoleArchiveCapacityPayload, Path: ownerRejoinCapacityArtifactPath(digest), Mode: 0o600, Length: len(payload), SHA256: digest}
 	target := archiveCapacityAdoption{SchemaVersion: 2, Phase: "completed", UpgradeID: source.UpgradeID, BoardPath: targetBoard, Namespace: source.Namespace, SourceJournalSchema: 2, TargetJournalSchema: 2, StorageProtocol: 6, JournalMode: mode, OriginalLength: len(sourceArchive), OriginalSHA256: bytesDigest(sourceArchive), TargetLength: len(targetArchive), TargetSHA256: bytesDigest(targetArchive), PayloadSHA256: digest}
 	targetRaw, err := archiveCapacityAdoptionBytes(target)
 	if err != nil {
@@ -283,7 +285,7 @@ func prepareCloneOwnerRejoinArchiveCapacity(sourceReceipt, sourceArchive, target
 		return nil, nil, zero, err
 	}
 	digest := bytesDigest(payload)
-	artifact := OwnerRejoinArtifact{Role: "archive-capacity-payload", Path: ownerRejoinCapacityArtifactPath(digest), Mode: 0o600, Length: len(payload), SHA256: digest}
+	artifact := OwnerRejoinArtifact{Role: outputvocab.RejoinRoleArchiveCapacityPayload, Path: ownerRejoinCapacityArtifactPath(digest), Mode: 0o600, Length: len(payload), SHA256: digest}
 	target := archiveCapacityAdoption{SchemaVersion: 2, Phase: "completed", UpgradeID: source.UpgradeID, BoardPath: targetBoard, Namespace: targetNamespace, SourceJournalSchema: 2, TargetJournalSchema: 2, StorageProtocol: 6, JournalMode: mode, OriginalLength: len(sourceArchive), OriginalSHA256: bytesDigest(sourceArchive), TargetLength: len(targetArchive), TargetSHA256: bytesDigest(targetArchive), PayloadSHA256: digest}
 	targetRaw, err := archiveCapacityAdoptionBytes(target)
 	if err != nil {

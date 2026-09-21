@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/intentdoc"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 // runContextValidation validates one standalone context document. It
@@ -56,23 +57,23 @@ func runContextValidation(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "context digest:", err)
 		return 1
 	}
-	scope := "intent-batch-document"
+	scope := outputvocab.ScopeIntentBatchDocument
 	if doc.Kind() == "iteration" {
-		scope = "iteration-document"
+		scope = outputvocab.ScopeIterationDocument
 	}
 	result := struct {
-		SchemaVersion        int             `json:"schemaVersion"`
-		Scope                string          `json:"scope"`
-		Valid                bool            `json:"valid"`
-		Kind                 string          `json:"kind"`
-		ID                   string          `json:"id"`
-		Revision             uint32          `json:"revision"`
-		Canonical            json.RawMessage `json:"canonical"`
-		Digest               string          `json:"digest"`
-		Registered           bool            `json:"registered"`
-		ReferenceValidation  string          `json:"referenceValidation"`
-		EvaluationValidation string          `json:"evaluationValidation"`
-	}{1, scope, true, doc.Kind(), doc.ID(), doc.Revision(), canonical, digest, false, "not_evaluated", "not_evaluated"}
+		SchemaVersion        int                         `json:"schemaVersion"`
+		Scope                outputvocab.Scope           `json:"scope"`
+		Valid                bool                        `json:"valid"`
+		Kind                 string                      `json:"kind"`
+		ID                   string                      `json:"id"`
+		Revision             uint32                      `json:"revision"`
+		Canonical            json.RawMessage             `json:"canonical"`
+		Digest               string                      `json:"digest"`
+		Registered           bool                        `json:"registered"`
+		ReferenceValidation  outputvocab.ValidationState `json:"referenceValidation"`
+		EvaluationValidation outputvocab.ValidationState `json:"evaluationValidation"`
+	}{1, scope, true, doc.Kind(), doc.ID(), doc.Revision(), canonical, digest, false, outputvocab.NotEvaluated, outputvocab.NotEvaluated}
 	if err := json.NewEncoder(out).Encode(result); err != nil {
 		fmt.Fprintln(errOut, "write context result:", err)
 		return 1
