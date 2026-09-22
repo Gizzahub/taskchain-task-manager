@@ -181,6 +181,12 @@ Git branch/worktree 관리·범용 카드 편집·분산 잠금은 아직 지원
 ## 개발과 라이선스
 
 `make check`는 포맷·vet·race 테스트·빌드를 실행합니다.
+
+`internal/taskstore`는 `-race`로 15~22분이 걸립니다. `make check`는 `-timeout 40m`을
+주므로 문제가 없지만, 이 패키지만 `go test ./internal/taskstore/`로 직접 돌리면 Go의
+기본 타임아웃 10분에 걸려 **실패한 것처럼 죽습니다** — 이때 `--- FAIL` 줄은 하나도
+나오지 않고 panic만 남아 회귀로 오독하기 쉽습니다. 직접 돌릴 때는 `-timeout 40m`을
+함께 주세요.
 테스트 데이터는 합성 예제입니다. 보안 문제는 공개 이슈에 비밀정보를 첨부하지 마세요.
 MIT 라이선스이며 파생 코드의 원저작권 고지는 [LICENSE](LICENSE)에 보존합니다.
 아직 릴리스 바이너리나 설치 자동화는 제공하지 않습니다.
