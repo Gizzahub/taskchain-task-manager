@@ -10,12 +10,13 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardpath"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type RepairRequest struct{ ID, Owner, Token, RequestID, Path, ExpectedSHA256 string }
 type RepairResult struct {
-	SchemaVersion int                      `json:"schemaVersion"`
+	OutputVersion int                      `json:"outputVersion"`
 	RequestID     string                   `json:"requestId"`
 	ID            string                   `json:"id"`
 	Path          string                   `json:"path"`
@@ -174,7 +175,7 @@ func prepareRepair(s *repairSession, req RepairRequest) (repairRecord, error) {
 	return rec, validateRepairRecord(rec)
 }
 func repairResult(rec repairRecord) RepairResult {
-	return RepairResult{SchemaVersion: 1, RequestID: rec.RequestID, ID: rec.ID, Path: rec.Path, Status: outputvocab.Completed, Changed: rec.Changed}
+	return RepairResult{OutputVersion: outputformat.Version, RequestID: rec.RequestID, ID: rec.ID, Path: rec.Path, Status: outputvocab.Completed, Changed: rec.Changed}
 }
 func sameRepair(rec repairRecord, req RepairRequest) bool {
 	return rec.ID == req.ID && rec.Owner == req.Owner && rec.Token == req.Token && rec.Path == req.Path && rec.ExpectedSHA256 == req.ExpectedSHA256

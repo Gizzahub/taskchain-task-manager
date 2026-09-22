@@ -54,7 +54,7 @@ func TestArchiveCLIAdoptOutputFailureAndReplay(t *testing.T) {
 			t.Fatalf("replay=%d %s", code, &diagnostics)
 		}
 		var result taskstore.ArchiveResult
-		if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.SchemaVersion != 1 || result.Status != "completed" || !result.CompletionEligible {
+		if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.OutputVersion != 1 || result.Status != "completed" || !result.CompletionEligible {
 			t.Fatalf("result=%+v err=%v", result, err)
 		}
 		after, err := os.ReadFile(filepath.Join(dir, ".task-manager-archives.json"))

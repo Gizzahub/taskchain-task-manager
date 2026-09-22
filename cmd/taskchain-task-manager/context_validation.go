@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/intentdoc"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
@@ -62,7 +63,7 @@ func runContextValidation(args []string, out, errOut io.Writer) int {
 		scope = outputvocab.ScopeIterationDocument
 	}
 	result := struct {
-		SchemaVersion        int                         `json:"schemaVersion"`
+		OutputVersion        int                         `json:"outputVersion"`
 		Scope                outputvocab.Scope           `json:"scope"`
 		Valid                bool                        `json:"valid"`
 		Kind                 string                      `json:"kind"`
@@ -73,7 +74,7 @@ func runContextValidation(args []string, out, errOut io.Writer) int {
 		Registered           bool                        `json:"registered"`
 		ReferenceValidation  outputvocab.ValidationState `json:"referenceValidation"`
 		EvaluationValidation outputvocab.ValidationState `json:"evaluationValidation"`
-	}{1, scope, true, doc.Kind(), doc.ID(), doc.Revision(), canonical, digest, false, outputvocab.NotEvaluated, outputvocab.NotEvaluated}
+	}{outputformat.Version, scope, true, doc.Kind(), doc.ID(), doc.Revision(), canonical, digest, false, outputvocab.NotEvaluated, outputvocab.NotEvaluated}
 	if err := json.NewEncoder(out).Encode(result); err != nil {
 		fmt.Fprintln(errOut, "write context result:", err)
 		return 1

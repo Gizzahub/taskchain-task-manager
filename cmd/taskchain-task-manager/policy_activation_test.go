@@ -65,7 +65,7 @@ func TestActivatePolicyCLI(t *testing.T) {
 		t.Fatalf("activate exit=%d out=%s diag=%s", code, &out, &diag)
 	}
 	var first taskstore.PolicyActivationResult
-	if err := json.Unmarshal(out.Bytes(), &first); err != nil || first.SchemaVersion != 1 || first.Status != "completed" || first.Replayed || first.Scope != "local" || first.Boards != 1 || len(first.AuthorityID) != 32 || len(first.Digest) != 64 {
+	if err := json.Unmarshal(out.Bytes(), &first); err != nil || first.OutputVersion != 1 || first.Status != "completed" || first.Replayed || first.Scope != "local" || first.Boards != 1 || len(first.AuthorityID) != 32 || len(first.Digest) != 64 {
 		t.Fatalf("result=%+v %v", first, err)
 	}
 	out.Reset()

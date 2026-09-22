@@ -26,7 +26,7 @@ func TestContextValidationIsReadOnlyAndReportsCanonicalDigest(t *testing.T) {
 		t.Fatalf("code=%d stdout=%s stderr=%s", code, &out, &diagnostics)
 	}
 	var result struct {
-		SchemaVersion        int             `json:"schemaVersion"`
+		OutputVersion        int             `json:"outputVersion"`
 		Scope                string          `json:"scope"`
 		Valid                bool            `json:"valid"`
 		Kind                 string          `json:"kind"`
@@ -41,7 +41,22 @@ func TestContextValidationIsReadOnlyAndReportsCanonicalDigest(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.SchemaVersion != 1 || result.Scope != "intent-batch-document" || !result.Valid || result.Kind != "intent" || result.ID == "" || result.Revision != 1 || result.Registered || result.ReferenceValidation != "not_evaluated" || result.EvaluationValidation != "not_evaluated" {
+	// The contract is the encoded bytes, not the Go field: assert the stdout
+	// document's own top-level keys spell the output-format version
+	// "outputVersion" and never "schemaVersion", which names this repository's
+	// on-disk journal axis. Only the top level is ours: the embedded canonical
+	// document carries whatever version key its own author wrote.
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(out.Bytes(), &top); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := top["outputVersion"]; !ok {
+		t.Fatalf("no top-level outputVersion key: %s", out.Bytes())
+	}
+	if _, ok := top["schemaVersion"]; ok {
+		t.Fatalf("top-level schemaVersion key regained: %s", out.Bytes())
+	}
+	if result.OutputVersion != 1 || result.Scope != "intent-batch-document" || !result.Valid || result.Kind != "intent" || result.ID == "" || result.Revision != 1 || result.Registered || result.ReferenceValidation != "not_evaluated" || result.EvaluationValidation != "not_evaluated" {
 		t.Fatalf("result=%+v", result)
 	}
 	sum := sha256.Sum256(result.Canonical)
