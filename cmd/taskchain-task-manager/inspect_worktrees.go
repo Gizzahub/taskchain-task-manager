@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-
 	"github.com/Gizzahub/taskchain-task-manager/internal/githistory"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
+	"io"
 )
 
 func runInspectWorktrees(args []string, out, errOut io.Writer) int {
@@ -32,7 +31,7 @@ func runInspectWorktrees(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "inspect worktrees:", err)
 		return 1
 	}
-	if err := json.NewEncoder(out).Encode(report); err != nil {
+	if err := outputformat.Encode(out, report); err != nil {
 		fmt.Fprintln(errOut, "write worktree inspection:", err)
 		return 1
 	}

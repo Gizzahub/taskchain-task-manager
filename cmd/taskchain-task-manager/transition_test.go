@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 )
 
 func TestTransitionCLIWorkflowReplayAndResume(t *testing.T) {
@@ -35,8 +37,8 @@ func TestTransitionCLIWorkflowReplayAndResume(t *testing.T) {
 		t.Fatalf("output failure code=%d", code)
 	}
 	first := call(0, start...)
-	var receipt map[string]string
-	if err := json.Unmarshal([]byte(first), &receipt); err != nil || receipt["path"] != "doing/TASK-1.md" || receipt["status"] != "completed" {
+	var receipt map[string]any
+	if err := json.Unmarshal([]byte(first), &receipt); err != nil || receipt["path"] != "doing/TASK-1.md" || receipt["status"] != "completed" || receipt["outputVersion"] != float64(outputformat.Version) {
 		t.Fatalf("receipt=%s err=%v", first, err)
 	}
 	call(0, args(strings.Repeat("2", 32), "doing", "review")...)

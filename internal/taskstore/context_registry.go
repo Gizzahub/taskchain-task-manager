@@ -8,12 +8,10 @@ import (
 	"os"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/intentdoc"
-	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type ContextResult struct {
-	OutputVersion        int                             `json:"outputVersion"`
 	Scope                outputvocab.Scope               `json:"scope"`
 	Kind                 string                          `json:"kind"`
 	ID                   string                          `json:"id"`
@@ -36,7 +34,7 @@ func contextResult(doc intentdoc.Document, path string, status outputvocab.Conte
 	if err != nil {
 		return ContextResult{}, err
 	}
-	return ContextResult{outputformat.Version, outputvocab.ScopeBoardContext, doc.Kind(), doc.ID(), doc.Revision(), digest, path, status, true, references, outputvocab.NotEvaluated, canonical}, nil
+	return ContextResult{outputvocab.ScopeBoardContext, doc.Kind(), doc.ID(), doc.Revision(), digest, path, status, true, references, outputvocab.NotEvaluated, canonical}, nil
 }
 
 // RegisterContext publishes exactly one immutable document. It creates no

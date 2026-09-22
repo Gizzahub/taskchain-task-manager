@@ -1,20 +1,28 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
+	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
 	"io"
 	"strings"
-
-	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
 )
 
 type repeatedString []string
 
 func (r *repeatedString) String() string         { return strings.Join(*r, ",") }
 func (r *repeatedString) Set(value string) error { *r = append(*r, value); return nil }
+
+// entryList wraps the one pair of commands whose payload is a sequence rather
+// than a record. A bare array has no top level to carry the stdout format
+// version, so list and ready name their sequence here instead. The field is
+// "entries" because taskstore calls the element an Entry; "tasks" would have
+// been narrower than the type, which also carries plans and issues.
+type entryList struct {
+	Entries []taskstore.Entry `json:"entries"`
+}
 
 func runStore(args []string, out, errOut io.Writer) int {
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
@@ -52,9 +60,13 @@ func runStore(args []string, out, errOut io.Writer) int {
 			Directory string `json:"directory"`
 		}{*dir}
 	case "list":
-		result, err = taskstore.List(*dir)
+		var entries []taskstore.Entry
+		entries, err = taskstore.List(*dir)
+		result = entryList{Entries: entries}
 	case "ready":
-		result, err = taskstore.Ready(*dir)
+		var entries []taskstore.Entry
+		entries, err = taskstore.Ready(*dir)
+		result = entryList{Entries: entries}
 	case "create":
 		if *title == "" {
 			fmt.Fprintln(errOut, "create requires --title")
@@ -75,7 +87,7 @@ func runStore(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, args[0]+":", err)
 		return 1
 	}
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write result:", err)
 		return 1
 	}

@@ -1,13 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
+	"io"
 )
 
 func runTransition(args []string, out, errOut io.Writer) int {
@@ -43,7 +42,7 @@ func runTransition(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, args[0]+":", err)
 		return 1
 	}
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write result (retry with exactly the same request-id and arguments):", err)
 		return 1
 	}

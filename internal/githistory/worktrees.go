@@ -14,12 +14,10 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type WorktreeReport struct {
-	OutputVersion   int                         `json:"outputVersion"`
 	Repository      string                      `json:"repository"`
 	CommonDirectory string                      `json:"commonDirectory"`
 	Board           string                      `json:"board"`
@@ -99,7 +97,7 @@ func inspectWorktrees(ctx context.Context, repo, board string, afterRead func() 
 		return WorktreeReport{}, err
 	}
 	key := fmt.Sprintf("%x", sha256.Sum256([]byte(s.board)))
-	return WorktreeReport{OutputVersion: outputformat.Version, Repository: s.root, CommonDirectory: common,
+	return WorktreeReport{Repository: s.root, CommonDirectory: common,
 		Board: s.board, NamespaceKey: key, Worktrees: worktrees, SharedReadiness: outputvocab.NotEvaluated}, nil
 }
 

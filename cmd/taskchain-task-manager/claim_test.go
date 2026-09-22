@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,14 +41,14 @@ func TestClaimCLIReplayAndRelease(t *testing.T) {
 		t.Fatalf("output failure code=%d", code)
 	}
 	result := call(0, args...)
-	var record map[string]string
-	if err := json.Unmarshal([]byte(result), &record); err != nil || record["status"] != "held" {
+	var record map[string]any
+	if err := json.Unmarshal([]byte(result), &record); err != nil || record["status"] != "held" || record["outputVersion"] != float64(outputformat.Version) {
 		t.Fatalf("record=%s err=%v", result, err)
 	}
 	if got := call(0, args...); got != result {
 		t.Fatalf("replay differs: %s vs %s", got, result)
 	}
-	if got := call(0, "ready", "--dir", dir, "--json"); got != "[]\n" {
+	if got := call(0, "ready", "--dir", dir, "--json"); got != "{\"outputVersion\":1,\"entries\":[]}\n" {
 		t.Fatalf("held task ready: %s", got)
 	}
 	wrong := append([]string(nil), args...)

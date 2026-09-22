@@ -53,7 +53,12 @@ func TestArchiveCLIAdoptOutputFailureAndReplay(t *testing.T) {
 		if code := run(append(append([]string{}, args...), flag), &out, &diagnostics); code != 0 || diagnostics.Len() != 0 {
 			t.Fatalf("replay=%d %s", code, &diagnostics)
 		}
-		var result taskstore.ArchiveResult
+		// The version key now arrives on the emitted document, not on the
+		// result type, so the decode target embeds the type and names the key.
+		var result struct {
+			taskstore.ArchiveResult
+			OutputVersion int `json:"outputVersion"`
+		}
 		if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.OutputVersion != 1 || result.Status != "completed" || !result.CompletionEligible {
 			t.Fatalf("result=%+v err=%v", result, err)
 		}

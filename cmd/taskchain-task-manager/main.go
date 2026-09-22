@@ -1,14 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/Gizzahub/taskchain-task-manager/internal/card"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/Gizzahub/taskchain-task-manager/internal/card"
 )
 
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
@@ -125,7 +124,7 @@ func run(args []string, out, errOut io.Writer) int {
 		return 1
 	}
 	var result any = doc.Snapshot(cardRelativePath(args[1]))
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write result:", err)
 		return 1
 	}

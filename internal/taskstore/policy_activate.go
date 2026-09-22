@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
-	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
@@ -18,13 +17,12 @@ type PolicyActivationOptions struct {
 }
 
 type PolicyActivationResult struct {
-	OutputVersion int                        `json:"outputVersion"`
-	AuthorityID   string                     `json:"authorityId"`
-	Scope         outputvocab.AuthorityScope `json:"scope"`
-	Digest        string                     `json:"digest"`
-	Status        outputvocab.ResultStatus   `json:"status"`
-	Replayed      bool                       `json:"replayed"`
-	Boards        int                        `json:"boards"`
+	AuthorityID string                     `json:"authorityId"`
+	Scope       outputvocab.AuthorityScope `json:"scope"`
+	Digest      string                     `json:"digest"`
+	Status      outputvocab.ResultStatus   `json:"status"`
+	Replayed    bool                       `json:"replayed"`
+	Boards      int                        `json:"boards"`
 }
 
 // ActivatePolicy explicitly adopts an immutable policy. Shared-ID namespaces
@@ -73,5 +71,5 @@ func newPolicyAuthorityID() (string, error) {
 }
 
 func policyActivationResult(state policyActivationState, replayed bool, boards int) PolicyActivationResult {
-	return PolicyActivationResult{OutputVersion: outputformat.Version, AuthorityID: state.AuthorityID, Scope: outputvocab.AuthorityScope(state.Scope), Digest: state.Digest, Status: outputvocab.Completed, Replayed: replayed, Boards: boards}
+	return PolicyActivationResult{AuthorityID: state.AuthorityID, Scope: outputvocab.AuthorityScope(state.Scope), Digest: state.Digest, Status: outputvocab.Completed, Replayed: replayed, Boards: boards}
 }

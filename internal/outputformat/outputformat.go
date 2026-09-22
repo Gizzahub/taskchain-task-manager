@@ -14,15 +14,23 @@
 // upgraded, or rejected. Different blast radius, different review, so they do
 // not share a name.
 //
+// The stdout axis has exactly one attachment point: Encode in this package
+// splices outputVersion into the top level of every document a command writes.
+// No output type declares the field, deliberately — several of them are also
+// written verbatim into on-disk ledgers (ClaimRecord into the claims ledger,
+// whose size is budgeted), so a field on the type would push a stdout contract
+// into storage.
+//
 // To re-derive the boundary rather than trust this comment, run:
 //
-//	grep -rnE "(Schema|Output)Version +\*?int" cmd internal | grep -v _test.go
+//	grep -rn "outputVersion" cmd internal --include='*.go' | grep -v _test.go
 //
-// That prints all 30 version declarations across both axes. The 12 tagged
-// json:"outputVersion" are this package's axis; the other 18, still tagged
-// json:"schemaVersion" or json:"schema-version", are storage. Grepping only
-// for SchemaVersion after this split shows storage alone and hides the very
-// boundary it was meant to prove.
+// Quote the --include pattern. Unquoted, zsh expands it against the current
+// directory and aborts the command with "no matches found" when nothing there
+// ends in .go, printing nothing — which reads exactly like a true zero result.
+//
+// That should print this package alone. Every other version declaration in the
+// tree, tagged json:"schemaVersion" or json:"schema-version", is storage.
 package outputformat
 
 // Version numbers the stdout JSON document format. It is not a journal or

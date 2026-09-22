@@ -1,14 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/Gizzahub/taskchain-task-manager/internal/card"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"io"
 	"os"
-
-	"github.com/Gizzahub/taskchain-task-manager/internal/card"
 )
 
 // Exit codes for this command. 0 (success) and 2 (usage) follow the
@@ -126,7 +125,7 @@ func runValidation(args []string, out, errOut io.Writer) int {
 		}
 		result, valid = report, report.Valid
 	}
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write validation result:", err)
 		return exitValidationError
 	}

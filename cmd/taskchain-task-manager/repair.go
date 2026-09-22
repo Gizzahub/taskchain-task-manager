@@ -1,13 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
+	"io"
 )
 
 const repairStatusUsage = "repair-status --dir <board> --id TASK-N --path <board-relative card path> --owner <owner> [--token <held token>] --request-id <32lowerhex> --expected-sha256 <64lowerhex> [--adopt | --resume] --json"
@@ -59,7 +58,7 @@ func runRepairStatus(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "repair-status:", err)
 		return 1
 	}
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write result (repair may already be recorded; retry the identical request):", err)
 		return 1
 	}

@@ -50,7 +50,10 @@ func TestRelocationCLIAdoptReplayAndOutput(t *testing.T) {
 		if code := run(append(append([]string{}, args...), option), &out, &diagnostics); code != 0 || diagnostics.Len() != 0 {
 			t.Fatalf("%s code=%d out=%s err=%s", option, code, out.String(), diagnostics.String())
 		}
-		var result taskstore.RelocationResult
+		var result struct {
+			taskstore.RelocationResult
+			OutputVersion int `json:"outputVersion"`
+		}
 		if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.Status != "completed" || result.Target != "plan/TASK-1.md" || result.OutputVersion != 1 {
 			t.Fatalf("result=%+v err=%v", result, err)
 		}

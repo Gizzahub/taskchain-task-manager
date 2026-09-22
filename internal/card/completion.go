@@ -1,14 +1,12 @@
 package card
 
 import (
-	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 // CompletionReport observes a single card. It does not grant permission to
 // transition, authenticate evidence, or attest that implementation is complete.
 type CompletionReport struct {
-	OutputVersion      int                         `json:"outputVersion"`
 	Scope              outputvocab.Scope           `json:"scope"`
 	CardValid          bool                        `json:"cardValid"`
 	CriteriaComplete   bool                        `json:"criteriaComplete"`
@@ -41,7 +39,7 @@ func (d *Document) ValidateCompletion(path string, rules ValidationRules) (Compl
 		findings = append(findings, ValidationFinding{Severity: outputvocab.SeverityError, Field: "completion", Message: "completion requires nonempty, well-formed criteria with every item checked"})
 	}
 	return CompletionReport{
-		OutputVersion: outputformat.Version, Scope: outputvocab.ScopeCardCompletionObservation, CardValid: card.Valid,
+		Scope: outputvocab.ScopeCardCompletionObservation, CardValid: card.Valid,
 		CriteriaComplete: complete, Valid: card.Valid && complete,
 		EvidenceValidation: outputvocab.NotEvaluated, BoardValidation: outputvocab.NotEvaluated,
 		Criteria: criteria, Findings: findings,

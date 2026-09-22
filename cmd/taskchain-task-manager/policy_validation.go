@@ -56,15 +56,14 @@ func runPolicyValidation(args []string, out, errOut io.Writer) int {
 		return 1
 	}
 	result := struct {
-		OutputVersion   int                         `json:"outputVersion"`
 		Scope           outputvocab.Scope           `json:"scope"`
 		Valid           bool                        `json:"valid"`
 		Activated       bool                        `json:"activated"`
 		BoardValidation outputvocab.ValidationState `json:"boardValidation"`
 		Digest          string                      `json:"digest"`
 		Canonical       json.RawMessage             `json:"canonical"`
-	}{outputformat.Version, outputvocab.ScopePolicyDocument, true, false, outputvocab.NotEvaluated, digest, canonical}
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	}{outputvocab.ScopePolicyDocument, true, false, outputvocab.NotEvaluated, digest, canonical}
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write policy result:", err)
 		return 1
 	}
