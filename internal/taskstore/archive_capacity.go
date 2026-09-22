@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"errors"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type ArchiveCapacityResult struct {
-	SchemaVersion   int                      `json:"schemaVersion"`
+	OutputVersion   int                      `json:"outputVersion"`
 	UpgradeID       string                   `json:"upgradeId"`
 	Status          outputvocab.ResultStatus `json:"status"`
 	StorageProtocol int                      `json:"storageProtocol"`
@@ -51,7 +52,7 @@ func archiveCapacityWithStep(dir, upgradeID string, adopt, resume bool, step fun
 	if err := resumeArchiveCapacity(s, step); err != nil {
 		return result, err
 	}
-	return ArchiveCapacityResult{SchemaVersion: 1, UpgradeID: upgradeID, Status: outputvocab.Completed, StorageProtocol: 5, JournalSchema: 2}, nil
+	return ArchiveCapacityResult{OutputVersion: outputformat.Version, UpgradeID: upgradeID, Status: outputvocab.Completed, StorageProtocol: 5, JournalSchema: 2}, nil
 }
 
 func startArchiveCapacity(s *archiveCapacitySession, upgradeID string, step func(string) error) error {

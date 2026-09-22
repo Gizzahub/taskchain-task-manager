@@ -8,6 +8,7 @@ import (
 	"path"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/intentdoc"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
@@ -20,7 +21,7 @@ type BundleTaskResult struct {
 }
 
 type BundleResult struct {
-	SchemaVersion int                      `json:"schemaVersion"`
+	OutputVersion int                      `json:"outputVersion"`
 	RequestID     string                   `json:"requestId"`
 	Digest        string                   `json:"digest"`
 	Status        outputvocab.ResultStatus `json:"status"`
@@ -117,7 +118,7 @@ func publishBundleWithStep(dir string, raw []byte, options BundleOptions, step f
 }
 
 func bundleResult(record bundleRecord, replayed bool) BundleResult {
-	result := BundleResult{SchemaVersion: 1, RequestID: record.RequestID, Digest: record.RequestDigest,
+	result := BundleResult{OutputVersion: outputformat.Version, RequestID: record.RequestID, Digest: record.RequestDigest,
 		Status: outputvocab.ResultStatus(record.Status), Replayed: replayed, Tasks: []BundleTaskResult{}, Batch: append(json.RawMessage(nil), record.Batch...)}
 	for _, card := range record.Cards {
 		result.Tasks = append(result.Tasks, BundleTaskResult{card.Key, card.ID, card.Path})

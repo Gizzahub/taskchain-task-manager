@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 	"gopkg.in/yaml.v3"
 )
@@ -20,7 +21,7 @@ type ValidationFinding struct {
 	Message  string               `json:"message"`
 }
 type ValidationReport struct {
-	SchemaVersion   int                         `json:"schemaVersion"`
+	OutputVersion   int                         `json:"outputVersion"`
 	Scope           outputvocab.Scope           `json:"scope"`
 	BoardValidation outputvocab.ValidationState `json:"boardValidation"`
 	Valid           bool                        `json:"valid"`
@@ -32,7 +33,7 @@ var validationFilenameNumber = regexp.MustCompile(`^\d{2,3}[a-z]?-[a-z0-9-]+(?:\
 
 // ValidateCard validates a work-task card without executing commands or writing bytes.
 func (d *Document) ValidateCard(path string, r ValidationRules) (ValidationReport, error) {
-	report := ValidationReport{SchemaVersion: 1, Scope: outputvocab.ScopeCard, BoardValidation: outputvocab.NotEvaluated, Valid: true, Criteria: []CriterionReport{}, Findings: []ValidationFinding{}}
+	report := ValidationReport{OutputVersion: outputformat.Version, Scope: outputvocab.ScopeCard, BoardValidation: outputvocab.NotEvaluated, Valid: true, Criteria: []CriterionReport{}, Findings: []ValidationFinding{}}
 	fm, body, err := splitFrontmatter(d.raw)
 	if err != nil {
 		return report, err

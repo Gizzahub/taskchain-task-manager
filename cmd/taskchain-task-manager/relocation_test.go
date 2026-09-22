@@ -51,7 +51,7 @@ func TestRelocationCLIAdoptReplayAndOutput(t *testing.T) {
 			t.Fatalf("%s code=%d out=%s err=%s", option, code, out.String(), diagnostics.String())
 		}
 		var result taskstore.RelocationResult
-		if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.Status != "completed" || result.Target != "plan/TASK-1.md" || result.SchemaVersion != 1 {
+		if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.Status != "completed" || result.Target != "plan/TASK-1.md" || result.OutputVersion != 1 {
 			t.Fatalf("result=%+v err=%v", result, err)
 		}
 		after, err := os.ReadFile(filepath.Join(dir, ".task-manager-relocations.json"))

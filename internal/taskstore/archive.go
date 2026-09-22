@@ -4,11 +4,12 @@ import (
 	"errors"
 	"io/fs"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 type ArchiveResult struct {
-	SchemaVersion      int                          `json:"schemaVersion"`
+	OutputVersion      int                          `json:"outputVersion"`
 	RequestID          string                       `json:"requestId"`
 	ID                 string                       `json:"id"`
 	Source             string                       `json:"source"`
@@ -27,7 +28,7 @@ func RecoverArchive(dir string, req ArchiveRequest) (ArchiveResult, error) {
 }
 
 func archiveResult(rec archiveRecord) ArchiveResult {
-	return ArchiveResult{SchemaVersion: 1, RequestID: rec.RequestID, ID: rec.ID, Source: rec.Source, Target: rec.Target, Status: outputvocab.Completed, Operation: outputvocab.ArchiveOperation(rec.Operation), CompletionEligible: rec.Completion != nil}
+	return ArchiveResult{OutputVersion: outputformat.Version, RequestID: rec.RequestID, ID: rec.ID, Source: rec.Source, Target: rec.Target, Status: outputvocab.Completed, Operation: outputvocab.ArchiveOperation(rec.Operation), CompletionEligible: rec.Completion != nil}
 }
 
 func archiveWithStep(dir string, req ArchiveRequest, adopt, recoverOnly bool, step func(string) error) (result ArchiveResult, err error) {

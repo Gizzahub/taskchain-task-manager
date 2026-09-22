@@ -54,7 +54,7 @@ func TestValidateCompletionCLIObservesCriteriaAndMetadataSeparately(t *testing.T
 				t.Fatalf("code=%d want=%d diagnostics=%s", code, tc.code, diagnostics.String())
 			}
 			var report struct {
-				SchemaVersion      int    `json:"schemaVersion"`
+				OutputVersion      int    `json:"outputVersion"`
 				EvidenceValidation string `json:"evidenceValidation"`
 				BoardValidation    string `json:"boardValidation"`
 				Scope              string `json:"scope"`
@@ -71,7 +71,7 @@ func TestValidateCompletionCLIObservesCriteriaAndMetadataSeparately(t *testing.T
 			if report.Scope != "card-completion-observation" || report.Valid != tc.wantValid || report.CriteriaComplete != tc.wantComplete || report.CardValid != tc.wantCardValid {
 				t.Fatalf("report=%+v", report)
 			}
-			if report.SchemaVersion != 1 || report.EvidenceValidation != "not_evaluated" || report.BoardValidation != "not_evaluated" {
+			if report.OutputVersion != 1 || report.EvidenceValidation != "not_evaluated" || report.BoardValidation != "not_evaluated" {
 				t.Fatalf("unexpected validation scope: %+v", report)
 			}
 			if tc.wantFinding != "" {
