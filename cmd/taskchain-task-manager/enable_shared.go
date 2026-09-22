@@ -1,13 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
+	"io"
 )
 
 func runEnableShared(args []string, out, errOut io.Writer) int {
@@ -32,7 +31,7 @@ func runEnableShared(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "enable shared IDs:", err)
 		return 1
 	}
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write shared activation result (activation may be applied; inspect/retry):", err)
 		return 1
 	}

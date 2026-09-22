@@ -1,13 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
+	"io"
 )
 
 func runPolicyActivation(args []string, out, errOut io.Writer) int {
@@ -49,7 +48,7 @@ func runPolicyActivation(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "activate policy:", err)
 		return 1
 	}
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write policy result (activation may already be completed; retry the identical policy):", err)
 		return 1
 	}

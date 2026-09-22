@@ -1,13 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
+	"io"
 )
 
 const planProgressUsage = "plan-progress --dir <board> --id <plan ID> --rules <archive.yaml> --json"
@@ -44,7 +43,7 @@ func runPlanProgress(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "plan-progress:", err)
 		return 1
 	}
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write plan progress:", err)
 		return 1
 	}

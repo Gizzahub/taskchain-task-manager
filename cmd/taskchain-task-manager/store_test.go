@@ -25,21 +25,23 @@ func TestStoreCLI(t *testing.T) {
 		return out.Bytes()
 	}
 	call("init", "--dir", dir, "--json")
-	if got := call("list", "--dir", dir, "--json"); string(got) != "[]\n" {
+	if got := call("list", "--dir", dir, "--json"); string(got) != "{\"outputVersion\":1,\"entries\":[]}\n" {
 		t.Fatalf("empty: %s", got)
 	}
 	call("create", "--dir", dir, "--title", "Synthetic task", "--json")
-	var entries []struct {
-		Path string
-		Card struct{ ID, Title, Status string }
+	var listed struct {
+		Entries []struct {
+			Path string
+			Card struct{ ID, Title, Status string }
+		} `json:"entries"`
 	}
-	if err := json.Unmarshal(call("list", "--dir", dir, "--json"), &entries); err != nil {
+	if err := json.Unmarshal(call("list", "--dir", dir, "--json"), &listed); err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Card.ID != "TASK-1" || entries[0].Card.Status != "pending" {
-		t.Fatalf("entries: %+v", entries)
+	if len(listed.Entries) != 1 || listed.Entries[0].Card.ID != "TASK-1" || listed.Entries[0].Card.Status != "pending" {
+		t.Fatalf("entries: %+v", listed.Entries)
 	}
-	call("show", filepath.Join(dir, filepath.FromSlash(entries[0].Path)), "--json")
+	call("show", filepath.Join(dir, filepath.FromSlash(listed.Entries[0].Path)), "--json")
 	path := filepath.Join(dir, "todo", "TASK-1.md")
 	before, err := os.ReadFile(path)
 	if err != nil {
@@ -95,11 +97,13 @@ func TestReadyCLIAndRepeatedDependencies(t *testing.T) {
 	if len(third.Card.DependsOn) != 2 || third.Card.DependsOn[0] != "TASK-1" || third.Card.DependsOn[1] != "TASK-2" {
 		t.Fatalf("repeated dependencies lost: %#v", third.Card.DependsOn)
 	}
-	var ready []taskstore.Entry
+	var ready struct {
+		Entries []taskstore.Entry `json:"entries"`
+	}
 	if err := json.Unmarshal(call("ready", "--dir", dir, "--json"), &ready); err != nil {
 		t.Fatal(err)
 	}
-	if len(ready) != 1 || ready[0].Card.ID != "TASK-1" {
+	if len(ready.Entries) != 1 || ready.Entries[0].Card.ID != "TASK-1" {
 		t.Fatalf("ready before move: %#v", ready)
 	}
 	if err := os.Mkdir(filepath.Join(dir, "done"), 0o755); err != nil {
@@ -111,12 +115,12 @@ func TestReadyCLIAndRepeatedDependencies(t *testing.T) {
 	if err := json.Unmarshal(call("ready", "--dir", dir, "--json"), &ready); err != nil {
 		t.Fatal(err)
 	}
-	if len(ready) != 1 || ready[0].Card.ID != "TASK-2" {
+	if len(ready.Entries) != 1 || ready.Entries[0].Card.ID != "TASK-2" {
 		t.Fatalf("ready after move: %#v", ready)
 	}
 	empty := filepath.Join(t.TempDir(), "empty")
 	call("init", "--dir", empty, "--json")
-	if got := call("ready", "--dir", empty, "--json"); string(got) != "[]\n" {
+	if got := call("ready", "--dir", empty, "--json"); string(got) != "{\"outputVersion\":1,\"entries\":[]}\n" {
 		t.Fatalf("unexpected output: %s", got)
 	}
 }

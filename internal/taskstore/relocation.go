@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io/fs"
 
-	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
@@ -13,13 +12,12 @@ type RelocationRequest struct {
 }
 
 type RelocationResult struct {
-	OutputVersion int                      `json:"outputVersion"`
-	RequestID     string                   `json:"requestId"`
-	ID            string                   `json:"id"`
-	Source        string                   `json:"source"`
-	Target        string                   `json:"target"`
-	Status        outputvocab.ResultStatus `json:"status"`
-	Changed       bool                     `json:"changed"`
+	RequestID string                   `json:"requestId"`
+	ID        string                   `json:"id"`
+	Source    string                   `json:"source"`
+	Target    string                   `json:"target"`
+	Status    outputvocab.ResultStatus `json:"status"`
+	Changed   bool                     `json:"changed"`
 }
 
 func Relocate(dir string, req RelocationRequest, adopt bool) (RelocationResult, error) {
@@ -39,7 +37,7 @@ func sameRelocation(rec relocationRecord, req RelocationRequest) bool {
 }
 
 func relocationResult(rec relocationRecord) RelocationResult {
-	return RelocationResult{OutputVersion: outputformat.Version, RequestID: rec.RequestID, ID: rec.ID, Source: rec.Source, Target: rec.Target, Status: outputvocab.Completed, Changed: rec.Changed}
+	return RelocationResult{RequestID: rec.RequestID, ID: rec.ID, Source: rec.Source, Target: rec.Target, Status: outputvocab.Completed, Changed: rec.Changed}
 }
 
 func relocateWithStep(dir string, req RelocationRequest, adopt, recoverOnly bool, step func(string) error) (result RelocationResult, err error) {

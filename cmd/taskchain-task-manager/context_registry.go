@@ -1,16 +1,15 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/Gizzahub/taskchain-task-manager/internal/intentdoc"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
+	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
 	"io"
 	"math"
 	"strconv"
-
-	"github.com/Gizzahub/taskchain-task-manager/internal/intentdoc"
-	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
 )
 
 func runRegisterContext(args []string, out, errOut io.Writer) int {
@@ -47,7 +46,7 @@ func runRegisterContext(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "register context:", err)
 		return 1
 	}
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write context result (it may already be registered; retry the same file and board):", err)
 		return 1
 	}
@@ -91,7 +90,7 @@ func runShowContext(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "show context:", err)
 		return 1
 	}
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write context result:", err)
 		return 1
 	}

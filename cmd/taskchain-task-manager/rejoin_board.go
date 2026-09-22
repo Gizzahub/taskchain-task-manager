@@ -1,16 +1,15 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
+	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
 	"io"
 	"os"
 	"strconv"
 	"strings"
-
-	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
 )
 
 const rejoinBoardUsage = "rejoin-board --dir <board> (--prepare | --apply | --status) --json [--source <board>] [--clone] [--rejoin-id <32lowerhex>] [--target-namespace <32lowerhex>] [--target-policy-authority <32lowerhex>] [--source-export <file>] [--source-fenced] [--floor PREFIX:N ...] [--reserve-id PREFIX-N ...] [--plan <file>] [--payload <file>] [--capacity <file>]"
@@ -181,7 +180,7 @@ func runRejoinBoardPrepare(a rejoinPrepareArgs, out, errOut io.Writer) int {
 }
 
 func writeRejoinBoardResult(result taskstore.RejoinBoardResult, out, errOut io.Writer) int {
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write result (the rejoin step may already have completed; re-read with --status):", err)
 		return 1
 	}

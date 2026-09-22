@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
 )
 
@@ -44,8 +45,11 @@ func TestActivatePolicyCLISharedScope(t *testing.T) {
 	if code := run(append(args, "--all-worktrees"), &out, &diag); code != 0 || diag.Len() != 0 {
 		t.Fatalf("shared activation exit=%d out=%s diag=%s", code, &out, &diag)
 	}
-	var result taskstore.PolicyActivationResult
-	if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.Scope != "shared" || result.Status != "completed" {
+	var result struct {
+		taskstore.PolicyActivationResult
+		OutputVersion int `json:"outputVersion"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil || result.Scope != "shared" || result.Status != "completed" || result.OutputVersion != outputformat.Version {
 		t.Fatalf("shared result=%+v %v", result, err)
 	}
 }
@@ -64,7 +68,10 @@ func TestActivatePolicyCLI(t *testing.T) {
 	if code := run(args, &out, &diag); code != 0 || diag.Len() != 0 {
 		t.Fatalf("activate exit=%d out=%s diag=%s", code, &out, &diag)
 	}
-	var first taskstore.PolicyActivationResult
+	var first struct {
+		taskstore.PolicyActivationResult
+		OutputVersion int `json:"outputVersion"`
+	}
 	if err := json.Unmarshal(out.Bytes(), &first); err != nil || first.OutputVersion != 1 || first.Status != "completed" || first.Replayed || first.Scope != "local" || first.Boards != 1 || len(first.AuthorityID) != 32 || len(first.Digest) != 64 {
 		t.Fatalf("result=%+v %v", first, err)
 	}

@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
-
 	"github.com/Gizzahub/taskchain-task-manager/internal/githistory"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
+	"io"
 )
 
 func runImportIDs(args []string, out, errOut io.Writer) int {
@@ -52,7 +51,7 @@ func runImportIDsWithScan(args []string, out, errOut io.Writer, scan func(contex
 		}
 		result.Reservation = &reservation
 	}
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write import result (reservations may be applied; repeat safely by union):", err)
 		return 1
 	}

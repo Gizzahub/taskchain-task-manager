@@ -101,11 +101,13 @@ func TestLegacyArchiveCLIApprovalControlsDependencyCompletion(t *testing.T) {
 			if beforeCode != 0 || beforeDiag != "" {
 				t.Fatalf("baseline ready code=%d diag=%q", beforeCode, beforeDiag)
 			}
-			var baseline []taskstore.Entry
+			var baseline struct {
+				Entries []taskstore.Entry `json:"entries"`
+			}
 			if err := json.Unmarshal([]byte(beforeReady), &baseline); err != nil {
 				t.Fatal(err)
 			}
-			if readyHasEntry(baseline, "TASK-2") {
+			if readyHasEntry(baseline.Entries, "TASK-2") {
 				t.Fatal("dependent was ready before legacy adoption")
 			}
 			if approve {
@@ -120,9 +122,11 @@ func TestLegacyArchiveCLIApprovalControlsDependencyCompletion(t *testing.T) {
 				t.Fatalf("result=%s err=%v", out, err)
 			}
 			readyCode, readyOut, readyDiag := runCLI(t, "ready", "--dir", dir, "--json")
-			var readyEntries []taskstore.Entry
+			var readyEntries struct {
+				Entries []taskstore.Entry `json:"entries"`
+			}
 			readyErr := json.Unmarshal([]byte(readyOut), &readyEntries)
-			if readyCode != 0 || readyDiag != "" || readyErr != nil || (readyHasEntry(readyEntries, "TASK-2") != approve) {
+			if readyCode != 0 || readyDiag != "" || readyErr != nil || (readyHasEntry(readyEntries.Entries, "TASK-2") != approve) {
 				t.Fatalf("approval=%v ready code=%d out=%q diag=%q", approve, readyCode, readyOut, readyDiag)
 			}
 			got, err := os.ReadFile(filepath.Join(dir, "_archive", "done", "TASK-1.md"))
