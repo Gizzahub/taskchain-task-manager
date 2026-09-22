@@ -1,0 +1,1 @@
+{"outputVersion":1,"scope":"policy-document","valid":true,"activated":false,"boardValidation":"not_evaluated","digest":"59ee2f385b530fd6196852180e3504a258e956cc29e38f16a9a86310547b18bc","canonical":{"schema-version":1,"board-policy":{"zones":["manual"],"zone-status":{"manual":"done"},"transitions":[{"from":"manual","to":["todo"]}]}}}

@@ -1,0 +1,1 @@
+{"outputVersion":1,"scope":"card-completion-observation","cardValid":true,"criteriaComplete":true,"valid":true,"evidenceValidation":"not_evaluated","boardValidation":"not_evaluated","criteria":[{"text":"done","checked":true}],"findings":[{"severity":"warning","field":"filename","message":"filename is outside the CE card pattern"}]}
