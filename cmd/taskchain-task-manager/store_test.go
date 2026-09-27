@@ -157,3 +157,63 @@ func TestReadyRejectsMalformedDependencyInsteadOfSelectingCard(t *testing.T) {
 		}
 	}
 }
+
+func TestQueueCLISeparatesHumanWorkAndFailsClosed(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "tasks")
+	var out, diagnostics bytes.Buffer
+	if code := run([]string{"init", "--dir", dir, "--json"}, &out, &diagnostics); code != 0 {
+		t.Fatal(diagnostics.String())
+	}
+	humanPath := filepath.Join(dir, "todo", "TASK-1.md")
+	agentPath := filepath.Join(dir, "todo", "TASK-2.md")
+	human := []byte("---\nid: TASK-1\nstatus: pending\nneeds-human: true\n---\nHuman work\n")
+	agent := []byte("---\nid: TASK-2\nstatus: pending\n---\nAgent work\n")
+	for path, raw := range map[string][]byte{humanPath: human, agentPath: agent} {
+		if err := os.WriteFile(path, raw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, err := os.ReadFile(humanPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	diagnostics.Reset()
+	if code := run([]string{"queue", "--dir", dir, "--json"}, &out, &diagnostics); code != 0 || diagnostics.Len() != 0 {
+		t.Fatalf("queue: code=%d stderr=%s", code, diagnostics.String())
+	}
+	var queue taskstore.QueueProjection
+	if err := json.Unmarshal(out.Bytes(), &queue); err != nil {
+		t.Fatal(err)
+	}
+	if queue.RunnableCount != 2 || queue.AgentRunnableCount != 1 ||
+		len(queue.Runnable) != 2 || len(queue.AgentRunnable) != 1 ||
+		!queue.Runnable[0].NeedsHuman || queue.AgentRunnable[0].Card.ID != "TASK-2" {
+		t.Fatalf("unexpected queue: %+v", queue)
+	}
+	after, err := os.ReadFile(humanPath)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("queue changed card: %v", err)
+	}
+	if err := os.Remove(agentPath); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	diagnostics.Reset()
+	if code := run([]string{"queue", "--dir", dir, "--json"}, &out, &diagnostics); code != 0 || diagnostics.Len() != 0 {
+		t.Fatalf("human-only queue: code=%d stderr=%s", code, diagnostics.String())
+	}
+	if err := json.Unmarshal(out.Bytes(), &queue); err != nil ||
+		queue.RunnableCount != 1 || queue.AgentRunnableCount != 0 ||
+		!bytes.Contains(out.Bytes(), []byte(`"agentRunnable":[]`)) {
+		t.Fatalf("human-only queue = %+v, JSON = %s, err = %v", queue, out.String(), err)
+	}
+	if err := os.WriteFile(humanPath, []byte("---\nid: TASK-1\nstatus: pending\nneeds-human: maybe\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	diagnostics.Reset()
+	if code := run([]string{"queue", "--dir", dir, "--json"}, &out, &diagnostics); code != 1 || out.Len() != 0 || diagnostics.Len() == 0 {
+		t.Fatalf("malformed queue: code=%d out=%s stderr=%s", code, out.String(), diagnostics.String())
+	}
+}

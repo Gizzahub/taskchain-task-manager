@@ -25,8 +25,9 @@ type View struct {
 // Document owns the exact source bytes and a derived view. Bytes never
 // serializes the view: unknown metadata and prose belong to the source.
 type Document struct {
-	raw  []byte
-	view View
+	raw        []byte
+	view       View
+	needsHuman bool
 }
 
 // Parse validates a card's leading YAML frontmatter and returns a document
@@ -51,7 +52,12 @@ func Parse(raw []byte) (*Document, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode depends-on: %w", err)
 	}
+	needsHuman, err := frontmatterBool(node.Content[0], metadata, "needs-human")
+	if err != nil {
+		return nil, err
+	}
 	d := &Document{raw: append([]byte(nil), raw...)}
+	d.needsHuman = needsHuman
 	d.view = View{
 		ID:    fmString(metadata["id"]),
 		Title: fmString(metadata["title"]), Status: fmString(metadata["status"]),
@@ -75,6 +81,11 @@ func (d *Document) Snapshot(path string) View {
 
 // View returns a defensive copy of the parsed projection.
 func (d *Document) View() View { return d.Snapshot("") }
+
+// NeedsHuman reports whether this card is explicitly reserved for a human.
+// Parse rejects a declared value that is not a YAML boolean, so callers never
+// mistake malformed metadata for agent-runnable work.
+func (d *Document) NeedsHuman() bool { return d.needsHuman }
 
 // Bytes returns a defensive copy of the exact input bytes.
 func (d *Document) Bytes() []byte { return append([]byte(nil), d.raw...) }
@@ -174,6 +185,34 @@ func fmString(v any) string {
 		return strings.TrimSpace(s)
 	}
 	return strings.TrimSpace(fmt.Sprint(v))
+}
+
+func frontmatterBool(root *yaml.Node, metadata map[string]any, name string) (bool, error) {
+	found := false
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		key, field := root.Content[i], root.Content[i+1]
+		if key.Kind != yaml.ScalarNode || key.Tag != "!!str" || key.Value != name {
+			continue
+		}
+		if found {
+			return false, fmt.Errorf("duplicate card frontmatter field %q", name)
+		}
+		found = true
+		if field.Kind != yaml.ScalarNode || field.Tag != "!!bool" {
+			return false, fmt.Errorf("card frontmatter %q must be a YAML boolean", name)
+		}
+	}
+	// The decoded mapping includes YAML merge keys. Inspecting only the direct
+	// syntax above would classify an inherited needs-human: true as false.
+	value, present := metadata[name]
+	if !present {
+		return false, nil
+	}
+	boolean, ok := value.(bool)
+	if !ok {
+		return false, fmt.Errorf("card frontmatter %q must be a YAML boolean", name)
+	}
+	return boolean, nil
 }
 
 func fmStrings(v any) ([]string, error) {

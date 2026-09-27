@@ -55,6 +55,8 @@ func runStore(args []string, out, errOut io.Writer) int {
 		result, err = taskstore.List(*dir)
 	case "ready":
 		result, err = taskstore.Ready(*dir)
+	case "queue":
+		result, err = taskstore.Queue(*dir)
 	case "create":
 		if *title == "" {
 			fmt.Fprintln(errOut, "create requires --title")

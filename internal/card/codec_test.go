@@ -2,6 +2,7 @@ package card
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -39,6 +40,48 @@ func TestSnapshotZoneOverridesFrontmatter(t *testing.T) {
 	}
 	if got := d.Snapshot("tasks/backlog/card.md").Status; got != "done" {
 		t.Fatalf("status = %q", got)
+	}
+}
+
+func TestParseNeedsHumanBoolean(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{name: "absent", raw: "---\nid: TASK-1\ntitle: Example\n---\n", want: false},
+		{name: "true", raw: "---\nid: TASK-1\nneeds-human: true\n---\n", want: true},
+		{name: "false", raw: "---\nid: TASK-1\nneeds-human: false\n---\n", want: false},
+		{name: "merged true", raw: "---\nid: TASK-1\ndefaults: &defaults\n  needs-human: true\n<<: *defaults\n---\n", want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc, err := Parse([]byte(tc.raw))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := doc.NeedsHuman(); got != tc.want {
+				t.Fatalf("NeedsHuman() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseRejectsMalformedNeedsHuman(t *testing.T) {
+	for _, value := range []string{"\"true\"", "null", "1", "[true]"} {
+		t.Run(value, func(t *testing.T) {
+			_, err := Parse([]byte("---\nid: TASK-1\nneeds-human: " + value + "\n---\n"))
+			if err == nil || !strings.Contains(err.Error(), "needs-human") {
+				t.Fatalf("Parse() error = %v, want needs-human error", err)
+			}
+		})
+	}
+	_, err := Parse([]byte("---\nid: TASK-1\nneeds-human: false\nneeds-human: true\n---\n"))
+	if err == nil {
+		t.Fatal("duplicate needs-human accepted")
+	}
+	_, err = Parse([]byte("---\nid: TASK-1\ndefaults: &defaults\n  needs-human: maybe\n<<: *defaults\n---\n"))
+	if err == nil || !strings.Contains(err.Error(), "needs-human") {
+		t.Fatalf("merged malformed needs-human error = %v", err)
 	}
 }
 

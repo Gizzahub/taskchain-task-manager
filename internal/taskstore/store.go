@@ -19,8 +19,26 @@ import (
 )
 
 type Entry struct {
-	Path string    `json:"path"`
-	Card card.View `json:"card"`
+	Path       string    `json:"path"`
+	Card       card.View `json:"card"`
+	NeedsHuman bool      `json:"-"`
+}
+
+// QueueEntry is a runnable card annotated with its execution audience.
+// NeedsHuman is deliberately projected here instead of card.View so existing
+// list and ready output remains byte-compatible.
+type QueueEntry struct {
+	Entry
+	NeedsHuman bool `json:"needsHuman"`
+}
+
+// QueueProjection separates all structurally runnable cards from the subset
+// that an agent may execute. Human-only cards remain in Runnable.
+type QueueProjection struct {
+	Runnable           []QueueEntry `json:"runnable"`
+	RunnableCount      int          `json:"runnableCount"`
+	AgentRunnable      []QueueEntry `json:"agentRunnable"`
+	AgentRunnableCount int          `json:"agentRunnableCount"`
 }
 
 type CreateRequest struct {
@@ -393,6 +411,49 @@ func Ready(dir string) (entries []Entry, err error) {
 	return readyForBoard(r, all, ledger, policy)
 }
 
+// Queue returns a read-only projection of structural and agent-runnable work.
+// It uses the same readiness rules as Ready and does not change claim or
+// transition eligibility.
+func Queue(dir string) (projection QueueProjection, err error) {
+	session, err := openBoardSession(dir)
+	if err != nil {
+		return QueueProjection{}, err
+	}
+	defer func() { err = errors.Join(err, session.close()) }()
+	r := session.root
+	if err := rejectPendingTransitions(r); err != nil {
+		return QueueProjection{}, err
+	}
+	all, err := listLocked(r)
+	if err != nil {
+		return QueueProjection{}, err
+	}
+	ledger, err := loadClaims(r, all)
+	if err != nil {
+		return QueueProjection{}, err
+	}
+	policy, err := policyForBoard(r)
+	if err != nil {
+		return QueueProjection{}, err
+	}
+	runnable, err := readyForBoard(r, all, ledger, policy)
+	if err != nil {
+		return QueueProjection{}, err
+	}
+	projection.Runnable = make([]QueueEntry, 0, len(runnable))
+	projection.AgentRunnable = make([]QueueEntry, 0, len(runnable))
+	for _, entry := range runnable {
+		item := QueueEntry{Entry: entry, NeedsHuman: entry.NeedsHuman}
+		projection.Runnable = append(projection.Runnable, item)
+		if !item.NeedsHuman {
+			projection.AgentRunnable = append(projection.AgentRunnable, item)
+		}
+	}
+	projection.RunnableCount = len(projection.Runnable)
+	projection.AgentRunnableCount = len(projection.AgentRunnable)
+	return projection, nil
+}
+
 func validateDependencies(deps []string, id string, entries []Entry) error {
 	proposed := append([]Entry(nil), entries...)
 	policy := currentPolicy()
@@ -571,7 +632,7 @@ func scanDirExceptWithPolicy(r *os.Root, dir string, out *[]Entry, ids map[strin
 			return fmt.Errorf("duplicate task ID %s in %s and %s", view.ID, old, path)
 		}
 		ids[key] = path
-		*out = append(*out, Entry{Path: filepath.ToSlash(path), Card: view})
+		*out = append(*out, Entry{Path: filepath.ToSlash(path), Card: view, NeedsHuman: doc.NeedsHuman()})
 		return nil
 	})
 }

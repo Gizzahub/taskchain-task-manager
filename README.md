@@ -8,7 +8,7 @@
 왜 이런 도구가 필요한지, 무엇을 보장하고 무엇을 보장하지 않는지는
 [왜 이 도구인가](docs/why.md)를 보십시오.
 
-현재는 초기 개발 단계이며 카드 codec과 **초기화·생성·목록·조회·의존성 기반 ready·구문 검증**을 제공합니다.
+현재는 초기 개발 단계이며 카드 codec과 **초기화·생성·목록·조회·의존성 기반 ready·실행 대상별 queue·구문 검증**을 제공합니다.
 claim/release와 소유권 기반 상태 전이·재개를 지원합니다. Intent/Batch/Iteration 문서의 구문 검증과 불변 등록·조회를 제공합니다.
 
 ## 빌드와 실행
@@ -24,6 +24,7 @@ make check
 ./build/taskchain-task-manager list --dir ./tasks --json
 ./build/taskchain-task-manager create --dir ./tasks --title '후속 작업' --depends-on TASK-1 --json
 ./build/taskchain-task-manager ready --dir ./tasks --json
+./build/taskchain-task-manager queue --dir ./tasks --json
 ./build/taskchain-task-manager validate-context examples/context/intent.json --json
 ./build/taskchain-task-manager register-context examples/context/intent.json --dir ./tasks --json
 ./build/taskchain-task-manager show-context --dir ./tasks --kind intent --id INTENT-0123456789abcdef0123456789abcdef --revision 1 --json
@@ -103,6 +104,15 @@ kind 디렉터리(plan/issue 등)·archive·중첩 카드의 상태 표기만으
 별도의 순환이 있어도 일부 정상 후보만 반환하지 않습니다. `list`는 관계 오류를 진단하기
 위해 읽을 수 있지만 카드 자체나 소유 원장이 잘못된 형식이면 실패합니다.
 기존 도구의 전체 dialect·완료 증거 계약을 이 기능만으로 대체하지 마세요.
+
+`queue --dir ./tasks --json`은 같은 준비 조건으로 `runnable`과
+`agentRunnable`을 반환하며 각 항목에 `needsHuman`을 표시합니다.
+`needs-human: true`인 카드는 `runnable`에만 포함됩니다. 결과에는
+`runnableCount`와 `agentRunnableCount`도 있습니다. 선언한
+`needs-human` 값이 YAML boolean이 아니면 오류로 종료합니다. 선언이 없으면
+`false`입니다. 이 검증은 공통 카드 파서에 적용되므로 잘못된 값은 `show`,
+`list`, `ready`, `claim` 등 카드 읽기 명령도 실패시킵니다. `queue`는
+읽기 전용이며 `ready`·claim의 작업 선택 의미는 유지됩니다.
 
 ## 실행권 예약
 

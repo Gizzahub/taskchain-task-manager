@@ -74,7 +74,7 @@ func run(args []string, out, errOut io.Writer) int {
 	if len(args) > 0 && (args[0] == "claim" || args[0] == "release") {
 		return runClaim(args, out, errOut)
 	}
-	if len(args) > 0 && (args[0] == "init" || args[0] == "create" || args[0] == "list" || args[0] == "ready") {
+	if len(args) > 0 && (args[0] == "init" || args[0] == "create" || args[0] == "list" || args[0] == "ready" || args[0] == "queue") {
 		return runStore(args, out, errOut)
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "help") {
@@ -89,7 +89,7 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "       taskchain-task-manager show-context --dir <board> --kind intent|batch|iteration --id ID --revision N --json")
 		fmt.Fprintln(out, "       taskchain-task-manager enable-shared --dir <board> --all-worktrees [--resume] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager inspect-worktrees --repo <root> --board <path> --json")
-		fmt.Fprintln(out, "       taskchain-task-manager <init|list|ready> --dir <board> --json")
+		fmt.Fprintln(out, "       taskchain-task-manager <init|list|ready|queue> --dir <board> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager import-ids --repo <root> --board <path> (--preview | --dir <target> [--adopt]) --json")
 		fmt.Fprintln(out, "       taskchain-task-manager reserve-ids --dir <board> [--adopt] [--id TASK-N ...] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager create-bundle <file> --dir <board> [--adopt] [--resume] --json")

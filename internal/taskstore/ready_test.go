@@ -1,6 +1,7 @@
 package taskstore
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -58,5 +59,76 @@ func TestCreateRejectsExistingCycleWithoutPublishing(t *testing.T) {
 	}
 	if !reflect.DeepEqual(before, boardBytes(t, root)) {
 		t.Fatal("invalid graph changed board or ID reservations")
+	}
+}
+
+func TestQueueSeparatesHumanOnlyCardsWithoutChangingReady(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "tasks")
+	if err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		raw  string
+	}{
+		{name: "agent.md", raw: "---\nid: TASK-1\ntitle: Agent\n---\n"},
+		{name: "human.md", raw: "---\nid: TASK-2\ntitle: Human\nneeds-human: true\n---\n"},
+	} {
+		if err := os.WriteFile(filepath.Join(root, "todo", tc.name), []byte(tc.raw), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	ready, err := Ready(root)
+	if err != nil || len(ready) != 2 {
+		t.Fatalf("Ready() = %+v, %v", ready, err)
+	}
+	queue, err := Queue(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if queue.RunnableCount != 2 || len(queue.Runnable) != 2 {
+		t.Fatalf("runnable = %+v", queue)
+	}
+	if queue.AgentRunnableCount != 1 || len(queue.AgentRunnable) != 1 || queue.AgentRunnable[0].Card.ID != "TASK-1" {
+		t.Fatalf("agent runnable = %+v", queue)
+	}
+	if !queue.Runnable[1].NeedsHuman || queue.Runnable[1].Card.ID != "TASK-2" {
+		t.Fatalf("human card was not visible in runnable projection: %+v", queue.Runnable)
+	}
+	encoded, err := json.Marshal(queue)
+	if err != nil || !strings.Contains(string(encoded), `"needsHuman":true`) {
+		t.Fatalf("queue JSON = %s, %v", encoded, err)
+	}
+	if err := os.Remove(filepath.Join(root, "todo", "agent.md")); err != nil {
+		t.Fatal(err)
+	}
+	humanOnly, err := Queue(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err = json.Marshal(humanOnly)
+	if err != nil || humanOnly.RunnableCount != 1 || humanOnly.AgentRunnableCount != 0 ||
+		len(humanOnly.AgentRunnable) != 0 || !strings.Contains(string(encoded), `"agentRunnable":[]`) {
+		t.Fatalf("human-only queue = %+v, JSON = %s, err = %v", humanOnly, encoded, err)
+	}
+}
+
+func TestQueueFailsClosedForMalformedNeedsHuman(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "tasks")
+	if err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	raw := []byte("---\nid: TASK-1\ntitle: Invalid\nneeds-human: \"false\"\n---\n")
+	if err := os.WriteFile(filepath.Join(root, "todo", "invalid.md"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Queue(root); err == nil || !strings.Contains(err.Error(), "needs-human") {
+		t.Fatalf("Queue() error = %v, want needs-human parse failure", err)
+	}
+	if _, err := Ready(root); err == nil || !strings.Contains(err.Error(), "needs-human") {
+		t.Fatalf("Ready() error = %v, want same malformed-card failure", err)
 	}
 }

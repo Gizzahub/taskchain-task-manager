@@ -121,7 +121,7 @@ func scanModuleZone(r *os.Root, root string, out *[]Entry, ids map[string]string
 			return fmt.Errorf("duplicate task ID %s in %s and %s", view.ID, old, path)
 		}
 		ids[key] = name
-		*out = append(*out, Entry{Path: name, Card: view})
+		*out = append(*out, Entry{Path: name, Card: view, NeedsHuman: doc.NeedsHuman()})
 		return nil
 	})
 }
