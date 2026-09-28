@@ -193,9 +193,16 @@ func TestManifestBounds(t *testing.T) {
 	if err := validateManifest(tooManyIDs); err == nil {
 		t.Fatal("accepted query bound")
 	}
-	longID := Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: "/tmp", Board: "tasks"}}, CardIDs: []string{"TASK-" + strings.Repeat("1", MaxIDBytes)}}
-	if err := validateManifest(longID); err == nil {
-		t.Fatal("accepted ID byte bound")
+	exactID := "TASK-" + strings.Repeat("0", MaxIDBytes-len("TASK-")-1) + "1"
+	if len(exactID) != MaxIDBytes {
+		t.Fatalf("exact ID fixture length=%d", len(exactID))
+	}
+	if err := validateManifest(Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: "/tmp", Board: "tasks"}}, CardIDs: []string{exactID}}); err != nil {
+		t.Fatalf("rejected exact ID byte bound: %v", err)
+	}
+	longID := exactID + "0"
+	if err := validateManifest(Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: "/tmp", Board: "tasks"}}, CardIDs: []string{longID}}); err == nil {
+		t.Fatal("accepted ID byte bound +1")
 	}
 	exactRepos := make([]Repository, MaxRepositories)
 	for i := range exactRepos {
