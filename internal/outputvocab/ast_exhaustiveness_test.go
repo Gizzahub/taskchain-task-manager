@@ -69,21 +69,23 @@ func TestConstDeclarationsMatchAllFuncs(t *testing.T) {
 	// this package's vocabularies are", not derived from the same source
 	// the parser above already reads.
 	want := map[string][]string{
-		"ValidationState":     allStrings(outputvocab.AllValidationStates()),
-		"ResultStatus":        allStrings(outputvocab.AllResultStatuses()),
-		"RejoinPhase":         allStrings(outputvocab.AllRejoinPhases()),
-		"SharedPhase":         allStrings(outputvocab.AllSharedPhases()),
-		"RejoinMode":          allStrings(outputvocab.AllRejoinModes()),
-		"ArchiveOperation":    allStrings(outputvocab.AllArchiveOperations()),
-		"Zone":                allStrings(outputvocab.AllZones()),
-		"Status":              allStrings(outputvocab.AllStatuses()),
-		"Scope":               allStrings(outputvocab.AllScopes()),
-		"ContextStatus":       allStrings(outputvocab.AllContextStatuses()),
-		"ReferenceCheckState": allStrings(outputvocab.AllReferenceCheckStates()),
-		"AuthorityScope":      allStrings(outputvocab.AllAuthorityScopes()),
-		"RejoinRole":          allStrings(outputvocab.AllRejoinRoles()),
-		"Severity":            allStrings(outputvocab.AllSeverities()),
-		"ClaimStatus":         allStrings(outputvocab.AllClaimStatuses()),
+		"ValidationState":      allStrings(outputvocab.AllValidationStates()),
+		"ResultStatus":         allStrings(outputvocab.AllResultStatuses()),
+		"RejoinPhase":          allStrings(outputvocab.AllRejoinPhases()),
+		"SharedPhase":          allStrings(outputvocab.AllSharedPhases()),
+		"RejoinMode":           allStrings(outputvocab.AllRejoinModes()),
+		"ArchiveOperation":     allStrings(outputvocab.AllArchiveOperations()),
+		"Zone":                 allStrings(outputvocab.AllZones()),
+		"Status":               allStrings(outputvocab.AllStatuses()),
+		"Scope":                allStrings(outputvocab.AllScopes()),
+		"ContextStatus":        allStrings(outputvocab.AllContextStatuses()),
+		"ReferenceCheckState":  allStrings(outputvocab.AllReferenceCheckStates()),
+		"AuthorityScope":       allStrings(outputvocab.AllAuthorityScopes()),
+		"RejoinRole":           allStrings(outputvocab.AllRejoinRoles()),
+		"Severity":             allStrings(outputvocab.AllSeverities()),
+		"ClaimStatus":          allStrings(outputvocab.AllClaimStatuses()),
+		"QueueExecutionMode":   allStrings(outputvocab.AllQueueExecutionModes()),
+		"WorkspaceMatchStatus": allStrings(outputvocab.AllWorkspaceMatchStatuses()),
 	}
 
 	if len(declared) != len(want) {

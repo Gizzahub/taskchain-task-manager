@@ -87,6 +87,14 @@ func TestAllClaimStatuses(t *testing.T) {
 	assertNoDuplicates(t, "ClaimStatus", outputvocab.AllClaimStatuses())
 }
 
+func TestAllQueueExecutionModes(t *testing.T) {
+	assertNoDuplicates(t, "QueueExecutionMode", outputvocab.AllQueueExecutionModes())
+}
+
+func TestAllWorkspaceMatchStatuses(t *testing.T) {
+	assertNoDuplicates(t, "WorkspaceMatchStatus", outputvocab.AllWorkspaceMatchStatuses())
+}
+
 // TestZoneVocabularyMatchesDefaultPolicy exercises the one real switch that
 // consumes the Zone vocabulary end to end: boardpolicy.Default() builds its
 // known-directory list from the same literals this package now names. If a
@@ -204,6 +212,16 @@ func TestVocabularySpelling(t *testing.T) {
 		outputvocab.ClaimHeld:     "held",
 		outputvocab.ClaimReleased: "released",
 	}
+	queueExecutionModes := map[outputvocab.QueueExecutionMode]string{
+		outputvocab.QueueImplementation: "implementation",
+		outputvocab.QueueExternal:       "external",
+		outputvocab.QueueDecision:       "decision",
+	}
+	workspaceMatchStatuses := map[outputvocab.WorkspaceMatchStatus]string{
+		outputvocab.WorkspaceMissing:   "missing",
+		outputvocab.WorkspaceFound:     "found",
+		outputvocab.WorkspaceAmbiguous: "ambiguous",
+	}
 
 	checkSpelling(t, "ValidationState", validationStates)
 	checkSpelling(t, "ResultStatus", resultStatuses)
@@ -220,6 +238,8 @@ func TestVocabularySpelling(t *testing.T) {
 	checkSpelling(t, "RejoinRole", rejoinRoles)
 	checkSpelling(t, "Severity", severities)
 	checkSpelling(t, "ClaimStatus", claimStatuses)
+	checkSpelling(t, "QueueExecutionMode", queueExecutionModes)
+	checkSpelling(t, "WorkspaceMatchStatus", workspaceMatchStatuses)
 
 	// Cross-check: every member this hand-typed table covers must also be a
 	// declared All<X>() member, and vice versa, so this golden test cannot
@@ -243,6 +263,8 @@ func TestVocabularySpelling(t *testing.T) {
 	checkMatchesAll(t, "RejoinRole", rejoinRoles, outputvocab.AllRejoinRoles())
 	checkMatchesAll(t, "Severity", severities, outputvocab.AllSeverities())
 	checkMatchesAll(t, "ClaimStatus", claimStatuses, outputvocab.AllClaimStatuses())
+	checkMatchesAll(t, "QueueExecutionMode", queueExecutionModes, outputvocab.AllQueueExecutionModes())
+	checkMatchesAll(t, "WorkspaceMatchStatus", workspaceMatchStatuses, outputvocab.AllWorkspaceMatchStatuses())
 }
 
 // checkMatchesAll fails if the hand-typed spelling table's key set and the

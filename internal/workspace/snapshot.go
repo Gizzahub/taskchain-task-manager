@@ -18,6 +18,7 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardpath"
 	"github.com/Gizzahub/taskchain-task-manager/internal/githistory"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
 )
 
@@ -37,10 +38,10 @@ type SnapshotOutput struct {
 
 // SnapshotResult classifies one requested numeric card identity.
 type SnapshotResult struct {
-	RequestedID string          `json:"requestedId"`
-	CardID      string          `json:"cardId"`
-	Status      string          `json:"status"`
-	Matches     []SnapshotMatch `json:"matches"`
+	RequestedID string                           `json:"requestedId"`
+	CardID      string                           `json:"cardId"`
+	Status      outputvocab.WorkspaceMatchStatus `json:"status"`
+	Matches     []SnapshotMatch                  `json:"matches"`
 }
 
 // SnapshotMatch identifies one card using only workspace-relative data.
@@ -110,11 +111,11 @@ func querySnapshot(manifest Manifest, requestedIDs []string, afterRead func(stri
 			}
 			return matches[i].Path < matches[j].Path
 		})
-		status := "missing"
+		status := outputvocab.WorkspaceMissing
 		if len(matches) == 1 {
-			status = "found"
+			status = outputvocab.WorkspaceFound
 		} else if len(matches) > 1 {
-			status = "ambiguous"
+			status = outputvocab.WorkspaceAmbiguous
 		}
 		out.Results = append(out.Results, SnapshotResult{
 			RequestedID: id.raw,

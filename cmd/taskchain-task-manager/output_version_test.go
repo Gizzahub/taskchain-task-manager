@@ -3,25 +3,34 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
+	"github.com/Gizzahub/taskchain-task-manager/internal/taskstore"
 )
 
 // TestPolymorphicEncodingSitesVersionEveryBranch grades the two encoding sites
-// that do not carry one document shape but several. Counting sites says 23;
-// counting shapes says 28, and the extra five all hide behind these two calls.
+// that do not carry one document shape but several. Counting sites says 25;
+// counting shapes says 31, and the extra six all hide behind these two calls.
 // A per-branch check is the only thing that catches a branch whose shape is not
 // an object: the chokepoint refuses those rather than wrapping them, so the
 // failure is a nonzero exit at runtime and a passing test that happened to
 // exercise the other branch.
 func TestPolymorphicEncodingSitesVersionEveryBranch(t *testing.T) {
 	board := filepath.Join(t.TempDir(), "tasks")
+	queueBoard := filepath.Join(t.TempDir(), "queue-tasks")
+	if err := taskstore.Init(queueBoard); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(queueBoard, "todo", "TASK-1.md"), []byte("---\nid: TASK-1\nstatus: pending\nallowed-paths: [src/task.go]\n---\nQueue task\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	cardPath, rulesPath := writeCompletionFixture(t, validCompletionCard("P1", "- [x] done\n"), []byte(completionRules))
 
-	// store.go's single Encode call carries four shapes: an anonymous struct,
-	// two sequences behind the entryList envelope, and one Entry.
+	// store.go's single Encode call carries five shapes: an anonymous struct,
+	// two sequences behind the entryList envelope, one QueueProjection, and one Entry.
 	// validation.go's carries three: an anonymous struct and two report types.
 	branches := []struct {
 		name string
@@ -31,6 +40,7 @@ func TestPolymorphicEncodingSitesVersionEveryBranch(t *testing.T) {
 		{"store list", []string{"list", "--dir", board, "--json"}},
 		{"store create", []string{"create", "--dir", board, "--title", "Synthetic task", "--json"}},
 		{"store ready", []string{"ready", "--dir", board, "--json"}},
+		{"store queue", []string{"queue", "--dir", queueBoard, "--json"}},
 		{"validate bare", []string{"validate", cardPath, "--json"}},
 		{"validate rules", []string{"validate", cardPath, "--config", rulesPath, "--json"}},
 		{"validate completion", []string{"validate-completion", cardPath, "--config", rulesPath, "--json"}},

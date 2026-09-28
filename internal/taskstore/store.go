@@ -15,6 +15,7 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardpath"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 	"gopkg.in/yaml.v3"
 )
 
@@ -32,9 +33,9 @@ type Entry struct {
 // list and ready output remains byte-compatible.
 type QueueEntry struct {
 	Entry
-	NeedsHuman    bool     `json:"needsHuman"`
-	ExecutionMode string   `json:"executionMode"`
-	AllowedPaths  []string `json:"allowedPaths"`
+	NeedsHuman    bool                           `json:"needsHuman"`
+	ExecutionMode outputvocab.QueueExecutionMode `json:"executionMode"`
+	AllowedPaths  []string                       `json:"allowedPaths"`
 }
 
 // QueueProjection separates all structurally runnable cards from the subset
@@ -465,7 +466,7 @@ func Queue(dir string) (projection QueueProjection, err error) {
 			return QueueProjection{}, err
 		}
 		projection.Runnable = append(projection.Runnable, item)
-		if item.ExecutionMode == "implementation" && !item.NeedsHuman {
+		if item.ExecutionMode == outputvocab.QueueImplementation && !item.NeedsHuman {
 			projection.AgentRunnable = append(projection.AgentRunnable, item)
 		}
 	}

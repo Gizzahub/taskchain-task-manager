@@ -188,6 +188,13 @@ var goldenCases = []struct {
 		goldenBoard(t)
 		return goldenRun(t, "ready", "--dir", "tasks", "--json")
 	}},
+	{"queue", func(t *testing.T) []byte {
+		goldenWorkspace(t)
+		goldenSetup(t, "init", "--dir", "tasks", "--json")
+		goldenWrite(t, filepath.Join("tasks", "todo", "TASK-1.md"), []byte("---\nid: TASK-1\nstatus: pending\nexecution-mode: external\nneeds-human: true\n---\nHuman work\n"))
+		goldenWrite(t, filepath.Join("tasks", "todo", "TASK-2.md"), []byte("---\nid: TASK-2\nstatus: pending\nallowed-paths: [src/task.go]\n---\nAgent work\n"))
+		return goldenRun(t, "queue", "--dir", "tasks", "--json")
+	}},
 	{"reserve-ids-adopt", func(t *testing.T) []byte {
 		goldenWorkspace(t)
 		goldenBoard(t)

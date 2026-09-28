@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 // queueEntry validates the execution route only for cards that Queue admits.
@@ -14,14 +16,14 @@ func queueEntry(entry Entry) (QueueEntry, error) {
 	item := QueueEntry{
 		Entry:         entry,
 		NeedsHuman:    entry.NeedsHuman,
-		ExecutionMode: entry.ExecutionMode,
+		ExecutionMode: outputvocab.QueueExecutionMode(entry.ExecutionMode),
 		AllowedPaths:  append([]string{}, entry.AllowedPaths...),
 	}
 	if item.ExecutionMode == "" {
-		item.ExecutionMode = "implementation"
+		item.ExecutionMode = outputvocab.QueueImplementation
 	}
 	switch item.ExecutionMode {
-	case "implementation":
+	case outputvocab.QueueImplementation:
 		if len(item.AllowedPaths) == 0 {
 			return QueueEntry{}, fmt.Errorf("queue card %s: implementation requires allowed-paths", entry.Path)
 		}
@@ -30,7 +32,7 @@ func queueEntry(entry Entry) (QueueEntry, error) {
 				return QueueEntry{}, fmt.Errorf("queue card %s: invalid allowed-path %q: %w", entry.Path, allowed, err)
 			}
 		}
-	case "external", "decision":
+	case outputvocab.QueueExternal, outputvocab.QueueDecision:
 		if !item.NeedsHuman {
 			return QueueEntry{}, fmt.Errorf("queue card %s: %s requires needs-human: true", entry.Path, item.ExecutionMode)
 		}

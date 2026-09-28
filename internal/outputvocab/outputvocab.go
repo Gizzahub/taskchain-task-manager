@@ -474,3 +474,32 @@ const (
 func AllClaimStatuses() []ClaimStatus {
 	return []ClaimStatus{ClaimHeld, ClaimReleased}
 }
+
+// QueueExecutionMode is the execution route published by queue. The card
+// parser owns its input spelling; taskstore.queueEntry validates every member
+// in its switch before the value reaches stdout.
+type QueueExecutionMode string
+
+const (
+	QueueImplementation QueueExecutionMode = "implementation"
+	QueueExternal       QueueExecutionMode = "external"
+	QueueDecision       QueueExecutionMode = "decision"
+)
+
+func AllQueueExecutionModes() []QueueExecutionMode {
+	return []QueueExecutionMode{QueueImplementation, QueueExternal, QueueDecision}
+}
+
+// No switch consumes WorkspaceMatchStatus; QuerySnapshot constructs a result
+// from the number of matches and the CLI serializes that result unchanged.
+type WorkspaceMatchStatus string
+
+const (
+	WorkspaceMissing   WorkspaceMatchStatus = "missing"
+	WorkspaceFound     WorkspaceMatchStatus = "found"
+	WorkspaceAmbiguous WorkspaceMatchStatus = "ambiguous"
+)
+
+func AllWorkspaceMatchStatuses() []WorkspaceMatchStatus {
+	return []WorkspaceMatchStatus{WorkspaceMissing, WorkspaceFound, WorkspaceAmbiguous}
+}

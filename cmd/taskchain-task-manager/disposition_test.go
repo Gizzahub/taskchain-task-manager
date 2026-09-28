@@ -40,7 +40,7 @@ func TestQueueCLIRoutesP0IssueAndDecisionWithoutSyntheticScope(t *testing.T) {
 	}
 	modes := map[string]string{}
 	for _, item := range projection.Runnable {
-		modes[item.Card.ID] = item.ExecutionMode
+		modes[item.Card.ID] = string(item.ExecutionMode)
 	}
 	if modes["ISSUE-1"] != "external" || modes["TASK-1"] != "decision" || modes["TASK-2"] != "implementation" {
 		t.Fatalf("routes: %+v", modes)
