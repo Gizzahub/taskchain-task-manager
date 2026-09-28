@@ -30,13 +30,13 @@
 
 ```sh
 $ ./build/taskchain-task-manager init --dir tasks --json
-{"directory":"tasks"}
+{"outputVersion":1,"directory":"tasks"}
 
 $ ./build/taskchain-task-manager create --dir tasks --title 'Write the spec' --json
-{"path":"todo/TASK-1.md","card":{"id":"TASK-1","title":"Write the spec","status":"pending","priority":"","dependsOn":null}}
+{"outputVersion":1,"path":"todo/TASK-1.md","card":{"id":"TASK-1","title":"Write the spec","status":"pending","priority":"","dependsOn":null}}
 
 $ ./build/taskchain-task-manager create --dir tasks --title 'Implement the spec' --depends-on TASK-1 --json
-{"path":"todo/TASK-2.md","card":{"id":"TASK-2","title":"Implement the spec","status":"pending","priority":"","dependsOn":["TASK-1"]}}
+{"outputVersion":1,"path":"todo/TASK-2.md","card":{"id":"TASK-2","title":"Implement the spec","status":"pending","priority":"","dependsOn":["TASK-1"]}}
 ```
 
 `ready`는 선행 작업이 끝나지 않은 TASK-2를 내보내지 않습니다. `ready`는 저장된
@@ -44,7 +44,7 @@ $ ./build/taskchain-task-manager create --dir tasks --title 'Implement the spec'
 
 ```sh
 $ ./build/taskchain-task-manager ready --dir tasks --json
-[{"path":"todo/TASK-1.md","card":{"id":"TASK-1","title":"Write the spec",...}}]
+{"outputVersion":1,"entries":[{"path":"todo/TASK-1.md","card":{"id":"TASK-1","title":"Write the spec",...}}]}
 ```
 
 에이전트 A가 작업을 점유하면 `ready` 목록에서 빠집니다.
@@ -52,10 +52,10 @@ $ ./build/taskchain-task-manager ready --dir tasks --json
 ```sh
 $ ./build/taskchain-task-manager claim --dir tasks --id TASK-1 \
     --owner agent-a --token aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --json
-{"id":"TASK-1","owner":"agent-a","token":"aaaa...","status":"held"}
+{"outputVersion":1,"id":"TASK-1","owner":"agent-a","token":"aaaa...","status":"held"}
 
 $ ./build/taskchain-task-manager ready --dir tasks --json
-[]
+{"outputVersion":1,"entries":[]}
 ```
 
 에이전트 B는 같은 카드를 점유할 수도, 상태를 옮길 수도 없습니다. 둘 다 종료
@@ -75,10 +75,10 @@ transition: matching held claim not found
 ```sh
 $ ... transition --id TASK-1 --owner agent-a --token aaaa... \
     --request-id 2222... --from todo --to doing --json
-{"requestId":"2222...","id":"TASK-1","from":"todo","to":"doing","path":"doing/TASK-1.md","status":"completed"}
+{"outputVersion":1,"requestId":"2222...","id":"TASK-1","from":"todo","to":"doing","path":"doing/TASK-1.md","status":"completed"}
 
 $ # 같은 요청을 그대로 다시 실행
-{"requestId":"2222...","id":"TASK-1","from":"todo","to":"doing","path":"doing/TASK-1.md","status":"completed"}
+{"outputVersion":1,"requestId":"2222...","id":"TASK-1","from":"todo","to":"doing","path":"doing/TASK-1.md","status":"completed"}
 ```
 
 결과는 평범한 파일입니다. 상태는 카드가 놓인 경로가 정본입니다.

@@ -48,7 +48,7 @@ taskchain-task-manager revise-policy next-policy.yaml --dir ./tasks \
 가능하지만 모든 참여 보드의 원래 HEAD·카드·원장과 파일 hash를 다시 확인한다.
 충돌한 상태는 자동 수정하지 않는다. lock은 소유 프로세스 종료를 확인한 뒤 별도 처리한다.
 
-성공 JSON은 활성화 명령과 같은 `schemaVersion:1`, `authorityId`, `scope`, `digest`,
+성공 JSON은 활성화 명령과 같은 최상위 `outputVersion:1`, `authorityId`, `scope`, `digest`,
 `status`, `replayed`, `boards` 필드를 사용한다. 완료 재호출의 `boards`는 1이다.
 exit 0은 성공, 1은 입력·상태·게시·출력 오류, 2는 CLI 사용 오류다. 진단은 stderr에 쓴다.
 출력 실패가 작업 미실행을 뜻하지는 않는다. 동일 요청으로 결과를 확인한다.

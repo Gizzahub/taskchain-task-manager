@@ -36,7 +36,7 @@ held claim이 있으면 같은 owner와 정확한 `--token`을 전달해야 합�
 
 ## 결과와 재시도
 
-성공은 exit 0과 JSON 한 개이며 `schemaVersion`, `requestId`, `id`, `path`,
+성공은 exit 0과 JSON 한 개이며 최상위 `outputVersion: 1`, `requestId`, `id`, `path`,
 `status: "completed"`, `changed`를 포함합니다. `completed`는 이 보정 요청의 완료일 뿐입니다.
 stdout 쓰기가 실패해도 작업은 이미 완료됐을 수 있습니다.
 

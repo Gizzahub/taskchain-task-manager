@@ -42,9 +42,9 @@ schema-version과 card-dialect 블록은 필수다. 설정은 단일 YAML 문서
 
 ## 범위와 오류
 
-결과에는 `schemaVersion: 1`, `scope: card`, `boardValidation: not_evaluated`,
+결과에는 최상위 `outputVersion: 1`, `scope: card`, `boardValidation: not_evaluated`,
 `valid`, `criteria`, `findings`가 포함된다. finding은 severity/field/message를 가진다.
-정상 검사 성공은 exit 0, 카드 규칙 위반은 exit 1과 JSON findings를 반환한다.
+정상 검사 성공은 exit 0, 카드 규칙 위반은 exit 3과 JSON findings를 반환한다.
 설정·파일·구문 오류는 exit 1과 stderr 진단만, 잘못된 명령 사용은 exit 2다.
 
 `zones`, `zone-status`, `transitions`와 알 수 없는 설정은 **거부**한다. 보드·writer 정책을

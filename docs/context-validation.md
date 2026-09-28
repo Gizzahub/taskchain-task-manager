@@ -7,12 +7,12 @@
 taskchain-task-manager validate-context examples/context/intent.json --json
 ```
 
-성공 결과는 `schemaVersion`, `scope: "intent-batch-document"`, `valid`, `kind`,
+성공 결과는 최상위 `outputVersion:1`, `scope: "intent-batch-document"`, `valid`, `kind`,
 `id`, `revision`, `canonical`, `digest`, `registered: false`,
 `referenceValidation: "not_evaluated"`, `evaluationValidation: "not_evaluated"`를
 포함합니다. canonical은 고정 필드 순서의 compact JSON이며 digest는 그 바이트의
 SHA-256입니다. Iteration의 scope는 `iteration-document`이며 출력 envelope의
-schemaVersion은 여전히 1입니다. 문서 내부의 schemaVersion과 구분하세요.
+outputVersion은 여전히 1입니다. canonical 문서 내부의 schemaVersion과 구분하세요.
 배열 순서와 TASK ID의 원래 표기를 보존하며 필드 순서·들여쓰기는 정규화합니다.
 같은 kind/id/revision은 불변 내용을 뜻하지만 이 단일 파일 검사는 기존 등록과의 충돌을
 확인하지 않습니다. Intent/Batch 수정은 새 revision, Iteration 수정은 새 ID로 기록합니다.

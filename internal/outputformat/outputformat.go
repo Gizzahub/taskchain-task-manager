@@ -29,8 +29,9 @@
 // directory and aborts the command with "no matches found" when nothing there
 // ends in .go, printing nothing — which reads exactly like a true zero result.
 //
-// That should print this package alone. Every other version declaration in the
-// tree, tagged json:"schemaVersion" or json:"schema-version", is storage.
+// That should print this package alone. Other version declarations tagged
+// json:"schemaVersion" or json:"schema-version" belong to their own input,
+// embedded, or persisted document schemas, not the stdout format axis.
 package outputformat
 
 // Version numbers the stdout JSON document format. It is not a journal or

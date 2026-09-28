@@ -26,8 +26,9 @@ ID/revision을 작성한다. 같은 보드에서 같은 requestId는 영구적�
   중복·순환·사용된 ID·기존 Batch key·잘못된 카드 규칙은 게시 전에 거부한다.
 - 선택적 `template`에는 단일 카드 생성과 같은 validationConfig 원문, type, priority,
   summary, criteria를 넣는다. 준비된 전체 카드와 Batch는 최대 1 MiB다.
-- 성공 stdout은 schemaVersion, requestId, digest, status, replayed, tasks(key/id/path),
-  batch를 가진 JSON 한 개다. `status: completed`는 **게시 트랜잭션 완료**일 뿐,
+- 성공 stdout은 최상위 `outputVersion: 1`, requestId, digest, status, replayed,
+  tasks(key/id/path), batch를 가진 JSON 한 개다. 중첩 `batch`는 저장 문서이므로
+  `schemaVersion`을 가진다. `status: completed`는 **게시 트랜잭션 완료**일 뿐,
   생성한 TASK 완료·Intent 달성·검증 통과를 뜻하지 않는다.
 
 ## 최초 채택과 이전 바이너리

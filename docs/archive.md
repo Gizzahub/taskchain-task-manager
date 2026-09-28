@@ -52,7 +52,7 @@ A held claim requires its exact owner/token; archiving does not release it.
 `--operation force --assertion <reason>` bypasses normal review admission but
 preserves source bytes. Neither operation publishes dependency completion.
 Rules, request ID, source hash and all other request fields must be preserved
-for a retry, including after a stdout failure. JSON success has schemaVersion 1.
+for a retry, including after a stdout failure. JSON success has top-level outputVersion 1.
 
 Existing archives use the separate [legacy adoption command](legacy-archive.md),
 which requires explicit operator approval to publish dependency completion.

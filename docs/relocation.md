@@ -52,7 +52,7 @@ done TASK를 kind로 이동하면 그 카드는 더 이상 후속 TASK의 완료
 claim release도 차단되며, 이동 완료 후 정확한 owner/token으로 해제할 수 있습니다.
 최초 target이 존재하면 내용이 같아도 충돌입니다. 기존 파일을 덮어쓰지 않습니다.
 
-성공 JSON은 schemaVersion/requestId/id/source/target/status/changed를 포함합니다.
+성공 JSON은 최상위 outputVersion:1, requestId/id/source/target/status/changed를 포함합니다.
 status=completed는 이동 요청의 완료일 뿐입니다. changed는 **본문 bytes 보정 여부**이며,
 false여도 경로는 이동합니다. 출력 실패 후에도 이동은 이미 완료됐을 수 있습니다.
 

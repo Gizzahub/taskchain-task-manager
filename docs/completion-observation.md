@@ -13,7 +13,7 @@ taskchain-task-manager validate-completion examples/completion/P1-observation.md
 
 ## JSON 해석
 
-- schemaVersion은 1, scope는 `card-completion-observation`입니다.
+- 최상위 outputVersion은 1, scope는 `card-completion-observation`입니다.
 - cardValid는 명시 규칙에 대한 기존 카드 구조 검사 결과입니다.
 - criteriaComplete는 완료 조건이 하나 이상 있고, 지원하는 문법이며, 모두 checked인 경우에만 true입니다.
   메타데이터 오류와 별도로 계산하므로 cardValid=false, criteriaComplete=true도 가능합니다.
@@ -21,7 +21,7 @@ taskchain-task-manager validate-completion examples/completion/P1-observation.md
 - criteria에는 text/checked 관측값, findings에는 severity/field/message가 담깁니다.
 - evidenceValidation과 boardValidation은 항상 `not_evaluated`입니다.
 
-정상 파싱된 미완료·규칙 위반 카드는 JSON과 exit 1을 반환합니다. 성공은 exit 0입니다.
+정상 파싱된 미완료·규칙 위반 카드는 JSON과 exit 3을 반환합니다. 성공은 exit 0입니다.
 읽기·구문·규칙 설정 오류는 stdout 없이 stderr와 exit 1, 잘못된 인자는 exit 2입니다.
 출력 도중 오류도 exit 1이며 부분 출력이 있을 수 있습니다.
 

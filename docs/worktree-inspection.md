@@ -8,7 +8,7 @@
 그 UTF-8 byte에 대한 SHA-256 `namespaceKey`도 반환한다. 같은 Git common directory와 같은
 보드 경로가 한 namespace를 식별한다. key만으로 다른 저장소까지 같은 보드라고 판단하지 않는다.
 
-출력에는 schemaVersion, repository, commonDirectory, board, namespaceKey, worktrees,
+출력에는 최상위 outputVersion:1, repository, commonDirectory, board, namespaceKey, worktrees,
 sharedReadiness가 있다. worktree별 path/head/branch 또는 detached/bare 상태와
 locked/prunable 여부·사유를 보존한다. 경로순으로 정렬하며 최대 256개다.
 

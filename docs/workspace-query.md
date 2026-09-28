@@ -40,6 +40,8 @@ taskchain-task-manager query-workspace --manifest workspace.json --kind intent -
 카드 결과는 저장소 이름과 기존 카드 목록의 작은 view를 돌려줍니다. 등록 context는
 정확한 종류·ID·revision 하나를 조회하며, 기존 등록 결과의 canonical 문서와 digest를
 돌려줍니다. 카드를 Intent/Batch에 자동 연결하거나 최신 revision을 추측하지 않습니다.
+성공 stdout의 최상위 `outputVersion`은 `1`입니다. manifest와 반환된 canonical 문서는
+각각의 저장 형식에 따른 `schemaVersion`을 유지합니다.
 
 선택한 범위에서 결과가 없거나 둘 이상의 저장소가 같은 ID를 가지면 명령은 오류를
 내고 성공 JSON을 출력하지 않습니다. 같은 내용이어도 서로 다른 저장소의 결과는

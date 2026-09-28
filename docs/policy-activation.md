@@ -56,7 +56,7 @@ local/common 무변경을 검증했다. 모든 과거 버전·외부 편집기�
 특히 local pending 기록만 게시된 초기 구간은 구버전 writer가 모른다. 그 사이 파일이
 변경되면 재개가 충돌로 거부한다. 따라서 혼합 버전 writer 운용은 지원하지 않는다.
 
-성공 JSON은 `schemaVersion:1`, `authorityId`, `scope`(local/shared), `digest`,
+성공 JSON은 최상위 `outputVersion:1`, `authorityId`, `scope`(local/shared), `digest`,
 `status:"completed"`, `replayed`, `boards`를 포함한다. `boards`는 이번 채택·재개에서
 확인한 보드 수이며 완료 재호출은 1이다. 이는 테스트·리뷰·Intent 달성 증거가 아니다.
 exit 0은 성공, 1은 입력·상태·게시·출력 오류, 2는 CLI 사용 오류다. 진단은 stderr에 쓴다.

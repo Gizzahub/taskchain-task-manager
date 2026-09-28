@@ -114,7 +114,8 @@ lock 디렉터리를 만들지 않습니다. 입력 한도와 동시 변경 경�
 숫자·객체·빈 문자열 항목은 오류입니다. 필드 없음/null/빈 목록은 의존성 없음입니다.
 
 `ready`는 바로 아래 `todo/`의 pending 카드 중 모든 선행 카드가 바로 아래 `done/`에
-있는 항목을 경로순으로 반환합니다. 없으면 `[]`입니다. 우선순위 정렬은 아직 없습니다.
+있는 항목을 경로순으로 반환합니다. 없으면 `{"outputVersion":1,"entries":[]}`입니다.
+우선순위 정렬은 아직 없습니다.
 kind 디렉터리(plan/issue 등)·archive·중첩 카드의 상태 표기만으로 완료를 인정하지 않습니다.
 `ready`와 `create`는 전체 그래프의 누락 참조·중복 의존성·자기참조·순환을 거부합니다.
 별도의 순환이 있어도 일부 정상 후보만 반환하지 않습니다. `list`는 관계 오류를 진단하기
@@ -159,7 +160,8 @@ staged write 뒤 rename으로 교체하며 전원 손실이나 잠금을 무시�
 
 ## 출력 계약 (초기, 안정화 전)
 
-- 성공: exit 0, stdout에 JSON 한 개. config 없는 `validate`는 `{"valid":true}`인 구문 검사입니다.
+- 성공: exit 0, stdout에 JSON 한 개. config 없는 `validate`는
+  `{"outputVersion":1,"valid":true}`인 구문 검사입니다.
 - `validate FILE --config RULES --json`은 명시적 단일 카드 규칙과 criteria를 검사합니다.
   규칙 위반은 exit 3과 JSON findings를 반환하며 전체 보드나 완료 증거의 검증이 아닙니다.
 - 오류: exit 1, stderr에 원인. stdout이 계약상 비어 있는 것은 아닙니다 — 결과 JSON을
@@ -187,9 +189,9 @@ staged write 뒤 rename으로 교체하며 전원 손실이나 잠금을 무시�
 파싱해서 쓰고, 안정적인 Go API가 필요하면 그 요구를 이슈로 남겨 주세요 — 지금은 그런
 표면이 존재하지 않습니다.
 
-`schemaVersion`을 호환 신호로 읽지 마십시오. 이 이름은 현재 stdout 결과 문서와 온디스크
-저널 양쪽에 쓰이고 두 축의 숫자가 이미 다릅니다. 출력 포맷 전용 version은 별도 이름으로
-분리하는 중입니다.
+JSON stdout 문서의 최상위 `outputVersion`이 출력 포맷 버전입니다. 현재 값은 `1`입니다.
+`schemaVersion`과 `schema-version`은 입력·중첩·저장 문서의 각 schema를 나타내며
+stdout 포맷의 호환 신호가 아닙니다. 각 문서 schema와 출력 버전은 독립적으로 변경됩니다.
 
 내부 codec은 원본 byte를 보존하고 본문의 첫 Status 셀만 변경할 수 있습니다.
 상태 patch는 소유권을 확인하는 `transition`에서 사용하며 안정적인 외부 Go API는 아닙니다.

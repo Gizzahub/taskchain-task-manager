@@ -41,7 +41,7 @@ taskchain-task-manager validate-policy policy.yaml --json
 
 ## 출력과 digest
 
-성공 JSON은 `schemaVersion:1`, `scope:"policy-document"`, `valid:true`, `activated:false`,
+성공 JSON은 최상위 `outputVersion:1`, `scope:"policy-document"`, `valid:true`, `activated:false`,
 `boardValidation:"not_evaluated"`, `canonical`, `digest`를 포함한다.
 `canonical`은 같은 정책 schema의 compact JSON 객체다. zone·전이 source·target을 정렬하고
 생략된 기본 graph를 명시한다. `digest`는 이 compact JSON bytes의 SHA-256 소문자 hex다.
