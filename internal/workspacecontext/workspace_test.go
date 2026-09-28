@@ -197,6 +197,20 @@ func TestManifestBounds(t *testing.T) {
 	if err := validateManifest(longID); err == nil {
 		t.Fatal("accepted ID byte bound")
 	}
+	exactRepos := make([]Repository, MaxRepositories)
+	for i := range exactRepos {
+		exactRepos[i] = Repository{RepositoryID: fmt.Sprintf("r%d", i), Root: "/tmp", Board: "tasks"}
+	}
+	if err := validateManifest(Manifest{SchemaVersion: 1, Repositories: exactRepos, CardIDs: []string{"TASK-1"}}); err != nil {
+		t.Fatalf("rejected exact repository bound: %v", err)
+	}
+	exactIDs := make([]string, MaxQueryIDs)
+	for i := range exactIDs {
+		exactIDs[i] = fmt.Sprintf("TASK-%d", i+1)
+	}
+	if err := validateManifest(Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: "/tmp", Board: "tasks"}}, CardIDs: exactIDs}); err != nil {
+		t.Fatalf("rejected exact query bound: %v", err)
+	}
 }
 
 func TestTypedManifestRoundTripAndDirectLookupValidation(t *testing.T) {
@@ -281,10 +295,16 @@ func TestBoardScanBounds(t *testing.T) {
 	if err := os.MkdirAll(cardDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i <= MaxCardsPerBoard; i++ {
+	for i := 0; i < MaxCardsPerBoard; i++ {
 		if err := os.WriteFile(filepath.Join(cardDir, fmt.Sprintf("%d.md", i)), nil, 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := preflightBoard(filepath.Join(tooManyCards, "tasks")); err != nil {
+		t.Fatalf("rejected exact card bound: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cardDir, fmt.Sprintf("%d.md", MaxCardsPerBoard)), nil, 0o644); err != nil {
+		t.Fatal(err)
 	}
 	if err := preflightBoard(filepath.Join(tooManyCards, "tasks")); err == nil {
 		t.Fatal("accepted card bound")
@@ -294,10 +314,16 @@ func TestBoardScanBounds(t *testing.T) {
 	if err := os.Mkdir(nodeDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i <= MaxBoardNodes; i++ {
+	for i := 0; i < MaxBoardNodes-1; i++ {
 		if err := os.WriteFile(filepath.Join(nodeDir, fmt.Sprintf("%d.txt", i)), nil, 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := preflightBoard(nodeDir); err != nil {
+		t.Fatalf("rejected exact node bound: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(nodeDir, fmt.Sprintf("%d.txt", MaxBoardNodes)), nil, 0o644); err != nil {
+		t.Fatal(err)
 	}
 	if err := preflightBoard(nodeDir); err == nil {
 		t.Fatal("accepted node bound")
