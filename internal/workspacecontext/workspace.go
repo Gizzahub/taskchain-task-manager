@@ -45,7 +45,11 @@ type Manifest struct {
 	Repositories  []Repository `json:"repositories"`
 	CardIDs       []string     `json:"cardIds"`
 }
-type Repository struct{ RepositoryID, Root, Board string }
+type Repository struct {
+	RepositoryID string `json:"repositoryId"`
+	Root         string `json:"root"`
+	Board        string `json:"board"`
+}
 
 func (r *Repository) UnmarshalJSON(raw []byte) error {
 	if err := exactObjectKeys(raw, map[string]bool{"repositoryId": true, "root": true, "board": true}); err != nil {
@@ -100,13 +104,6 @@ func (m *Manifest) UnmarshalJSON(raw []byte) error {
 }
 
 func validateManifest(m Manifest) error {
-	encoded, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("encode manifest bounds: %w", err)
-	}
-	if len(encoded) > MaxManifestBytes {
-		return fmt.Errorf("manifest exceeds %d bytes", MaxManifestBytes)
-	}
 	if m.SchemaVersion != SchemaVersion {
 		return fmt.Errorf("unsupported manifest schemaVersion %d", m.SchemaVersion)
 	}
@@ -139,6 +136,13 @@ func validateManifest(m Manifest) error {
 			return fmt.Errorf("duplicate repositoryId %q", r.RepositoryID)
 		}
 		seen[r.RepositoryID] = true
+	}
+	encoded, err := json.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("encode manifest bounds: %w", err)
+	}
+	if len(encoded) > MaxManifestBytes {
+		return fmt.Errorf("manifest exceeds %d bytes", MaxManifestBytes)
 	}
 	return nil
 }

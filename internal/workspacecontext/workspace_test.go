@@ -136,6 +136,10 @@ func TestFingerprintDetectsSameContentReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	old := filepath.Join(t.TempDir(), "one.md.old")
+	dirInfo, err := os.Stat(filepath.Dir(cardPath))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Rename(cardPath, old); err != nil {
 		t.Fatal(err)
 	}
@@ -143,6 +147,9 @@ func TestFingerprintDetectsSameContentReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.Chtimes(cardPath, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(filepath.Dir(cardPath), dirInfo.ModTime(), dirInfo.ModTime()); err != nil {
 		t.Fatal(err)
 	}
 	after, err := fingerprint(filepath.Join(root, "tasks"))
@@ -169,7 +176,12 @@ func TestManifestRejectsDuplicateIdentityAndUnsafeBoard(t *testing.T) {
 }
 
 func TestManifestBounds(t *testing.T) {
-	if _, err := DecodeManifest(bytes.Repeat([]byte(" "), MaxManifestBytes+1)); err == nil {
+	base := []byte(`{"schemaVersion":1,"repositories":[{"repositoryId":"a","root":"/tmp","board":"tasks"}],"cardIds":["TASK-1"]}`)
+	accepted := append(append([]byte{}, base...), bytes.Repeat([]byte(" "), MaxManifestBytes-len(base))...)
+	if _, err := DecodeManifest(accepted); err != nil {
+		t.Fatalf("rejected exact manifest bound: %v", err)
+	}
+	if _, err := DecodeManifest(append(accepted, ' ')); err == nil {
 		t.Fatal("accepted oversized manifest")
 	}
 	tooManyRepos := Manifest{SchemaVersion: 1, Repositories: make([]Repository, MaxRepositories+1), CardIDs: []string{"TASK-1"}}
@@ -186,6 +198,27 @@ func TestManifestBounds(t *testing.T) {
 	}
 }
 
+func TestTypedManifestRoundTripAndDirectLookupValidation(t *testing.T) {
+	root := testRepo(t)
+	original := Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: root, Board: "tasks"}}, CardIDs: []string{"TASK-1"}}
+	raw, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := DecodeManifest(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Repositories[0].RepositoryID != "a" {
+		t.Fatal("repository JSON tags did not round-trip")
+	}
+	for _, invalid := range []Manifest{{SchemaVersion: 2, Repositories: original.Repositories, CardIDs: original.CardIDs}, {SchemaVersion: 1, Repositories: nil, CardIDs: original.CardIDs}, {SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: root, Board: "../tasks"}}, CardIDs: original.CardIDs}, {SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: root, Board: "tasks"}}, CardIDs: []string{"TASK-" + string([]byte{0xff})}}} {
+		if _, err := Lookup(context.Background(), invalid); err == nil {
+			t.Fatal("direct Lookup accepted invalid manifest")
+		}
+	}
+}
+
 func TestBoardScanBounds(t *testing.T) {
 	tooLarge := t.TempDir()
 	if err := os.Mkdir(filepath.Join(tooLarge, "tasks"), 0o755); err != nil {
@@ -194,6 +227,15 @@ func TestBoardScanBounds(t *testing.T) {
 	large := filepath.Join(tooLarge, "tasks", "large.bin")
 	if err := os.WriteFile(large, []byte{0}, 0o644); err != nil {
 		t.Fatal(err)
+	}
+	if err := os.Truncate(large, MaxBoardBytes); err != nil {
+		t.Fatal(err)
+	}
+	if err := preflightBoard(filepath.Join(tooLarge, "tasks")); err != nil {
+		t.Fatalf("rejected exact board byte bound: %v", err)
+	}
+	if _, err := fingerprint(filepath.Join(tooLarge, "tasks")); err != nil {
+		t.Fatalf("fingerprint rejected exact board byte bound: %v", err)
 	}
 	if err := os.Truncate(large, MaxBoardBytes+1); err != nil {
 		t.Fatal(err)
