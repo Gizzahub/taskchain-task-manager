@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -25,9 +26,12 @@ type View struct {
 // Document owns the exact source bytes and a derived view. Bytes never
 // serializes the view: unknown metadata and prose belong to the source.
 type Document struct {
-	raw        []byte
-	view       View
-	needsHuman bool
+	raw             []byte
+	view            View
+	needsHuman      bool
+	executionMode   string
+	allowedPaths    []string
+	hasAllowedPaths bool
 }
 
 // Parse validates a card's leading YAML frontmatter and returns a document
@@ -56,8 +60,19 @@ func Parse(raw []byte) (*Document, error) {
 	if err != nil {
 		return nil, err
 	}
+	executionMode, err := frontmatterExecutionMode(node.Content[0])
+	if err != nil {
+		return nil, err
+	}
+	allowedPaths, hasAllowedPaths, err := frontmatterAllowedPaths(node.Content[0])
+	if err != nil {
+		return nil, err
+	}
 	d := &Document{raw: append([]byte(nil), raw...)}
 	d.needsHuman = needsHuman
+	d.executionMode = executionMode
+	d.allowedPaths = allowedPaths
+	d.hasAllowedPaths = hasAllowedPaths
 	d.view = View{
 		ID:    fmString(metadata["id"]),
 		Title: fmString(metadata["title"]), Status: fmString(metadata["status"]),
@@ -86,6 +101,22 @@ func (d *Document) View() View { return d.Snapshot("") }
 // Parse rejects a declared value that is not a YAML boolean, so callers never
 // mistake malformed metadata for agent-runnable work.
 func (d *Document) NeedsHuman() bool { return d.needsHuman }
+
+// ExecutionMode reports how the card may be executed. It defaults to
+// implementation when execution-mode is omitted.
+func (d *Document) ExecutionMode() string { return d.executionMode }
+
+// AllowedPaths reports the declared allowed-paths value and whether it was
+// present in the card frontmatter. The returned slice is safe for callers to
+// modify.
+func (d *Document) AllowedPaths() ([]string, bool) {
+	if !d.hasAllowedPaths {
+		return nil, false
+	}
+	paths := make([]string, len(d.allowedPaths))
+	copy(paths, d.allowedPaths)
+	return paths, true
+}
 
 // Bytes returns a defensive copy of the exact input bytes.
 func (d *Document) Bytes() []byte { return append([]byte(nil), d.raw...) }
@@ -213,6 +244,149 @@ func frontmatterBool(root *yaml.Node, metadata map[string]any, name string) (boo
 		return false, fmt.Errorf("card frontmatter %q must be a YAML boolean", name)
 	}
 	return boolean, nil
+}
+
+func frontmatterExecutionMode(root *yaml.Node) (string, error) {
+	nodes, err := effectiveFrontmatterNodes(root, "execution-mode")
+	if err != nil {
+		return "", err
+	}
+	if len(nodes) == 0 {
+		return "implementation", nil
+	}
+	var mode string
+	for _, node := range nodes {
+		value, err := executionModeValue(node)
+		if err != nil {
+			return "", err
+		}
+		if mode != "" && mode != value {
+			return "", fmt.Errorf("conflicting effective card frontmatter field %q", "execution-mode")
+		}
+		mode = value
+	}
+	return mode, nil
+}
+
+func executionModeValue(node *yaml.Node) (string, error) {
+	node = dereferenceYAMLNode(node)
+	if node.Kind != yaml.ScalarNode || node.Tag != "!!str" {
+		return "", fmt.Errorf("card frontmatter %q must be one of implementation, external, decision", "execution-mode")
+	}
+	switch node.Value {
+	case "implementation", "external", "decision":
+		return node.Value, nil
+	default:
+		return "", fmt.Errorf("card frontmatter %q must be one of implementation, external, decision", "execution-mode")
+	}
+}
+
+func frontmatterAllowedPaths(root *yaml.Node) ([]string, bool, error) {
+	nodes, err := effectiveFrontmatterNodes(root, "allowed-paths")
+	if err != nil {
+		return nil, false, err
+	}
+	if len(nodes) == 0 {
+		return nil, false, nil
+	}
+	var paths []string
+	for _, node := range nodes {
+		value, err := allowedPathsValue(node)
+		if err != nil {
+			return nil, false, err
+		}
+		if paths != nil && !reflect.DeepEqual(paths, value) {
+			return nil, false, fmt.Errorf("conflicting effective card frontmatter field %q", "allowed-paths")
+		}
+		paths = value
+	}
+	copyPaths := make([]string, len(paths))
+	copy(copyPaths, paths)
+	return copyPaths, true, nil
+}
+
+func allowedPathsValue(node *yaml.Node) ([]string, error) {
+	node = dereferenceYAMLNode(node)
+	if node.Kind != yaml.SequenceNode || node.Tag != "!!seq" {
+		return nil, fmt.Errorf("card frontmatter %q must be a YAML sequence of nonempty strings", "allowed-paths")
+	}
+	paths := make([]string, 0, len(node.Content))
+	for i, item := range node.Content {
+		item = dereferenceYAMLNode(item)
+		if item.Kind != yaml.ScalarNode || item.Tag != "!!str" || strings.TrimSpace(item.Value) == "" {
+			return nil, fmt.Errorf("card frontmatter %q item %d must be a nonempty string", "allowed-paths", i)
+		}
+		paths = append(paths, item.Value)
+	}
+	return paths, nil
+}
+
+// effectiveFrontmatterNodes returns the values that would apply through YAML
+// merges. It retains direct and inherited values so strict fields can reject
+// ambiguity rather than silently accepting yaml.v3's merge precedence.
+func effectiveFrontmatterNodes(mapping *yaml.Node, name string) ([]*yaml.Node, error) {
+	mapping = dereferenceYAMLNode(mapping)
+	if mapping.Kind != yaml.MappingNode {
+		return nil, errors.New("card frontmatter must be a YAML mapping")
+	}
+	var direct []*yaml.Node
+	var merges []*yaml.Node
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		key, value := mapping.Content[i], mapping.Content[i+1]
+		if key.Kind != yaml.ScalarNode {
+			continue
+		}
+		switch key.Value {
+		case name:
+			direct = append(direct, value)
+		case "<<":
+			merges = append(merges, value)
+		}
+	}
+	if len(direct) > 1 {
+		return nil, fmt.Errorf("duplicate card frontmatter field %q", name)
+	}
+	inherited := make([]*yaml.Node, 0, len(direct))
+	inherited = append(inherited, direct...)
+	for _, merge := range merges {
+		values, err := mergedFrontmatterNodes(merge, name)
+		if err != nil {
+			return nil, err
+		}
+		inherited = append(inherited, values...)
+	}
+	return inherited, nil
+}
+
+func mergedFrontmatterNodes(node *yaml.Node, name string) ([]*yaml.Node, error) {
+	node = dereferenceYAMLNode(node)
+	switch node.Kind {
+	case yaml.MappingNode:
+		return effectiveFrontmatterNodes(node, name)
+	case yaml.SequenceNode:
+		var values []*yaml.Node
+		for _, item := range node.Content {
+			item = dereferenceYAMLNode(item)
+			if item.Kind != yaml.MappingNode {
+				return nil, fmt.Errorf("malformed YAML merge for card frontmatter field %q", name)
+			}
+			inherited, err := effectiveFrontmatterNodes(item, name)
+			if err != nil {
+				return nil, err
+			}
+			values = append(values, inherited...)
+		}
+		return values, nil
+	default:
+		return nil, fmt.Errorf("malformed YAML merge for card frontmatter field %q", name)
+	}
+}
+
+func dereferenceYAMLNode(node *yaml.Node) *yaml.Node {
+	for node != nil && node.Kind == yaml.AliasNode {
+		node = node.Alias
+	}
+	return node
 }
 
 func fmStrings(v any) ([]string, error) {

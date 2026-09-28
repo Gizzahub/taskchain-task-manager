@@ -72,8 +72,8 @@ func TestQueueSeparatesHumanOnlyCardsWithoutChangingReady(t *testing.T) {
 		name string
 		raw  string
 	}{
-		{name: "agent.md", raw: "---\nid: TASK-1\ntitle: Agent\n---\n"},
-		{name: "human.md", raw: "---\nid: TASK-2\ntitle: Human\nneeds-human: true\n---\n"},
+		{name: "agent.md", raw: "---\nid: TASK-1\ntitle: Agent\nallowed-paths: [internal/taskstore/agent.go]\n---\n"},
+		{name: "human.md", raw: "---\nid: TASK-2\ntitle: Human\nneeds-human: true\nallowed-paths: [internal/taskstore/human.go]\n---\n"},
 	} {
 		if err := os.WriteFile(filepath.Join(root, "todo", tc.name), []byte(tc.raw), 0o644); err != nil {
 			t.Fatal(err)
@@ -112,6 +112,91 @@ func TestQueueSeparatesHumanOnlyCardsWithoutChangingReady(t *testing.T) {
 	if err != nil || humanOnly.RunnableCount != 1 || humanOnly.AgentRunnableCount != 0 ||
 		len(humanOnly.AgentRunnable) != 0 || !strings.Contains(string(encoded), `"agentRunnable":[]`) {
 		t.Fatalf("human-only queue = %+v, JSON = %s, err = %v", humanOnly, encoded, err)
+	}
+}
+
+func TestQueueRoutesScopedWorkAndP0Issues(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "tasks")
+	if err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		path string
+		raw  string
+	}{
+		{"todo/agent.md", "---\nid: TASK-1\ntitle: Agent\nallowed-paths: [internal/taskstore/queue_routing.go]\n---\n"},
+		{"todo/human.md", "---\nid: TASK-2\ntitle: Human implementation\nneeds-human: true\nallowed-paths: [internal/taskstore/store.go]\n---\n"},
+		{"todo/decision.md", "---\nid: TASK-5\ntitle: Choose direction\nexecution-mode: decision\nneeds-human: true\n---\n"},
+		{"issue/p0.md", "---\nid: ISSUE-3\ntitle: Escalate\nstatus: open\npriority: P0\nexecution-mode: external\nneeds-human: true\n---\n"},
+		{"issue/p1.md", "---\nid: ISSUE-4\ntitle: Deferred\nstatus: pending\npriority: P1\nexecution-mode: external\nneeds-human: true\n---\n"},
+		{"issue/done.md", "---\nid: ISSUE-6\ntitle: Resolved\nstatus: done\npriority: P0\nexecution-mode: external\nneeds-human: true\n---\n"},
+	} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, tc.path)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, tc.path), []byte(tc.raw), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	queue, err := Queue(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if queue.RunnableCount != 4 || queue.AgentRunnableCount != 1 || len(queue.Runnable) != 4 || len(queue.AgentRunnable) != 1 {
+		t.Fatalf("queue = %+v", queue)
+	}
+	if got := queue.AgentRunnable[0]; got.Card.ID != "TASK-1" || got.ExecutionMode != "implementation" || !reflect.DeepEqual(got.AllowedPaths, []string{"internal/taskstore/queue_routing.go"}) {
+		t.Fatalf("agent item = %+v", got)
+	}
+	if got := queue.Runnable[0]; got.Card.ID != "ISSUE-3" || got.ExecutionMode != "external" || !got.NeedsHuman || !reflect.DeepEqual(got.AllowedPaths, []string{}) {
+		t.Fatalf("P0 issue = %+v", got)
+	}
+	if got := queue.Runnable[2]; got.Card.ID != "TASK-5" || got.ExecutionMode != "decision" || !got.NeedsHuman || !reflect.DeepEqual(got.AllowedPaths, []string{}) {
+		t.Fatalf("decision = %+v", got)
+	}
+	for _, item := range queue.Runnable {
+		if item.Card.ID == "ISSUE-4" || item.Card.ID == "ISSUE-6" {
+			t.Fatalf("ineligible issue was admitted: %+v", queue)
+		}
+	}
+}
+
+func TestQueueRejectsInvalidRouteWithoutPartialProjection(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		raw  string
+	}{
+		{"unscoped implementation", "---\nid: TASK-1\ntitle: Unscoped\n---\n"},
+		{"tasks subtree", "---\nid: TASK-1\ntitle: Board write\nallowed-paths: [tasks/todo/TASK-1.md]\n---\n"},
+		{"absolute path", "---\nid: TASK-1\ntitle: Absolute\nallowed-paths: [/etc/passwd]\n---\n"},
+		{"parent traversal", "---\nid: TASK-1\ntitle: Traversal\nallowed-paths: [../secret]\n---\n"},
+		{"glob", "---\nid: TASK-1\ntitle: Glob\nallowed-paths: ['internal/*.go']\n---\n"},
+		{"glob close bracket", "---\nid: TASK-1\ntitle: Glob\nallowed-paths: ['internal/].go']\n---\n"},
+		{"backslash", "---\nid: TASK-1\ntitle: Backslash\nallowed-paths: ['internal\\\\file.go']\n---\n"},
+		{"whitespace", "---\nid: TASK-1\ntitle: Whitespace\nallowed-paths: ['internal/task store.go']\n---\n"},
+		{"external with paths", "---\nid: TASK-1\ntitle: External\nexecution-mode: external\nneeds-human: true\nallowed-paths: [internal/taskstore/store.go]\n---\n"},
+		{"decision without human", "---\nid: TASK-1\ntitle: Decide\nexecution-mode: decision\n---\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), "tasks")
+			if err := Init(root); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, "todo", "card.md"), []byte(tc.raw), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			before := boardBytes(t, root)
+			projection, err := Queue(root)
+			if err == nil || projection.Runnable != nil || projection.AgentRunnable != nil || projection.RunnableCount != 0 || projection.AgentRunnableCount != 0 {
+				t.Fatalf("Queue() = %+v, %v", projection, err)
+			}
+			if !reflect.DeepEqual(before, boardBytes(t, root)) {
+				t.Fatal("Queue changed board after rejecting route")
+			}
+		})
 	}
 }
 

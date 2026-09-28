@@ -19,9 +19,12 @@ import (
 )
 
 type Entry struct {
-	Path       string    `json:"path"`
-	Card       card.View `json:"card"`
-	NeedsHuman bool      `json:"-"`
+	Path            string    `json:"path"`
+	Card            card.View `json:"card"`
+	NeedsHuman      bool      `json:"-"`
+	ExecutionMode   string    `json:"-"`
+	AllowedPaths    []string  `json:"-"`
+	HasAllowedPaths bool      `json:"-"`
 }
 
 // QueueEntry is a runnable card annotated with its execution audience.
@@ -29,7 +32,9 @@ type Entry struct {
 // list and ready output remains byte-compatible.
 type QueueEntry struct {
 	Entry
-	NeedsHuman bool `json:"needsHuman"`
+	NeedsHuman    bool     `json:"needsHuman"`
+	ExecutionMode string   `json:"executionMode"`
+	AllowedPaths  []string `json:"allowedPaths"`
 }
 
 // QueueProjection separates all structurally runnable cards from the subset
@@ -411,9 +416,9 @@ func Ready(dir string) (entries []Entry, err error) {
 	return readyForBoard(r, all, ledger, policy)
 }
 
-// Queue returns a read-only projection of structural and agent-runnable work.
-// It uses the same readiness rules as Ready and does not change claim or
-// transition eligibility.
+// Queue returns a read-only projection of dependency-ready work plus active
+// P0 issue disposition candidates. It does not change claim or transition
+// eligibility.
 func Queue(dir string) (projection QueueProjection, err error) {
 	session, err := openBoardSession(dir)
 	if err != nil {
@@ -440,12 +445,27 @@ func Queue(dir string) (projection QueueProjection, err error) {
 	if err != nil {
 		return QueueProjection{}, err
 	}
-	projection.Runnable = make([]QueueEntry, 0, len(runnable))
-	projection.AgentRunnable = make([]QueueEntry, 0, len(runnable))
-	for _, entry := range runnable {
-		item := QueueEntry{Entry: entry, NeedsHuman: entry.NeedsHuman}
+	candidates := append([]Entry(nil), runnable...)
+	for _, entry := range all {
+		// Issue cards are disposition observations, not workflow tasks. Their
+		// frontmatter status is intentionally unconstrained by the issue zone,
+		// so classify them by their declared location and ISSUE identity.
+		if entryZone(entry.Path, policy) == "issue" && strings.HasPrefix(entry.Card.ID, "ISSUE-") && entry.Card.Priority == "P0" && entry.Card.Status != policy.DoneZone() {
+			candidates = append(candidates, entry)
+		}
+	}
+	// Ready entries and issue candidates arrive from independently derived
+	// lists. Sort the combined result so queue order is stable by board path.
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].Path < candidates[j].Path })
+	projection.Runnable = make([]QueueEntry, 0, len(candidates))
+	projection.AgentRunnable = make([]QueueEntry, 0, len(candidates))
+	for _, entry := range candidates {
+		item, err := queueEntry(entry)
+		if err != nil {
+			return QueueProjection{}, err
+		}
 		projection.Runnable = append(projection.Runnable, item)
-		if !item.NeedsHuman {
+		if item.ExecutionMode == "implementation" && !item.NeedsHuman {
 			projection.AgentRunnable = append(projection.AgentRunnable, item)
 		}
 	}
@@ -632,7 +652,8 @@ func scanDirExceptWithPolicy(r *os.Root, dir string, out *[]Entry, ids map[strin
 			return fmt.Errorf("duplicate task ID %s in %s and %s", view.ID, old, path)
 		}
 		ids[key] = path
-		*out = append(*out, Entry{Path: filepath.ToSlash(path), Card: view, NeedsHuman: doc.NeedsHuman()})
+		allowedPaths, hasAllowedPaths := doc.AllowedPaths()
+		*out = append(*out, Entry{Path: filepath.ToSlash(path), Card: view, NeedsHuman: doc.NeedsHuman(), ExecutionMode: doc.ExecutionMode(), AllowedPaths: allowedPaths, HasAllowedPaths: hasAllowedPaths})
 		return nil
 	})
 }

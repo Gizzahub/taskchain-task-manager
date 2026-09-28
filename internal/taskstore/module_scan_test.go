@@ -89,6 +89,26 @@ func TestListLockedWithPolicyScansModulesAndPreservesZoneSemantics(t *testing.T)
 	}
 }
 
+func TestListLockedWithPolicyCarriesModuleRoutingMetadata(t *testing.T) {
+	t.Parallel()
+	board := claimBoard(t)
+	path := filepath.Join(board, "backend", "todo", "TASK-2.md")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	raw := []byte("---\nid: TASK-2\ntitle: Routed\nexecution-mode: implementation\nallowed-paths: [internal/taskstore/store.go]\n---\n")
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := listWithModulePolicy(t, board, moduleScanPolicy(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 || entries[0].ExecutionMode != "implementation" || !entries[0].HasAllowedPaths || len(entries[0].AllowedPaths) != 1 || entries[0].AllowedPaths[0] != "internal/taskstore/store.go" {
+		t.Fatalf("entries = %+v", entries)
+	}
+}
+
 func TestListLockedWithPolicyRejectsModuleShapeAndDuplicates(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {

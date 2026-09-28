@@ -2,6 +2,7 @@ package card
 
 import (
 	"bytes"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -82,6 +83,107 @@ func TestParseRejectsMalformedNeedsHuman(t *testing.T) {
 	_, err = Parse([]byte("---\nid: TASK-1\ndefaults: &defaults\n  needs-human: maybe\n<<: *defaults\n---\n"))
 	if err == nil || !strings.Contains(err.Error(), "needs-human") {
 		t.Fatalf("merged malformed needs-human error = %v", err)
+	}
+}
+
+func TestParseExecutionMode(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "default", raw: "---\nid: TASK-1\n---\n", want: "implementation"},
+		{name: "external", raw: "---\nid: TASK-1\nexecution-mode: external\n---\n", want: "external"},
+		{name: "merged", raw: "---\nid: TASK-1\ndefaults: &defaults\n  execution-mode: decision\n<<: *defaults\n---\n", want: "decision"},
+		{name: "direct matches merge", raw: "---\nid: TASK-1\ndefaults: &defaults\n  execution-mode: external\n<<: *defaults\nexecution-mode: external\n---\n", want: "external"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc, err := Parse([]byte(tc.raw))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := doc.ExecutionMode(); got != tc.want {
+				t.Fatalf("ExecutionMode() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParseRejectsInvalidExecutionMode(t *testing.T) {
+	for _, value := range []string{"null", "true", "[external]", "manual", "'external '"} {
+		t.Run(value, func(t *testing.T) {
+			_, err := Parse([]byte("---\nid: TASK-1\nexecution-mode: " + value + "\n---\n"))
+			if err == nil || !strings.Contains(err.Error(), "execution-mode") {
+				t.Fatalf("Parse() error = %v, want execution-mode error", err)
+			}
+		})
+	}
+	_, err := Parse([]byte("---\nid: TASK-1\ndefault-a: &a\n  execution-mode: external\ndefault-b: &b\n  execution-mode: decision\n<<: [*a, *b]\n---\n"))
+	if err == nil || !strings.Contains(err.Error(), "conflicting effective") {
+		t.Fatalf("conflicting merged execution-mode error = %v", err)
+	}
+	_, err = Parse([]byte("---\nid: TASK-1\ndefaults: &defaults\n  execution-mode: decision\n<<: *defaults\nexecution-mode: external\n---\n"))
+	if err == nil || !strings.Contains(err.Error(), "conflicting effective") {
+		t.Fatalf("direct and merged execution-mode conflict error = %v", err)
+	}
+	_, err = Parse([]byte("---\nid: TASK-1\nexecution-mode: external\nexecution-mode: decision\n---\n"))
+	if err == nil || !strings.Contains(err.Error(), "execution-mode") {
+		t.Fatalf("duplicate execution-mode error = %v", err)
+	}
+}
+
+func TestParseAllowedPaths(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		raw     string
+		want    []string
+		present bool
+	}{
+		{name: "absent", raw: "---\nid: TASK-1\n---\n", present: false},
+		{name: "empty", raw: "---\nid: TASK-1\nallowed-paths: []\n---\n", want: []string{}, present: true},
+		{name: "values", raw: "---\nid: TASK-1\nallowed-paths: [internal/card, docs]\n---\n", want: []string{"internal/card", "docs"}, present: true},
+		{name: "preserves values", raw: "---\nid: TASK-1\nallowed-paths: [' internal/card ']\n---\n", want: []string{" internal/card "}, present: true},
+		{name: "merged", raw: "---\nid: TASK-1\ndefaults: &defaults\n  allowed-paths: [internal/card]\n<<: *defaults\n---\n", want: []string{"internal/card"}, present: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc, err := Parse([]byte(tc.raw))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, present := doc.AllowedPaths()
+			if present != tc.present || !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("AllowedPaths() = %#v, %v; want %#v, %v", got, present, tc.want, tc.present)
+			}
+			if len(got) > 0 {
+				got[0] = "mutated"
+				if next, _ := doc.AllowedPaths(); next[0] == "mutated" {
+					t.Fatal("AllowedPaths returned internal slice")
+				}
+			}
+		})
+	}
+}
+
+func TestParseRejectsInvalidAllowedPaths(t *testing.T) {
+	for _, value := range []string{"null", "internal/card", "{}", "[internal/card, 1]", "['']", "['   ']"} {
+		t.Run(value, func(t *testing.T) {
+			_, err := Parse([]byte("---\nid: TASK-1\nallowed-paths: " + value + "\n---\n"))
+			if err == nil || !strings.Contains(err.Error(), "allowed-paths") {
+				t.Fatalf("Parse() error = %v, want allowed-paths error", err)
+			}
+		})
+	}
+	_, err := Parse([]byte("---\nid: TASK-1\ndefault-a: &a\n  allowed-paths: [internal/card]\ndefault-b: &b\n  allowed-paths: [docs]\n<<: [*a, *b]\n---\n"))
+	if err == nil || !strings.Contains(err.Error(), "conflicting effective") {
+		t.Fatalf("conflicting merged allowed-paths error = %v", err)
+	}
+	_, err = Parse([]byte("---\nid: TASK-1\nallowed-paths: [internal/card]\nallowed-paths: [docs]\n---\n"))
+	if err == nil || !strings.Contains(err.Error(), "allowed-paths") {
+		t.Fatalf("duplicate allowed-paths error = %v", err)
+	}
+	_, err = Parse([]byte("---\nid: TASK-1\n<<: [not-a-map]\n---\n"))
+	if err == nil || !strings.Contains(err.Error(), "merge") {
+		t.Fatalf("malformed merge error = %v", err)
 	}
 }
 

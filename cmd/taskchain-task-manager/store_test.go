@@ -166,8 +166,8 @@ func TestQueueCLISeparatesHumanWorkAndFailsClosed(t *testing.T) {
 	}
 	humanPath := filepath.Join(dir, "todo", "TASK-1.md")
 	agentPath := filepath.Join(dir, "todo", "TASK-2.md")
-	human := []byte("---\nid: TASK-1\nstatus: pending\nneeds-human: true\n---\nHuman work\n")
-	agent := []byte("---\nid: TASK-2\nstatus: pending\n---\nAgent work\n")
+	human := []byte("---\nid: TASK-1\nstatus: pending\nexecution-mode: external\nneeds-human: true\n---\nHuman work\n")
+	agent := []byte("---\nid: TASK-2\nstatus: pending\nallowed-paths: [src/task.go]\n---\nAgent work\n")
 	for path, raw := range map[string][]byte{humanPath: human, agentPath: agent} {
 		if err := os.WriteFile(path, raw, 0o644); err != nil {
 			t.Fatal(err)
@@ -188,7 +188,8 @@ func TestQueueCLISeparatesHumanWorkAndFailsClosed(t *testing.T) {
 	}
 	if queue.RunnableCount != 2 || queue.AgentRunnableCount != 1 ||
 		len(queue.Runnable) != 2 || len(queue.AgentRunnable) != 1 ||
-		!queue.Runnable[0].NeedsHuman || queue.AgentRunnable[0].Card.ID != "TASK-2" {
+		!queue.Runnable[0].NeedsHuman || queue.Runnable[0].ExecutionMode != "external" ||
+		queue.AgentRunnable[0].Card.ID != "TASK-2" || queue.AgentRunnable[0].ExecutionMode != "implementation" {
 		t.Fatalf("unexpected queue: %+v", queue)
 	}
 	after, err := os.ReadFile(humanPath)

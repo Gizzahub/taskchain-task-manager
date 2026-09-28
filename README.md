@@ -111,7 +111,7 @@ kind 디렉터리(plan/issue 등)·archive·중첩 카드의 상태 표기만으
 위해 읽을 수 있지만 카드 자체나 소유 원장이 잘못된 형식이면 실패합니다.
 기존 도구의 전체 dialect·완료 증거 계약을 이 기능만으로 대체하지 마세요.
 
-`queue --dir ./tasks --json`은 같은 준비 조건으로 `runnable`과
+`queue --dir ./tasks --json`은 `ready`의 todo 준비 조건과 활성 P0 issue를 대상으로 `runnable`과
 `agentRunnable`을 반환하며 각 항목에 `needsHuman`을 표시합니다.
 `needs-human: true`인 카드는 `runnable`에만 포함됩니다. 결과에는
 `runnableCount`와 `agentRunnableCount`도 있습니다. 선언한
@@ -119,6 +119,10 @@ kind 디렉터리(plan/issue 등)·archive·중첩 카드의 상태 표기만으
 `false`입니다. 이 검증은 공통 카드 파서에 적용되므로 잘못된 값은 `show`,
 `list`, `ready`, `claim` 등 카드 읽기 명령도 실패시킵니다. `queue`는
 읽기 전용이며 `ready`·claim의 작업 선택 의미는 유지됩니다.
+`execution-mode`와 `allowed-paths`는 구현, 외부 조치, 사람의 결정을 별도
+경로로 분류합니다. 큐 항목에는 `executionMode`와 `allowedPaths`가 추가되며
+P0 issue도 분류합니다. 형식, 경로 검증, 사람 전용 처리 규칙은
+[큐의 실행 경로 분류](docs/disposition-routing.md)를 따릅니다.
 
 ## 실행권 예약
 
