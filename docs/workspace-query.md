@@ -1,6 +1,8 @@
 # Workspace 조회
 
-`query-workspace`는 명시한 저장소들의 작업 보드를 읽기 전용으로 조회합니다. 저장소나
+`query-workspace`는 명시한 저장소들의 작업 보드를 논리적으로 읽기 전용 조회합니다. 보드
+writer와 조정하기 위해 조회 중 각 보드에 공통 writer lock과 임시 `.task-manager.lock`을
+만들었다가 제거합니다. 저장소나
 보드를 자동 발견하지 않고, 카드 내용의 명령·링크를 실행하거나 추가 파일을 선택하지
 않습니다.
 
@@ -42,7 +44,7 @@ taskchain-task-manager query-workspace --manifest workspace.json --kind intent -
 선택한 범위에서 결과가 없거나 둘 이상의 저장소가 같은 ID를 가지면 명령은 오류를
 내고 성공 JSON을 출력하지 않습니다. 같은 내용이어도 서로 다른 저장소의 결과는
 하나로 합치지 않습니다. 충돌은 `--repository`로 조회 범위를 좁혀 해결합니다.
-조회에 필요한 보드 상태·등록 파일·잠금 중 하나라도 읽을 수 없으면 부분 결과를
+보드 session을 얻지 못하거나 필요한 카드·등록 파일의 검증에 실패하면 부분 결과를
 출력하지 않습니다. 등록 context 조회는 관계없는 카드 파일이나 ID 원장을 검사하지
 않습니다.
 
@@ -50,3 +52,7 @@ taskchain-task-manager query-workspace --manifest workspace.json --kind intent -
 결과를 냅니다. 서로 다른 저장소를 동시에 수정하는 동안의 원자적 snapshot은
 보장하지 않으므로, 그 경우 작업을 멈춘 뒤 다시 조회해야 합니다.
 검증과 조회 사이에 디렉터리를 교체하는 동시 변경도 감지한다고 약속하지 않습니다.
+
+여러 카드 ID를 묶어 조회하면서 잠금 디렉터리조차 만들지 않아야 한다면 별도 계약인
+[`workspace-context`](workspace-context.md)를 사용하세요. 이 명령은 기존의 정확히 하나인
+`query-workspace` 결과 의미를 바꾸지 않습니다.

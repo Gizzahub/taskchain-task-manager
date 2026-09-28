@@ -30,6 +30,7 @@ make check
 ./build/taskchain-task-manager register-context examples/context/intent.json --dir ./tasks --json
 ./build/taskchain-task-manager show-context --dir ./tasks --kind intent --id INTENT-0123456789abcdef0123456789abcdef --revision 1 --json
 ./build/taskchain-task-manager query-workspace --manifest ./workspace.json --card-id TASK-1 --json
+./build/taskchain-task-manager workspace-context --manifest ./workspace.json --card-id TASK-1 --card-id TASK-2 --json
 ```
 
 `validate`는 YAML frontmatter의 구문·형식을 검사합니다. 완료 조건, 의존성,
@@ -57,6 +58,9 @@ SHA-256 digest를 출력합니다. 보드 등록, TASK 존재 확인, 권한 부
 `query-workspace`는 strict JSON manifest에 명시한 저장소만 읽습니다. 카드 ID 또는
 등록 context의 정확한 revision을 조회하며 충돌은 명시한 저장소 이름으로 해소합니다.
 입력·경로 경계와 결과 규칙은 [Workspace 조회](docs/workspace-query.md)를 따릅니다.
+`workspace-context`는 여러 카드 ID의 모든 저장소별 결과를 한 번에 돌려주며 보드
+lock 디렉터리를 만들지 않습니다. 입력 한도와 동시 변경 경계는
+[Workspace 카드 묶음 조회](docs/workspace-context.md)를 따릅니다.
 
 유지형 Intent는 trigger와 유한 예산을 선언하고, Iteration은 기준별 관측·사용량·중단
 사유를 기록합니다. 작업 없는 idle도 기록할 수 있습니다. 스케줄러나 실행기는 아니며

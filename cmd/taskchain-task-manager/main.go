@@ -53,6 +53,9 @@ func run(args []string, out, errOut io.Writer) int {
 	if len(args) > 0 && args[0] == "query-workspace" {
 		return runWorkspaceQuery(args, out, errOut)
 	}
+	if len(args) > 0 && args[0] == "workspace-context" {
+		return runWorkspaceContext(args, out, errOut)
+	}
 	if len(args) > 0 && (args[0] == "validate" || args[0] == "validate-completion") {
 		return runValidation(args, out, errOut)
 	}
@@ -91,6 +94,7 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "       taskchain-task-manager register-context <file> --dir <board> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager show-context --dir <board> --kind intent|batch|iteration --id ID --revision N --json")
 		fmt.Fprintln(out, "       taskchain-task-manager", workspaceQueryUsage)
+		fmt.Fprintln(out, "       taskchain-task-manager", workspaceContextUsage)
 		fmt.Fprintln(out, "       taskchain-task-manager enable-shared --dir <board> --all-worktrees [--resume] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager inspect-worktrees --repo <root> --board <path> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager <init|list|ready|queue> --dir <board> --json")

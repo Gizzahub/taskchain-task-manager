@@ -126,35 +126,119 @@ func acquireSharedOwnerRejoinOptions(dir string, allowInitializing, allowPending
 	if err != nil {
 		return nil, release, err
 	}
-	if state.BoardPath != location.Board {
-		return nil, release, errors.New("shared namespace board identity mismatch")
-	}
-	if state.Phase != "active" && !allowInitializing {
-		return nil, release, errors.New("shared ID activation is initializing; use enable-shared --resume")
-	}
-	if state.PendingBundle != nil && !allowPendingBundle {
-		return nil, release, errors.New("shared namespace has a pending bundle; recover from its original board")
-	}
-	if state.PendingRepair != nil && !allowPendingRepair {
-		return nil, release, errors.New("shared namespace has a pending status repair; recover from its original board")
-	}
-	if state.PendingRelocation != nil && !allowPendingRelocation {
-		return nil, release, errors.New("shared namespace has a pending relocation; recover from its original board")
-	}
-	if (state.PendingArchive != nil || state.PendingArchiveDelta != nil) && !allowPendingArchive {
-		return nil, release, errors.New("shared namespace has a pending archive; recover from its original board")
-	}
-	if state.PendingArchiveCapacity != nil && !allowPendingCapacity {
-		return nil, release, errors.New("shared namespace has a pending archive capacity adoption; recover from its original board")
-	}
-	if state.PendingOwnerRejoin != nil && !allowPendingOwnerRejoin {
-		return nil, release, errors.New("shared namespace has a pending owner rejoin; recover from its original board")
-	}
-	if state.Policy != nil && state.Policy.Phase != "active" && !allowPendingPolicy {
-		return nil, release, errors.New("shared policy activation is pending; explicit policy recovery required")
+	if err := validateSharedStateAdmission(location, state, allowInitializing, allowPendingBundle, allowPendingRepair, allowPendingRelocation, allowPendingArchive, allowPendingCapacity, allowPendingOwnerRejoin, allowPendingPolicy); err != nil {
+		return nil, release, err
 	}
 	session.state = &state
 	return session, release, nil
+}
+
+func validateSharedStateAdmission(location *githistory.BoardLocation, state sharedState, allowInitializing, allowPendingBundle, allowPendingRepair, allowPendingRelocation, allowPendingArchive, allowPendingCapacity, allowPendingOwnerRejoin, allowPendingPolicy bool) error {
+	if location == nil || state.BoardPath != location.Board {
+		return errors.New("shared namespace board identity mismatch")
+	}
+	if state.Phase != "active" && !allowInitializing {
+		return errors.New("shared ID activation is initializing; use enable-shared --resume")
+	}
+	if state.PendingBundle != nil && !allowPendingBundle {
+		return errors.New("shared namespace has a pending bundle; recover from its original board")
+	}
+	if state.PendingRepair != nil && !allowPendingRepair {
+		return errors.New("shared namespace has a pending status repair; recover from its original board")
+	}
+	if state.PendingRelocation != nil && !allowPendingRelocation {
+		return errors.New("shared namespace has a pending relocation; recover from its original board")
+	}
+	if (state.PendingArchive != nil || state.PendingArchiveDelta != nil) && !allowPendingArchive {
+		return errors.New("shared namespace has a pending archive; recover from its original board")
+	}
+	if state.PendingArchiveCapacity != nil && !allowPendingCapacity {
+		return errors.New("shared namespace has a pending archive capacity adoption; recover from its original board")
+	}
+	if state.PendingOwnerRejoin != nil && !allowPendingOwnerRejoin {
+		return errors.New("shared namespace has a pending owner rejoin; recover from its original board")
+	}
+	if state.Policy != nil && state.Policy.Phase != "active" && !allowPendingPolicy {
+		return errors.New("shared policy activation is pending; explicit policy recovery required")
+	}
+	return nil
+}
+
+// openSharedReadOnly inspects an existing shared namespace without creating
+// common directories or acquiring its writer lock. A missing namespace stays
+// missing; local journals and ID bindings are checked by verifyBoard later.
+func openSharedReadOnly(dir string) (*sharedSession, func() error, error) {
+	location, err := githistory.LocateBoard(context.Background(), dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	if location == nil {
+		return nil, func() error { return nil }, nil
+	}
+	common, err := os.OpenRoot(location.CommonDirectory)
+	if err != nil {
+		return nil, nil, err
+	}
+	commonInfo, err := common.Stat(".")
+	if err != nil {
+		return nil, nil, errors.Join(err, common.Close())
+	}
+	commonPath, err := os.Lstat(location.CommonDirectory)
+	if err != nil || !commonPath.IsDir() || commonPath.Mode()&os.ModeSymlink != 0 || !os.SameFile(commonInfo, commonPath) {
+		return nil, nil, errors.Join(errors.New("Git common directory identity changed"), common.Close())
+	}
+	session := &sharedSession{location: location, commonInfo: commonInfo}
+	namespace := path.Join("taskchain-task-manager", "ids", location.NamespaceKey)
+	current := ""
+	for _, part := range []string{"taskchain-task-manager", "ids", location.NamespaceKey} {
+		current = path.Join(current, part)
+		info, err := common.Lstat(current)
+		if errors.Is(err, fs.ErrNotExist) {
+			if closeErr := common.Close(); closeErr != nil {
+				return nil, nil, closeErr
+			}
+			return session, func() error { return nil }, nil
+		}
+		if err != nil {
+			return nil, nil, errors.Join(err, common.Close())
+		}
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return nil, nil, errors.Join(errors.New("shared namespace path is not a real directory"), common.Close())
+		}
+	}
+	session.root, err = common.OpenRoot(namespace)
+	if err != nil {
+		return nil, nil, errors.Join(err, common.Close())
+	}
+	if err := common.Close(); err != nil {
+		return nil, nil, errors.Join(err, session.root.Close())
+	}
+	if err := rejectReadOnlyLock(session.root, "shared ID namespace"); err != nil {
+		return nil, nil, errors.Join(err, session.root.Close())
+	}
+	state, err := loadSharedState(session.root)
+	if errors.Is(err, fs.ErrNotExist) {
+		return session, session.root.Close, nil
+	}
+	if err != nil {
+		return nil, nil, errors.Join(err, session.root.Close())
+	}
+	if err := validateSharedStateAdmission(location, state, false, false, false, false, false, false, false, false); err != nil {
+		return nil, nil, errors.Join(err, session.root.Close())
+	}
+	session.state = &state
+	return session, session.root.Close, nil
+}
+
+func rejectReadOnlyLock(root *os.Root, scope string) error {
+	_, err := root.Lstat(".task-manager.lock")
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect %s writer lock: %w", scope, err)
+	}
+	return fmt.Errorf("%s is locked (writer operation in progress)", scope)
 }
 
 func (s *sharedSession) merge(ledger idLedger) (idLedger, error) {
@@ -239,6 +323,16 @@ func (s *sharedSession) verify() error {
 	}
 	if !common.IsDir() || !os.SameFile(common, s.commonInfo) {
 		return errors.New("Git common directory identity changed")
+	}
+	if s.root == nil {
+		_, err := os.Lstat(filepath.Join(s.location.CommonDirectory, "taskchain-task-manager", "ids", s.location.NamespaceKey))
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return errors.New("shared namespace appeared during inspection; retry")
 	}
 	return verifyBoardHandle(s.root, filepath.Join(s.location.CommonDirectory, "taskchain-task-manager", "ids", s.location.NamespaceKey))
 }
