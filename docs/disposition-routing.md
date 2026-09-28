@@ -26,6 +26,8 @@ needs-human: true
 
 구현 카드는 `allowed-paths`에 정확한 저장소 상대 경로를 하나 이상 선언합니다.
 `tasks/` 보드 내부, 절대 경로, 부모 탐색, glob은 구현 범위로 허용하지 않습니다.
+플랫폼에 따라 의미가 달라지는 Windows 드라이브 표기(`C:/...`)와 역슬래시,
+공백·제어 문자도 거부합니다.
 이 검사는 경로 문자열의 범위만 검사하며 대상 파일의 존재나 심볼릭 링크를
 검증하지 않습니다.
 `external`·`decision` 카드에 가짜 경로를 선언하거나 빈 목록을 넣는 것도
@@ -36,7 +38,10 @@ needs-human: true
 `executionMode`, `allowedPaths`가 출력됩니다. `allowedPaths`는 선언이 없는
 외부·결정 카드에서도 빈 배열입니다. `agentRunnable`에는 `needsHuman: false`인
 적격 구현 카드만 들어갑니다. P0 issue는 별도 경로로 관찰되며 P1 issue를
-자동 승격하지 않습니다. `ready`와 claim의 기존 작업 선택 의미는 유지됩니다.
+자동 승격하지 않습니다. issue의 활성 상태는 `todo`, `open`, `pending`,
+`in-progress`/`in_progress`/`doing`, `review`, `blocked`로 한정합니다.
+`done`, `superseded`, `cancelled` 및 알 수 없는 상태는 큐에 올리지 않습니다.
+`ready`와 claim의 기존 작업 선택 의미는 유지됩니다.
 
 읽기 전용 분류는 종료 상태를 결정하거나 외부 작업이 실제 수행됐음을 증명하지
 않습니다. 큐의 우선순위와 서로 다른 경로 사이의 한 항목 자동 선택도 이 명령의

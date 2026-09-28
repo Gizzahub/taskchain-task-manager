@@ -109,6 +109,37 @@ func TestListLockedWithPolicyCarriesModuleRoutingMetadata(t *testing.T) {
 	}
 }
 
+func TestQueueRoutesModuleTodoAndP0Issue(t *testing.T) {
+	board := filepath.Join(t.TempDir(), "tasks")
+	if err := Init(board); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ActivatePolicy(board, moduleAdoptionRaw(t), PolicyActivationOptions{AdoptModules: true}); err != nil {
+		t.Fatal(err)
+	}
+	for path, raw := range map[string]string{
+		"backend/todo/TASK-2.md":   "---\nid: TASK-2\ntitle: Implement\nallowed-paths: [internal/taskstore/store.go]\n---\n",
+		"backend/issue/ISSUE-3.md": "---\nid: ISSUE-3\ntitle: Escalate\nstatus: todo\npriority: P0\nexecution-mode: external\nneeds-human: true\n---\n",
+	} {
+		full := filepath.Join(board, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(raw), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	projection, err := Queue(board)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if projection.RunnableCount != 2 || projection.AgentRunnableCount != 1 ||
+		projection.Runnable[0].Card.ID != "ISSUE-3" || projection.Runnable[0].ExecutionMode != "external" ||
+		projection.AgentRunnable[0].Card.ID != "TASK-2" {
+		t.Fatalf("module queue = %+v", projection)
+	}
+}
+
 func TestListLockedWithPolicyRejectsModuleShapeAndDuplicates(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {

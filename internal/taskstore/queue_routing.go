@@ -47,7 +47,7 @@ func validateAllowedPath(allowed string) error {
 	if allowed == "" || path.IsAbs(allowed) || filepath.IsAbs(allowed) {
 		return fmt.Errorf("path must be a non-empty repository-relative path")
 	}
-	if strings.ContainsAny(allowed, "\\*?[]") {
+	if strings.ContainsAny(allowed, "\\*?[]:") {
 		return fmt.Errorf("path contains an unsafe pattern character")
 	}
 	for _, r := range allowed {

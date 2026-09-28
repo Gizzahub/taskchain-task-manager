@@ -450,7 +450,7 @@ func Queue(dir string) (projection QueueProjection, err error) {
 		// Issue cards are disposition observations, not workflow tasks. Their
 		// frontmatter status is intentionally unconstrained by the issue zone,
 		// so classify them by their declared location and ISSUE identity.
-		if entryZone(entry.Path, policy) == "issue" && strings.HasPrefix(entry.Card.ID, "ISSUE-") && entry.Card.Priority == "P0" && entry.Card.Status != policy.DoneZone() {
+		if entryZone(entry.Path, policy) == "issue" && strings.HasPrefix(entry.Card.ID, "ISSUE-") && entry.Card.Priority == "P0" && activeIssueStatus(entry.Card.Status) {
 			candidates = append(candidates, entry)
 		}
 	}
@@ -472,6 +472,14 @@ func Queue(dir string) (projection QueueProjection, err error) {
 	projection.RunnableCount = len(projection.Runnable)
 	projection.AgentRunnableCount = len(projection.AgentRunnable)
 	return projection, nil
+}
+
+func activeIssueStatus(status string) bool {
+	switch strings.ToLower(status) {
+	case "todo", "open", "pending", "in-progress", "in_progress", "doing", "review", "blocked":
+		return true
+	}
+	return false
 }
 
 func validateDependencies(deps []string, id string, entries []Entry) error {

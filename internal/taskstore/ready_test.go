@@ -172,6 +172,7 @@ func TestQueueRejectsInvalidRouteWithoutPartialProjection(t *testing.T) {
 		{"unscoped implementation", "---\nid: TASK-1\ntitle: Unscoped\n---\n"},
 		{"tasks subtree", "---\nid: TASK-1\ntitle: Board write\nallowed-paths: [tasks/todo/TASK-1.md]\n---\n"},
 		{"absolute path", "---\nid: TASK-1\ntitle: Absolute\nallowed-paths: [/etc/passwd]\n---\n"},
+		{"windows volume", "---\nid: TASK-1\ntitle: Windows volume\nallowed-paths: ['C:/Windows']\n---\n"},
 		{"parent traversal", "---\nid: TASK-1\ntitle: Traversal\nallowed-paths: [../secret]\n---\n"},
 		{"glob", "---\nid: TASK-1\ntitle: Glob\nallowed-paths: ['internal/*.go']\n---\n"},
 		{"glob close bracket", "---\nid: TASK-1\ntitle: Glob\nallowed-paths: ['internal/].go']\n---\n"},
@@ -197,6 +198,19 @@ func TestQueueRejectsInvalidRouteWithoutPartialProjection(t *testing.T) {
 				t.Fatal("Queue changed board after rejecting route")
 			}
 		})
+	}
+}
+
+func TestActiveIssueStatusIsClosed(t *testing.T) {
+	for status, want := range map[string]bool{
+		"todo": true, "open": true, "pending": true, "doing": true,
+		"in-progress": true, "in_progress": true, "review": true, "blocked": true,
+		"done": false, "Done": false, "superseded": false,
+		"cancelled": false, "canceled": false, "unknown": false, "": false,
+	} {
+		if got := activeIssueStatus(status); got != want {
+			t.Errorf("activeIssueStatus(%q) = %v, want %v", status, got, want)
+		}
 	}
 }
 
