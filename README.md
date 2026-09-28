@@ -62,6 +62,26 @@ SHA-256 digest를 출력합니다. 보드 등록, TASK 존재 확인, 권한 부
 lock 디렉터리를 만들지 않습니다. 입력 한도와 동시 변경 경계는
 [Workspace 카드 묶음 조회](docs/workspace-context.md)를 따릅니다.
 
+에이전트가 정확히 하나의 writer-coordinated 조회와 bounded no-write snapshot 중 선택할 때는
+[workspace integration skill](skills/task-manager-workspace/SKILL.md)을 사용하세요.
+재현 가능한 manifest·합성 보드·출력은 번들 안의
+[workspace fixture](skills/task-manager-workspace/assets/workspace/README.md)에 있습니다.
+이 저장소는 스킬 설치나 클라이언트 자동 탐색을 수행하지 않습니다. 사용자가 설정한
+클라이언트 스킬 디렉터리에 번들 전체를 수동으로 복사하고 CLI를 `PATH`에 둡니다.
+아래 명령은 저장소 루트에서 실행하며, 대상 번들 경로가 아직 없어야 합니다.
+
+```sh
+make build
+export PATH="$PWD/build:$PATH"
+client_skills_dir=${CLIENT_SKILLS_DIR:?set your configured client skill directory}
+test -d "$client_skills_dir"
+test ! -e "$client_skills_dir/task-manager-workspace"
+cp -R skills/task-manager-workspace "$client_skills_dir/"
+```
+
+실제 작업에서는 caller가 제공한 workspace manifest를 사용합니다. 번들 안의
+fixture는 합성 예시이며 설치된 스킬 디렉터리에서 직접 `git init`하지 않습니다.
+
 유지형 Intent는 trigger와 유한 예산을 선언하고, Iteration은 기준별 관측·사용량·중단
 사유를 기록합니다. 작업 없는 idle도 기록할 수 있습니다. 스케줄러나 실행기는 아니며
 실제 예산 집행·증거 인증은 하지 않습니다. [유지형 관측 기록](docs/maintenance-iterations.md)을

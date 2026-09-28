@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "repositories": [
+    {"name": "alpha", "path": "repos/alpha", "board": "tasks"},
+    {"name": "beta", "path": "repos/beta", "board": "tasks"}
+  ]
+}
