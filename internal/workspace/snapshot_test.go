@@ -76,7 +76,7 @@ func TestQuerySnapshotClassifiesAllMatchesInStableOrderWithoutWrites(t *testing.
 	if !bytes.Equal(gotJSON, wantJSON) {
 		t.Fatalf("repository order changed output: %s vs %s", gotJSON, wantJSON)
 	}
-	if got.OutputVersion != SnapshotOutputVersion || len(got.Results) != 3 {
+	if len(got.Results) != 3 {
 		t.Fatalf("output = %#v", got)
 	}
 	collision := got.Results[0]
@@ -117,7 +117,7 @@ func TestQuerySnapshotErrorsWithoutPartialResultOrWrites(t *testing.T) {
 		Repository{Name: "beta", Path: betaRoot, Board: betaBoard},
 	)
 	beforeAlpha, beforeBeta := snapshotTree(t, alphaRoot), snapshotTree(t, betaRoot)
-	if got, err := QuerySnapshot(manifest, []string{"TASK-1"}); err == nil || got.OutputVersion != 0 || len(got.Results) != 0 || !strings.Contains(err.Error(), "claims") {
+	if got, err := QuerySnapshot(manifest, []string{"TASK-1"}); err == nil || len(got.Results) != 0 || !strings.Contains(err.Error(), "claims") {
 		t.Fatalf("corrupt claims returned output=%#v err=%v", got, err)
 	}
 	if afterAlpha, afterBeta := snapshotTree(t, alphaRoot), snapshotTree(t, betaRoot); !beforeAlpha.same(afterAlpha) || !beforeBeta.same(afterBeta) {
@@ -306,7 +306,7 @@ func TestQuerySnapshotDetectsSameContentReplacementDuringScan(t *testing.T) {
 	result, err := querySnapshot(manifest, []string{"TASK-1"}, func(string) {
 		replaceFileWithSameContent(t, filepath.Join(board, "todo", "TASK-1.md"))
 	})
-	if err == nil || !strings.Contains(err.Error(), "changed during inspection") || result.OutputVersion != 0 || len(result.Results) != 0 {
+	if err == nil || !strings.Contains(err.Error(), "changed during inspection") || len(result.Results) != 0 {
 		t.Fatalf("replacement returned partial/accepted output=%#v err=%v", result, err)
 	}
 	after := snapshotTree(t, root)

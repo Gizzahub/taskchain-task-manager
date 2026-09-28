@@ -1,12 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
 	"github.com/Gizzahub/taskchain-task-manager/internal/workspace"
 )
 
@@ -68,7 +68,7 @@ func runWorkspaceQuery(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(errOut, "query-workspace:", err)
 		return 1
 	}
-	if err := json.NewEncoder(out).Encode(result); err != nil {
+	if err := outputformat.Encode(out, result); err != nil {
 		fmt.Fprintln(errOut, "write workspace result:", err)
 		return 1
 	}

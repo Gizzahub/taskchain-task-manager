@@ -58,6 +58,33 @@ func TestWorkspaceQueryCLIRequiresExplicitScopeForCollision(t *testing.T) {
 	}
 }
 
+func TestWorkspaceQueryCLIMissingAndAmbiguousEmitNoJSON(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"alpha", "beta"} {
+		board := filepath.Join(root, name, "tasks")
+		if err := os.Mkdir(filepath.Dir(board), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := taskstore.Init(board); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := taskstore.Create(board, taskstore.CreateRequest{ID: "TASK-1", Title: name}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manifest := filepath.Join(root, "workspace.json")
+	if err := os.WriteFile(manifest, []byte(`{"schemaVersion":1,"repositories":[{"name":"beta","path":"beta","board":"tasks"},{"name":"alpha","path":"alpha","board":"tasks"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, cardID := range []string{"TASK-2", "TASK-1"} {
+		var out, diagnostics bytes.Buffer
+		code := run([]string{"query-workspace", "--manifest", manifest, "--card-id", cardID, "--json"}, &out, &diagnostics)
+		if code != 1 || out.Len() != 0 || diagnostics.Len() == 0 {
+			t.Fatalf("card %s: code=%d stdout=%q stderr=%q", cardID, code, out.String(), diagnostics.String())
+		}
+	}
+}
+
 func TestWorkspaceQueryCLIUsageHasNoOutput(t *testing.T) {
 	for _, args := range [][]string{
 		{"query-workspace", "--json"},

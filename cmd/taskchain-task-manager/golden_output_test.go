@@ -263,6 +263,18 @@ var goldenCases = []struct {
 		return goldenRun(t, "show-context", "--dir", "tasks", "--kind", "intent",
 			"--id", "INTENT-0123456789abcdef0123456789abcdef", "--revision", "1", "--json")
 	}},
+	{"query-workspace", func(t *testing.T) []byte {
+		root := goldenWorkspace(t)
+		createContextCLIRepo(t, root, "alpha", map[string]string{"TASK-1": "workspace task"})
+		goldenWrite(t, "workspace.json", []byte(`{"schemaVersion":1,"repositories":[{"name":"alpha","path":"repos/alpha","board":"tasks"}]}`))
+		return goldenRun(t, "query-workspace", "--manifest", "workspace.json", "--card-id", "TASK-1", "--json")
+	}},
+	{"workspace-context", func(t *testing.T) []byte {
+		root := goldenWorkspace(t)
+		createContextCLIRepo(t, root, "alpha", map[string]string{"TASK-1": "workspace task"})
+		goldenWrite(t, "workspace.json", []byte(`{"schemaVersion":1,"repositories":[{"name":"alpha","path":"repos/alpha","board":"tasks"}]}`))
+		return goldenRun(t, "workspace-context", "--manifest", "workspace.json", "--card-id", "TASK-1", "--card-id", "TASK-2", "--json")
+	}},
 	{"create-bundle", func(t *testing.T) []byte {
 		goldenWorkspace(t)
 		goldenSetup(t, "init", "--dir", "tasks", "--json")

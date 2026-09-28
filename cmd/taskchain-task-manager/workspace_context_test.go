@@ -47,7 +47,7 @@ func TestWorkspaceContextCLIProducesBoundedBatchWithoutWriting(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.OutputVersion != workspace.SnapshotOutputVersion || len(result.Results) != 3 {
+	if len(result.Results) != 3 {
 		t.Fatalf("output = %#v", result)
 	}
 	if got := result.Results[0]; got.RequestedID != "TASK-0001" || got.CardID != "TASK-1" || got.Status != "ambiguous" || len(got.Matches) != 2 || got.Matches[0].Repository != "alpha" || got.Matches[1].Repository != "beta" {

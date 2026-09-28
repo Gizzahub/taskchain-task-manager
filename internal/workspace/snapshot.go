@@ -22,7 +22,6 @@ import (
 )
 
 const (
-	SnapshotOutputVersion    = 1
 	SnapshotMaxRepositories  = 32
 	SnapshotMaxQueryIDs      = 256
 	SnapshotMaxIDBytes       = 128
@@ -31,10 +30,9 @@ const (
 	SnapshotMaxBoardNodes    = 8192
 )
 
-// SnapshotOutput is the versioned result of a bounded multi-card lookup.
+// SnapshotOutput is the result of a bounded multi-card lookup.
 type SnapshotOutput struct {
-	OutputVersion int              `json:"outputVersion"`
-	Results       []SnapshotResult `json:"results"`
+	Results []SnapshotResult `json:"results"`
 }
 
 // SnapshotResult classifies one requested numeric card identity.
@@ -100,7 +98,7 @@ func querySnapshot(manifest Manifest, requestedIDs []string, afterRead func(stri
 		}
 	}
 
-	out := SnapshotOutput{OutputVersion: SnapshotOutputVersion, Results: make([]SnapshotResult, 0, len(ids))}
+	out := SnapshotOutput{Results: make([]SnapshotResult, 0, len(ids))}
 	for _, id := range ids {
 		matches := matchesByID[id.id.Key()]
 		sort.Slice(matches, func(i, j int) bool {
