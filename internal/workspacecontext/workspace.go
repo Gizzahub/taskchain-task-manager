@@ -37,6 +37,9 @@ const (
 	MaxBoardNodes    = 8192
 )
 
+// scanAfterReadHook is test-only instrumentation for proving the retry guard.
+var scanAfterReadHook func(string)
+
 type Manifest struct {
 	SchemaVersion int          `json:"schemaVersion"`
 	Repositories  []Repository `json:"repositories"`
@@ -257,6 +260,9 @@ func scanBoard(ctx context.Context, root, board string) ([]Match, error) {
 			return nil, fmt.Errorf("invalid card ID in %s: %w", entry.Path, err)
 		}
 		out = append(out, Match{CardID: id.Key(), Path: entry.Path, Card: entry.Card})
+	}
+	if scanAfterReadHook != nil {
+		scanAfterReadHook(base)
 	}
 	after, err := fingerprint(base)
 	if err != nil {
