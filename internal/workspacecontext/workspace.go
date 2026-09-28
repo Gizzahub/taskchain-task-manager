@@ -129,6 +129,9 @@ func validateManifest(m Manifest) error {
 	}
 	seen := map[string]bool{}
 	for _, r := range m.Repositories {
+		if len(r.RepositoryID) > MaxManifestBytes || len(r.Root) > MaxManifestBytes || len(r.Board) > MaxManifestBytes || !utf8.ValidString(r.RepositoryID) || !utf8.ValidString(r.Root) || !utf8.ValidString(r.Board) {
+			return errors.New("manifest field exceeds byte or UTF-8 bound")
+		}
 		if !validRepositoryID(r.RepositoryID) || r.Root == "" || !utf8.ValidString(r.Root) || !filepath.IsAbs(r.Root) || filepath.Clean(r.Root) != r.Root || r.Board == "" || !utf8.ValidString(r.Board) || pathUnsafe(r.Board) {
 			return errors.New("repository requires bounded ID, absolute clean root and safe relative board")
 		}
@@ -137,14 +140,48 @@ func validateManifest(m Manifest) error {
 		}
 		seen[r.RepositoryID] = true
 	}
-	encoded, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("encode manifest bounds: %w", err)
-	}
-	if len(encoded) > MaxManifestBytes {
+	if manifestJSONLen(m) > MaxManifestBytes {
 		return fmt.Errorf("manifest exceeds %d bytes", MaxManifestBytes)
 	}
 	return nil
+}
+
+func manifestJSONLen(m Manifest) int {
+	n := len(`{"schemaVersion":1,"repositories":[`) + len(`,"cardIds":[`)
+	for i, r := range m.Repositories {
+		if i > 0 {
+			n++
+		}
+		n += len(`{"repositoryId":,"root":,"board":}`) + jsonStringLen(r.RepositoryID) + jsonStringLen(r.Root) + jsonStringLen(r.Board)
+	}
+	for i, id := range m.CardIDs {
+		if i > 0 {
+			n++
+		}
+		n += jsonStringLen(id)
+	}
+	return n + 2
+}
+
+func jsonStringLen(s string) int {
+	n := 2
+	for _, r := range s {
+		switch r {
+		case '"', '\\':
+			n += 2
+		case '\b', '\f', '\n', '\r', '\t':
+			n += 2
+		case '\u2028', '\u2029':
+			n += 6
+		default:
+			if r < 0x20 {
+				n += 6
+			} else {
+				n += utf8.RuneLen(r)
+			}
+		}
+	}
+	return n
 }
 
 func DecodeManifest(raw []byte) (Manifest, error) {

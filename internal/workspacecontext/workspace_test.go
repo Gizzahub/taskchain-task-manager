@@ -217,6 +217,9 @@ func TestTypedManifestRoundTripAndDirectLookupValidation(t *testing.T) {
 			t.Fatal("direct Lookup accepted invalid manifest")
 		}
 	}
+	if _, err := Lookup(context.Background(), Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: strings.Repeat("/", MaxManifestBytes+1), Board: "tasks"}}, CardIDs: []string{"TASK-1"}}); err == nil {
+		t.Fatal("direct Lookup accepted oversized root")
+	}
 }
 
 func TestBoardScanBounds(t *testing.T) {
