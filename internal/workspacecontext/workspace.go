@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -33,6 +34,7 @@ const (
 	MaxIDBytes       = 128
 	MaxCardsPerBoard = 4096
 	MaxBoardBytes    = 64 << 20
+	MaxBoardNodes    = 8192
 )
 
 type Manifest struct {
@@ -43,6 +45,9 @@ type Manifest struct {
 type Repository struct{ RepositoryID, Root, Board string }
 
 func (r *Repository) UnmarshalJSON(raw []byte) error {
+	if err := exactObjectKeys(raw, map[string]bool{"repositoryId": true, "root": true, "board": true}); err != nil {
+		return err
+	}
 	var v struct {
 		RepositoryID string `json:"repositoryId"`
 		Root         string `json:"root"`
@@ -72,8 +77,11 @@ type Output struct {
 	Results       []Result `json:"results"`
 }
 
-func (m Manifest) UnmarshalJSON(raw []byte) error {
+func (m *Manifest) UnmarshalJSON(raw []byte) error {
 	if err := validateJSON(raw); err != nil {
+		return err
+	}
+	if err := exactObjectKeys(raw, map[string]bool{"schemaVersion": true, "repositories": true, "cardIds": true}); err != nil {
 		return err
 	}
 	var v struct {
@@ -84,33 +92,36 @@ func (m Manifest) UnmarshalJSON(raw []byte) error {
 	if err := strictDecode(raw, &v); err != nil {
 		return err
 	}
-	if v.SchemaVersion != SchemaVersion {
-		return fmt.Errorf("unsupported manifest schemaVersion %d", v.SchemaVersion)
+	m.SchemaVersion, m.Repositories, m.CardIDs = v.SchemaVersion, v.Repositories, v.CardIDs
+	return validateManifest(*m)
+}
+
+func validateManifest(m Manifest) error {
+	if m.SchemaVersion != SchemaVersion {
+		return fmt.Errorf("unsupported manifest schemaVersion %d", m.SchemaVersion)
 	}
-	if len(v.Repositories) == 0 || len(v.Repositories) > MaxRepositories {
+	if len(m.Repositories) == 0 || len(m.Repositories) > MaxRepositories {
 		return fmt.Errorf("repositories must contain 1..%d items", MaxRepositories)
 	}
-	if len(v.CardIDs) == 0 || len(v.CardIDs) > MaxQueryIDs {
+	if len(m.CardIDs) == 0 || len(m.CardIDs) > MaxQueryIDs {
 		return fmt.Errorf("cardIds must contain 1..%d items", MaxQueryIDs)
 	}
-	for _, id := range v.CardIDs {
+	seenIDs := map[string]bool{}
+	for _, id := range m.CardIDs {
 		if len(id) == 0 || len(id) > MaxIDBytes || !utf8.ValidString(id) {
 			return errors.New("cardIds contains an invalid ID")
 		}
-		if _, err := cardid.Parse(id); err != nil {
+		parsed, err := cardid.Parse(id)
+		if err != nil {
 			return err
 		}
-	}
-	rawIDs := make(map[string]bool)
-	for _, id := range v.CardIDs {
-		x, _ := cardid.Parse(id)
-		if rawIDs[x.Key()] {
-			return fmt.Errorf("duplicate card ID identity %q", x.Key())
+		if seenIDs[parsed.Key()] {
+			return fmt.Errorf("duplicate card ID identity %q", parsed.Key())
 		}
-		rawIDs[x.Key()] = true
+		seenIDs[parsed.Key()] = true
 	}
 	seen := map[string]bool{}
-	for _, r := range v.Repositories {
+	for _, r := range m.Repositories {
 		if !validRepositoryID(r.RepositoryID) || r.Root == "" || !filepath.IsAbs(r.Root) || filepath.Clean(r.Root) != r.Root || r.Board == "" || pathUnsafe(r.Board) {
 			return errors.New("repository requires bounded ID, absolute clean root and safe relative board")
 		}
@@ -119,7 +130,6 @@ func (m Manifest) UnmarshalJSON(raw []byte) error {
 		}
 		seen[r.RepositoryID] = true
 	}
-	m.SchemaVersion, m.Repositories, m.CardIDs = v.SchemaVersion, v.Repositories, v.CardIDs
 	return nil
 }
 
@@ -142,13 +152,21 @@ func DecodeManifest(raw []byte) (Manifest, error) {
 }
 
 func Lookup(ctx context.Context, m Manifest) (Output, error) {
+	if err := validateManifest(m); err != nil {
+		return Output{}, err
+	}
 	type board struct {
 		id, root, board string
 		cards           []Match
 	}
 	boards := make([]board, len(m.Repositories))
 	roots := map[string]bool{}
+	commons := map[string]bool{}
 	for i, r := range m.Repositories {
+		rootInfo, statErr := os.Lstat(r.Root)
+		if statErr != nil || rootInfo.Mode()&os.ModeSymlink != 0 || !rootInfo.IsDir() {
+			return Output{}, fmt.Errorf("repository %s root is not a real directory", r.RepositoryID)
+		}
 		root, err := filepath.EvalSymlinks(r.Root)
 		if err != nil {
 			return Output{}, fmt.Errorf("repository %s: %w", r.RepositoryID, err)
@@ -166,9 +184,16 @@ func Lookup(ctx context.Context, m Manifest) (Output, error) {
 		if err != nil || loc == nil || loc.Repository != root || loc.Board != r.Board {
 			return Output{}, fmt.Errorf("repository %s unsafe board boundary: %v", r.RepositoryID, err)
 		}
+		if commons[loc.CommonDirectory] {
+			return Output{}, fmt.Errorf("duplicate Git common directory %q", loc.CommonDirectory)
+		}
+		commons[loc.CommonDirectory] = true
 		cards, err := scanBoard(ctx, root, r.Board)
 		if err != nil {
 			return Output{}, fmt.Errorf("repository %s: %w", r.RepositoryID, err)
+		}
+		for j := range cards {
+			cards[j].RepositoryID = r.RepositoryID
 		}
 		boards[i] = board{r.RepositoryID, root, r.Board, cards}
 	}
@@ -204,11 +229,11 @@ func Lookup(ctx context.Context, m Manifest) (Output, error) {
 
 func scanBoard(ctx context.Context, root, board string) ([]Match, error) {
 	base := filepath.Join(root, filepath.FromSlash(board))
-	before, err := fingerprint(base)
-	if err != nil {
+	if err := preflightBoard(base); err != nil {
 		return nil, err
 	}
-	if err := preflightBoard(base); err != nil {
+	before, err := fingerprint(base)
+	if err != nil {
 		return nil, err
 	}
 	entries, err := taskstore.ListReadOnly(base)
@@ -230,7 +255,7 @@ func scanBoard(ctx context.Context, root, board string) ([]Match, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !bytes.Equal(before, after) {
+	if !bytes.Equal(before.digest, after.digest) || !sameNodes(before.nodes, after.nodes) {
 		return nil, errors.New("board changed during inspection; retry")
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
@@ -238,10 +263,14 @@ func scanBoard(ctx context.Context, root, board string) ([]Match, error) {
 }
 
 func preflightBoard(root string) error {
-	count, total := 0, int64(0)
+	count, nodes, total := 0, 0, int64(0)
 	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		nodes++
+		if nodes > MaxBoardNodes {
+			return fmt.Errorf("board exceeds %d filesystem entries", MaxBoardNodes)
 		}
 		if path != root && d.Name() == ".git" {
 			return errors.New("nested Git metadata boundary")
@@ -275,11 +304,22 @@ func preflightBoard(root string) error {
 	})
 }
 
-func fingerprint(root string) ([]byte, error) {
+type boardSnapshot struct {
+	digest []byte
+	nodes  map[string]os.FileInfo
+}
+
+func fingerprint(root string) (boardSnapshot, error) {
 	h := sha256.New()
+	nodes, total := 0, int64(0)
+	identities := map[string]os.FileInfo{}
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, e error) error {
 		if e != nil {
 			return e
+		}
+		nodes++
+		if nodes > MaxBoardNodes {
+			return fmt.Errorf("board exceeds %d filesystem entries", MaxBoardNodes)
 		}
 		rel, _ := filepath.Rel(root, path)
 		if path != root && d.Name() == ".git" {
@@ -298,13 +338,19 @@ func fingerprint(root string) ([]byte, error) {
 		if !d.IsDir() && !info.Mode().IsRegular() {
 			return fmt.Errorf("board contains non-regular file: %s", path)
 		}
+		identities[filepath.ToSlash(rel)] = info
+		total += info.Size()
+		if total > MaxBoardBytes {
+			return fmt.Errorf("board exceeds %d bytes", MaxBoardBytes)
+		}
 		fmt.Fprintf(h, "%s\x00%d\x00%d\x00", filepath.ToSlash(rel), info.Size(), info.ModTime().UnixNano())
 		if !d.IsDir() {
+			declaredSize := info.Size()
 			f, openErr := os.Open(path)
 			if openErr != nil {
 				return openErr
 			}
-			n, copyErr := io.Copy(h, io.LimitReader(f, MaxBoardBytes+1))
+			n, copyErr := io.Copy(h, io.LimitReader(f, MaxBoardBytes-total+declaredSize+1))
 			closeErr := f.Close()
 			if copyErr != nil {
 				return copyErr
@@ -312,13 +358,27 @@ func fingerprint(root string) ([]byte, error) {
 			if closeErr != nil {
 				return closeErr
 			}
-			if n > MaxBoardBytes {
+			if n > MaxBoardBytes-total+declaredSize {
 				return fmt.Errorf("board exceeds %d bytes", MaxBoardBytes)
 			}
+			total = total - declaredSize + n
 		}
 		return nil
 	})
-	return h.Sum(nil), err
+	return boardSnapshot{digest: h.Sum(nil), nodes: identities}, err
+}
+
+func sameNodes(a, b map[string]os.FileInfo) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for path, left := range a {
+		right, ok := b[path]
+		if !ok || left.Mode() != right.Mode() || left.Size() != right.Size() || left.ModTime() != right.ModTime() || !os.SameFile(left, right) {
+			return false
+		}
+	}
+	return true
 }
 
 func validRepositoryID(s string) bool {
@@ -333,7 +393,20 @@ func validRepositoryID(s string) bool {
 	return true
 }
 func pathUnsafe(s string) bool {
-	return filepath.IsAbs(s) || filepath.Clean(s) != s || s == "." || s == ".." || strings.HasPrefix(s, "../") || strings.ContainsAny(s, "\\\r\n*?[") || strings.IndexByte(s, 0) >= 0
+	return path.IsAbs(s) || path.Clean(s) != s || s == "." || s == ".." || strings.HasPrefix(s, "../") || strings.ContainsAny(s, "\\\r\n*?[") || strings.IndexByte(s, 0) >= 0
+}
+
+func exactObjectKeys(raw []byte, allowed map[string]bool) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	for key := range fields {
+		if !allowed[key] {
+			return fmt.Errorf("unknown or non-canonical JSON field %q", key)
+		}
+	}
+	return nil
 }
 
 func strictDecode(raw []byte, dst any) error {

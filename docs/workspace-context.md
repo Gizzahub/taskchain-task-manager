@@ -19,7 +19,8 @@ locators and `board` is one clean, repository-relative directory. The command
 rejects unsafe or missing roots and boards, duplicate IDs, duplicate canonical
 Git roots, invalid card IDs, duplicate numeric card identities, unknown fields,
 trailing JSON, and manifests over 256 KiB. It accepts at most 32 repositories,
-256 query IDs, and 4,096 cards per board.
+256 query IDs, 4,096 cards, 8,192 filesystem entries, and 64 MiB of regular
+files per board.
 
 Each query returns `missing`, `found`, or `ambiguous`. Numeric identity means
 `TASK-01` and `TASK-1` address the same card; the requested spelling is retained
@@ -32,3 +33,7 @@ The lookup reads a board and compares a bounded file fingerprint before and
 after the scan. An observed change fails the complete request. This is a
 per-board consistency check; it does not claim one atomic point in time across
 repositories or detect a change that is restored before either fingerprint.
+The read-only projection validates pending transitions, board policy, cards and
+claims, but does not acquire the writer lock or run the session's shared-state
+writer coordination; callers must treat a concurrent shared-state change as a
+retry condition.

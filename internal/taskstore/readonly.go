@@ -12,5 +12,12 @@ func ListReadOnly(dir string) (entries []Entry, err error) {
 	if err := rejectPendingTransitions(r); err != nil {
 		return nil, err
 	}
-	return listLocked(r)
+	entries, err = listLocked(r)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := loadClaims(r, entries); err != nil {
+		return nil, err
+	}
+	return entries, nil
 }

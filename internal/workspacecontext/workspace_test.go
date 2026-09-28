@@ -71,9 +71,40 @@ func TestLookupPreservesCollisionAndMissing(t *testing.T) {
 	}
 }
 
+func TestFingerprintDetectsSameContentReplacement(t *testing.T) {
+	root := testRepo(t)
+	before, err := fingerprint(filepath.Join(root, "tasks"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cardPath := filepath.Join(root, "tasks", "todo", "one.md")
+	info, err := os.Stat(cardPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := filepath.Join(t.TempDir(), "one.md.old")
+	if err := os.Rename(cardPath, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cardPath, []byte("---\nid: TASK-001\ntitle: one\npriority: P2\nstatus: pending\n---\n# One\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(cardPath, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	after, err := fingerprint(filepath.Join(root, "tasks"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sameNodes(before.nodes, after.nodes) {
+		t.Fatal("accepted replacement with same content and mtime")
+	}
+}
+
 func TestManifestRejectsDuplicateIdentityAndUnsafeBoard(t *testing.T) {
 	for _, raw := range []string{
 		`{"schemaVersion":1,"repositories":[],"repositories":[],"cardIds":["TASK-1"]}`,
+		`{"schemaVersion":1,"repositories":[{"RepositoryID":"a","root":"/tmp/x","board":"tasks"}],"cardIds":["TASK-1"]}`,
 		`{"schemaVersion":1,"repositories":[{"repositoryId":"a","root":"/tmp/x","board":"../tasks"}],"cardIds":["TASK-1"]}`,
 		`{"schemaVersion":1,"repositories":[{"repositoryId":"a","root":"/tmp/x","board":"tasks"}],"cardIds":["TASK-01","TASK-1"]}`,
 	} {
@@ -85,9 +116,13 @@ func TestManifestRejectsDuplicateIdentityAndUnsafeBoard(t *testing.T) {
 
 func TestLookupRejectsAliasMalformedAndSymlinkBoundaries(t *testing.T) {
 	root := testRepo(t)
+	other := testRepo(t)
 	alias := filepath.Join(t.TempDir(), "alias")
 	if err := os.Symlink(root, alias); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := Lookup(context.Background(), Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: alias, Board: "tasks"}}, CardIDs: []string{"TASK-1"}}); err == nil {
+		t.Fatal("accepted symlink root")
 	}
 	m := Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: root, Board: "tasks"}, {RepositoryID: "b", Root: alias, Board: "tasks"}}, CardIDs: []string{"TASK-1"}}
 	if _, err := Lookup(context.Background(), m); err == nil {
@@ -97,8 +132,12 @@ func TestLookupRejectsAliasMalformedAndSymlinkBoundaries(t *testing.T) {
 	if err := os.WriteFile(bad, []byte("not a card"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Lookup(context.Background(), Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: root, Board: "tasks"}}, CardIDs: []string{"TASK-1"}}); err == nil {
+	beforeRoot, beforeOther := treeBytes(t, root), treeBytes(t, other)
+	if _, err := Lookup(context.Background(), Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: root, Board: "tasks"}, {RepositoryID: "b", Root: other, Board: "tasks"}}, CardIDs: []string{"TASK-1"}}); err == nil {
 		t.Fatal("accepted malformed card")
+	}
+	if afterRoot, afterOther := treeBytes(t, root), treeBytes(t, other); !bytes.Equal(beforeRoot, afterRoot) || !bytes.Equal(beforeOther, afterOther) {
+		t.Fatal("error lookup changed repository state")
 	}
 	if err := os.Remove(bad); err != nil {
 		t.Fatal(err)
