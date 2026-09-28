@@ -16,6 +16,10 @@ claim/release와 소유권 기반 상태 전이·재개를 지원합니다. Inte
 
 Go 1.26.6 이상이 필요합니다.
 
+릴리스 태그와 내려받을 바이너리는 아직 제공하지 않습니다. 현재 검증된 내부 후보의
+출처, 재현 빌드, 확인된 플랫폼, 향후 공개 절차는
+[릴리스 후보와 출처](docs/release-candidate.md)를 따르세요.
+
 ```sh
 make check
 ./build/taskchain-task-manager show examples/card.md --json
