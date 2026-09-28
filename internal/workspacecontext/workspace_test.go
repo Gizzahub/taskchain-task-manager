@@ -163,7 +163,7 @@ func TestFingerprintDetectsSameContentReplacement(t *testing.T) {
 
 func TestManifestRejectsDuplicateIdentityAndUnsafeBoard(t *testing.T) {
 	for _, raw := range []string{
-		`{"schemaVersion":1,"repositories":[],"repositories":[],"cardIds":["TASK-1"]}`,
+		`{"schemaVersion":1,"repositories":[{"repositoryId":"a","root":"/tmp/x","board":"tasks"}],"repositories":[{"repositoryId":"b","root":"/tmp/y","board":"tasks"}],"cardIds":["TASK-1"]}`,
 		`{"schemaVersion":1,"repositories":[{"RepositoryID":"a","root":"/tmp/x","board":"tasks"}],"cardIds":["TASK-1"]}`,
 		`{"schemaVersion":1,"SchemaVersion":1,"repositories":[{"repositoryId":"a","root":"/tmp/x","board":"tasks"}],"cardIds":["TASK-1"]}`,
 		`{"schemaVersion":1,"SchemaVersion":1,"repositories":[],"cardIds":["TASK-1"]}`,
@@ -322,11 +322,17 @@ func TestBoardScanBounds(t *testing.T) {
 	if err := preflightBoard(nodeDir); err != nil {
 		t.Fatalf("rejected exact node bound: %v", err)
 	}
+	if _, err := fingerprint(nodeDir); err != nil {
+		t.Fatalf("fingerprint rejected exact node bound: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(nodeDir, fmt.Sprintf("%d.txt", MaxBoardNodes)), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := preflightBoard(nodeDir); err == nil {
 		t.Fatal("accepted node bound")
+	}
+	if _, err := fingerprint(nodeDir); err == nil {
+		t.Fatal("fingerprint accepted node bound")
 	}
 }
 
