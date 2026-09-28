@@ -122,7 +122,7 @@ func validateManifest(m Manifest) error {
 	}
 	seen := map[string]bool{}
 	for _, r := range m.Repositories {
-		if !validRepositoryID(r.RepositoryID) || r.Root == "" || !filepath.IsAbs(r.Root) || filepath.Clean(r.Root) != r.Root || r.Board == "" || pathUnsafe(r.Board) {
+		if !validRepositoryID(r.RepositoryID) || r.Root == "" || !utf8.ValidString(r.Root) || !filepath.IsAbs(r.Root) || filepath.Clean(r.Root) != r.Root || r.Board == "" || !utf8.ValidString(r.Board) || pathUnsafe(r.Board) {
 			return errors.New("repository requires bounded ID, absolute clean root and safe relative board")
 		}
 		if seen[r.RepositoryID] {
@@ -339,9 +339,11 @@ func fingerprint(root string) (boardSnapshot, error) {
 			return fmt.Errorf("board contains non-regular file: %s", path)
 		}
 		identities[filepath.ToSlash(rel)] = info
-		total += info.Size()
-		if total > MaxBoardBytes {
-			return fmt.Errorf("board exceeds %d bytes", MaxBoardBytes)
+		if !d.IsDir() {
+			total += info.Size()
+			if total > MaxBoardBytes {
+				return fmt.Errorf("board exceeds %d bytes", MaxBoardBytes)
+			}
 		}
 		fmt.Fprintf(h, "%s\x00%d\x00%d\x00", filepath.ToSlash(rel), info.Size(), info.ModTime().UnixNano())
 		if !d.IsDir() {
