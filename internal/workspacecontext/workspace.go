@@ -97,6 +97,13 @@ func (m *Manifest) UnmarshalJSON(raw []byte) error {
 }
 
 func validateManifest(m Manifest) error {
+	encoded, err := json.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("encode manifest bounds: %w", err)
+	}
+	if len(encoded) > MaxManifestBytes {
+		return fmt.Errorf("manifest exceeds %d bytes", MaxManifestBytes)
+	}
 	if m.SchemaVersion != SchemaVersion {
 		return fmt.Errorf("unsupported manifest schemaVersion %d", m.SchemaVersion)
 	}

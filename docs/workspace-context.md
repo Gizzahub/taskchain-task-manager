@@ -37,3 +37,7 @@ The read-only projection validates pending transitions, board policy, cards and
 claims, but does not acquire the writer lock or run the session's shared-state
 writer coordination; callers must treat a concurrent shared-state change as a
 retry condition.
+
+The same 256 KiB bound also applies to the compact JSON representation of a
+typed API manifest passed directly to `Lookup`; this prevents callers from
+bypassing the input bound by constructing the value in memory.
