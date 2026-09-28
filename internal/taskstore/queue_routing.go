@@ -47,7 +47,10 @@ func validateAllowedPath(allowed string) error {
 	if allowed == "" || path.IsAbs(allowed) || filepath.IsAbs(allowed) {
 		return fmt.Errorf("path must be a non-empty repository-relative path")
 	}
-	if strings.ContainsAny(allowed, "\\*?[]:") {
+	if len(allowed) >= 2 && ((allowed[0] >= 'A' && allowed[0] <= 'Z') || (allowed[0] >= 'a' && allowed[0] <= 'z')) && allowed[1] == ':' {
+		return fmt.Errorf("path must not use Windows drive notation")
+	}
+	if strings.ContainsAny(allowed, "\\*?[]") {
 		return fmt.Errorf("path contains an unsafe pattern character")
 	}
 	for _, r := range allowed {

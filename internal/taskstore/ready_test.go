@@ -173,6 +173,7 @@ func TestQueueRejectsInvalidRouteWithoutPartialProjection(t *testing.T) {
 		{"tasks subtree", "---\nid: TASK-1\ntitle: Board write\nallowed-paths: [tasks/todo/TASK-1.md]\n---\n"},
 		{"absolute path", "---\nid: TASK-1\ntitle: Absolute\nallowed-paths: [/etc/passwd]\n---\n"},
 		{"windows volume", "---\nid: TASK-1\ntitle: Windows volume\nallowed-paths: ['C:/Windows']\n---\n"},
+		{"windows volume relative", "---\nid: TASK-1\ntitle: Windows volume relative\nallowed-paths: ['C:Windows']\n---\n"},
 		{"parent traversal", "---\nid: TASK-1\ntitle: Traversal\nallowed-paths: [../secret]\n---\n"},
 		{"glob", "---\nid: TASK-1\ntitle: Glob\nallowed-paths: ['internal/*.go']\n---\n"},
 		{"glob close bracket", "---\nid: TASK-1\ntitle: Glob\nallowed-paths: ['internal/].go']\n---\n"},
@@ -198,6 +199,12 @@ func TestQueueRejectsInvalidRouteWithoutPartialProjection(t *testing.T) {
 				t.Fatal("Queue changed board after rejecting route")
 			}
 		})
+	}
+}
+
+func TestAllowedPathPermitsColonAfterRepositoryPrefix(t *testing.T) {
+	if err := validateAllowedPath("docs/spec:v2.md"); err != nil {
+		t.Fatalf("repository-relative path with colon: %v", err)
 	}
 }
 
