@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -182,6 +183,49 @@ func TestManifestBounds(t *testing.T) {
 	longID := Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: "/tmp", Board: "tasks"}}, CardIDs: []string{"TASK-" + strings.Repeat("1", MaxIDBytes)}}
 	if err := validateManifest(longID); err == nil {
 		t.Fatal("accepted ID byte bound")
+	}
+}
+
+func TestBoardScanBounds(t *testing.T) {
+	tooLarge := t.TempDir()
+	if err := os.Mkdir(filepath.Join(tooLarge, "tasks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	large := filepath.Join(tooLarge, "tasks", "large.bin")
+	if err := os.WriteFile(large, []byte{0}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(large, MaxBoardBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	if err := preflightBoard(filepath.Join(tooLarge, "tasks")); err == nil {
+		t.Fatal("accepted board byte bound")
+	}
+	tooManyCards := t.TempDir()
+	cardDir := filepath.Join(tooManyCards, "tasks", "todo")
+	if err := os.MkdirAll(cardDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i <= MaxCardsPerBoard; i++ {
+		if err := os.WriteFile(filepath.Join(cardDir, fmt.Sprintf("%d.md", i)), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := preflightBoard(filepath.Join(tooManyCards, "tasks")); err == nil {
+		t.Fatal("accepted card bound")
+	}
+	tooManyNodes := t.TempDir()
+	nodeDir := filepath.Join(tooManyNodes, "tasks")
+	if err := os.Mkdir(nodeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i <= MaxBoardNodes; i++ {
+		if err := os.WriteFile(filepath.Join(nodeDir, fmt.Sprintf("%d.txt", i)), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := preflightBoard(nodeDir); err == nil {
+		t.Fatal("accepted node bound")
 	}
 }
 
