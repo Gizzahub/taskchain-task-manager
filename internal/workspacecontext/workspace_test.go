@@ -165,6 +165,7 @@ func TestManifestRejectsDuplicateIdentityAndUnsafeBoard(t *testing.T) {
 	for _, raw := range []string{
 		`{"schemaVersion":1,"repositories":[],"repositories":[],"cardIds":["TASK-1"]}`,
 		`{"schemaVersion":1,"repositories":[{"RepositoryID":"a","root":"/tmp/x","board":"tasks"}],"cardIds":["TASK-1"]}`,
+		`{"schemaVersion":1,"SchemaVersion":1,"repositories":[{"repositoryId":"a","root":"/tmp/x","board":"tasks"}],"cardIds":["TASK-1"]}`,
 		`{"schemaVersion":1,"SchemaVersion":1,"repositories":[],"cardIds":["TASK-1"]}`,
 		`{"schemaVersion":1,"repositories":[{"repositoryId":"a","root":"/tmp/x","board":"../tasks"}],"cardIds":["TASK-1"]}`,
 		`{"schemaVersion":1,"repositories":[{"repositoryId":"a","root":"/tmp/x","board":"tasks"}],"cardIds":["TASK-01","TASK-1"]}`,
@@ -220,6 +221,35 @@ func TestTypedManifestRoundTripAndDirectLookupValidation(t *testing.T) {
 	if _, err := Lookup(context.Background(), Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: strings.Repeat("/", MaxManifestBytes+1), Board: "tasks"}}, CardIDs: []string{"TASK-1"}}); err == nil {
 		t.Fatal("direct Lookup accepted oversized root")
 	}
+	heavy := Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: "/" + strings.Repeat("&", 100000), Board: "tasks"}}, CardIDs: []string{"TASK-1"}}
+	if _, err := Lookup(context.Background(), heavy); err == nil {
+		t.Fatal("direct Lookup accepted HTML-heavy oversized manifest")
+	}
+}
+
+func TestManifestJSONLengthMatchesMarshal(t *testing.T) {
+	m := Manifest{SchemaVersion: 1, Repositories: []Repository{{RepositoryID: "a", Root: `/tmp/<>\\&`, Board: "tasks"}}, CardIDs: []string{"TASK-1", "TASK-2"}}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := manifestJSONLen(m); got != len(raw) {
+		t.Fatalf("manifestJSONLen=%d, marshal=%d, raw=%s", got, len(raw), raw)
+	}
+	for _, value := range []string{"quote\"", "slash\\", "control\n", "html<&>", "\u2028\u2029"} {
+		if got := jsonStringLen(value); got != len(mustJSONQuote(t, value)) {
+			t.Fatalf("jsonStringLen(%q)=%d", value, got)
+		}
+	}
+}
+
+func mustJSONQuote(t *testing.T, value string) []byte {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }
 
 func TestBoardScanBounds(t *testing.T) {

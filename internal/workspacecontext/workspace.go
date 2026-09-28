@@ -147,7 +147,7 @@ func validateManifest(m Manifest) error {
 }
 
 func manifestJSONLen(m Manifest) int {
-	n := len(`{"schemaVersion":1,"repositories":[`) + len(`,"cardIds":[`)
+	n := len(`{"schemaVersion":1,"repositories":[`) + len(`],"cardIds":[`)
 	for i, r := range m.Repositories {
 		if i > 0 {
 			n++
@@ -169,6 +169,8 @@ func jsonStringLen(s string) int {
 		switch r {
 		case '"', '\\':
 			n += 2
+		case '<', '>', '&':
+			n += 6
 		case '\b', '\f', '\n', '\r', '\t':
 			n += 2
 		case '\u2028', '\u2029':
