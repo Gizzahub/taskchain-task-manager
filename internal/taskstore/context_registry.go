@@ -25,6 +25,11 @@ type ContextResult struct {
 	Canonical            json.RawMessage `json:"canonical"`
 }
 
+// ErrContextNotFound distinguishes an absent exact revision from a damaged
+// board or registry. Workspace queries may continue to the next repository
+// only for this error.
+var ErrContextNotFound = errors.New("context document not found")
+
 func contextResult(doc intentdoc.Document, path, status, references string) (ContextResult, error) {
 	canonical, err := doc.Canonical()
 	if err != nil {
@@ -138,7 +143,7 @@ func ShowContext(dir, kind, id string, revision uint32) (result ContextResult, e
 	if err != nil {
 		return result, err
 	}
-	defer func() { err = errors.Join(err, session.close()) }()
+	defer func() { err = contextReadCloseError(err, session.close()) }()
 	if err := rejectPendingTransitions(session.root); err != nil {
 		return result, err
 	}
@@ -147,9 +152,18 @@ func ShowContext(dir, kind, id string, revision uint32) (result ContextResult, e
 		return result, err
 	}
 	if !found {
-		return result, fmt.Errorf("context document not found: %s", path)
+		return result, fmt.Errorf("%w: %s", ErrContextNotFound, path)
 	}
 	return contextResult(doc, path, "stored", "not_rechecked")
+}
+
+func contextReadCloseError(readErr, closeErr error) error {
+	if closeErr != nil && errors.Is(readErr, ErrContextNotFound) {
+		// An absent exact revision is safe to skip only after all locks and
+		// handles close successfully. Keep cleanup failures visible to callers.
+		return closeErr
+	}
+	return errors.Join(readErr, closeErr)
 }
 
 func validateContextReferences(r *os.Root, doc intentdoc.Document) (string, error) {
