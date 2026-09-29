@@ -90,6 +90,23 @@ func TestStoreRejectsUnknownCommand(t *testing.T) {
 	}
 }
 
+func TestStoreRejectsUnknownVerb(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "missing-board")
+	var out, diagnostics bytes.Buffer
+	if code := runStore([]string{"bogus-verb", "--dir", dir, "--json"}, &out, &diagnostics); code != 2 {
+		t.Fatalf("code = %d, want 2; stderr = %s", code, diagnostics.String())
+	}
+	if out.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", out.String())
+	}
+	if !bytes.Contains(diagnostics.Bytes(), []byte("bogus-verb")) {
+		t.Fatalf("stderr = %q, want mention of bogus-verb", diagnostics.String())
+	}
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("board directory was created: %v", err)
+	}
+}
+
 func TestReadyCLIAndRepeatedDependencies(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "tasks")
 	call := func(args ...string) []byte {
