@@ -1,0 +1,13 @@
+Validation tool: CE v0.8.4-400-gbb970b24 (bb970b24adfc29f75e7555cb3cc45716d6973f3b)
+📋 Validating all tasks...
+
+Validating: decisions/adr/0001-uncatalogued-decision.md
+  ✅ Valid (no errors or warnings)
+
+Validating: decisions/README.md
+  ❌ decisions/README.md holds no index table with a Status column; 1 decision document(s) are catalogued by nothing
+  ❌ Invalid: 1 error(s), 0 warning(s)
+
+---
+Summary: 1 valid, 1 invalid (total: 2)
+Path citations: 0 binding(s) examined, 0 skipped as unreadable without a shell

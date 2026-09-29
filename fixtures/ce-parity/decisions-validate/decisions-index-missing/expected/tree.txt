@@ -1,0 +1,2 @@
+a5db7aa8db79c34f92978000e639639ef60c6e4c04793d3b2c33d91abcc7aa42  decisions/README.md
+c7268430ef3b00208348fdfed9c5321ce00cc20d324f95b3ee28789ad4606b0f  decisions/adr/0001-uncatalogued-decision.md

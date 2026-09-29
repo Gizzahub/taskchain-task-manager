@@ -1,0 +1,10 @@
+Validation tool: CE v0.8.4-400-gbb970b24 (bb970b24adfc29f75e7555cb3cc45716d6973f3b)
+📋 Validating all tasks...
+
+Validating: tasks/todo/001-shapes.md
+  ❌ verify binding severs a command substitution with ';', discarding its exit status so the binding cannot go red: out=$(cat data.txt)
+  ❌ Invalid: 1 error(s), 0 warning(s)
+
+---
+Summary: 0 valid, 1 invalid (total: 1)
+Path citations: 0 binding(s) examined, 3 skipped as unreadable without a shell

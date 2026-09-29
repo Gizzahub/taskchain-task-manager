@@ -1,4 +1,4 @@
-.PHONY: build test lint check release-candidate release-candidate-verify
+.PHONY: build test lint check parity-ce parity-report release-candidate release-candidate-verify
 
 RELEASE_DIR ?= build/release
 # provenance manifest의 buildCommand에 기록하는 공식 출력 경로다.
@@ -20,6 +20,17 @@ lint:
 	test -z "$$(gofmt -l cmd internal)"
 
 check: lint test build
+
+# CE 참조 동작(고정 커밋)에 대해 fixture를 재검증한다. 하나라도 미세차면 실패한다.
+parity-ce:
+	cd fixtures/ce-parity && bash scripts/parity.sh verify
+
+# 제품 바이너리를 같은 fixture로 측정해 build/parity-report/REPORT.md를 남긴다.
+parity-report: build
+	cd fixtures/ce-parity && \
+		PRODUCT_BIN="$(CURDIR)/build/taskchain-task-manager" \
+		PARITY_REPORT_DIR="$(CURDIR)/build/parity-report" \
+		bash scripts/parity.sh report
 
 # 매트릭스 플랫폼별 바이너리, SHA256SUMS, provenance manifest를 RELEASE_DIR에 만든다.
 # 출처가 source commit과 1:1로 묶여야 하므로 깨끗한 작업 트리에서만 실행한다.

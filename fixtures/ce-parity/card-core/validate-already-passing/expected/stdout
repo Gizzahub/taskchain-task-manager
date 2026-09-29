@@ -1,0 +1,10 @@
+Validation tool: CE v0.8.4-400-gbb970b24 (bb970b24adfc29f75e7555cb3cc45716d6973f3b)
+📋 Validating all tasks...
+
+Validating: tasks/todo/001-passes.md
+  ❌ Criterion already passes on the current tree, so completing this card would prove nothing: bound | verify: `test -d tasks`
+  ❌ Invalid: 1 error(s), 0 warning(s)
+
+---
+Summary: 0 valid, 1 invalid (total: 1)
+Path citations: 1 binding(s) examined, 0 skipped as unreadable without a shell

@@ -1,0 +1,31 @@
+Validation tool: CE v0.8.4-400-gbb970b24 (bb970b24adfc29f75e7555cb3cc45716d6973f3b)
+📋 Validating all tasks...
+
+Validating: tasks/done/001-checked.md
+  ✅ Valid (no errors or warnings)
+
+---
+Summary: 1 valid, 0 invalid (total: 1)
+Path citations: 1 binding(s) examined, 0 skipped as unreadable without a shell
+TASK LINT — CLEAN (1 dir(s), 1 card(s), every card where the board looks)
+
+DIRS
+  done/            zone                   1
+TASK PREFLIGHT — READY
+zones: all    dialect: ce    total 1    runnable 1    unrunnable 0
+
+RUNNABLE
+  Low  tasks/done/001-checked.md (1/1 bound)
+
+ADVISORY (degrades a run, does not stop it)
+    1  no-exec-tier             no exec-tier; falls back to standard
+
+NOT DONE: no card was read past its metadata, moved, or modified.
+
+✅ validate  pass
+✅ lint      pass
+✅ preflight pass
+❌ bindings  fail
+   tasks/done/001-checked.md:19: test -f absent-gate-marker.txt: exit status 1
+
+NOT READY — task_binding_failed (bindings)

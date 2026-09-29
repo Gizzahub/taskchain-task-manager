@@ -1,0 +1,7 @@
+TASK LINT — CLEAN (1 dir(s), 1 card(s), every card where the board looks)
+
+DIRS
+  doing/           zone                   1
+
+WARNINGS
+  doing-zone-exit          tasks/doing/002-working.md: card sits in doing/ but task TASK-002 has no active run in run-status states; move the card on or restart the run

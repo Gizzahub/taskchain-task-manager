@@ -1,0 +1,4 @@
+0d9dc74f71d2973127c1cfd0f8971464588acc1a7d4afa24e00e7bcdafbb833d  tasks/plan/010-with-roster.md
+e442fff6e2bd182a8b07b62043c51151d6f4e456ec4a21fa592336f8021afe69  tasks/plan/011-no-roster.md
+637930db918acc526e3a07184b85c0722cb22e2cc1c12b2d4dd6bfe03d05fb69  tasks/todo/012-child-alpha.md
+cf094dd99040741949c2c47e923fc5dd50aa5f423bb335c66c47e37ac5102534  tasks/todo/013-child-beta.md

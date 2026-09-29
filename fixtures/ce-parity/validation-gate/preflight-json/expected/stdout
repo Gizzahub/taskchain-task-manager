@@ -1,0 +1,44 @@
+{
+  "verdict": "READY",
+  "zones": [],
+  "total": 1,
+  "runnable": 1,
+  "unrunnable": 0,
+  "blocking": {},
+  "advisory": {
+    "no-exec-tier": 1
+  },
+  "cards": [
+    {
+      "path": "tasks/todo/001-ready.md",
+      "zone": "todo",
+      "title": "ready card",
+      "priority": "Low",
+      "runnable": true,
+      "blocking": [],
+      "advisory": [
+        "no-exec-tier"
+      ],
+      "criteria": 1,
+      "bound": 1,
+      "bytes": 258
+    }
+  ],
+  "strays": {
+    "clean": true,
+    "hidden_wip": 0,
+    "counts": {},
+    "dirs": [
+      {
+        "name": "todo",
+        "kind": "zone",
+        "cards": 1
+      }
+    ],
+    "cards": [],
+    "warnings": [],
+    "structure": [],
+    "stage_diagnostics": [],
+    "id_parity": []
+  }
+}

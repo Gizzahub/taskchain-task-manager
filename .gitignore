@@ -1,3 +1,4 @@
 /build/
+/fixtures/ce-parity/build/
 /tmp/
 *.test

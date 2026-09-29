@@ -1,0 +1,13 @@
+=== Task List ===
+Directory: <WS>/tasks
+
+[~] tasks/doing/003-active.md
+   active card | High | L
+[ ] tasks/todo/001-draft.md
+   draft card | Low | S
+[ ] tasks/todo/002-second.md
+   second draft card | Medium | M
+
+Total: 3 task(s)
+
+=== End ===

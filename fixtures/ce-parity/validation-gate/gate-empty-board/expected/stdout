@@ -1,0 +1,14 @@
+Validation tool: CE v0.8.4-400-gbb970b24 (bb970b24adfc29f75e7555cb3cc45716d6973f3b)
+📋 Validating all tasks...
+
+No task files found
+TASK LINT — CLEAN (0 dir(s), 0 card(s), every card where the board looks)
+TASK PREFLIGHT — NO_QUEUE (valid cleared/reference-only board; no execution queue)
+
+✅ validate  pass
+✅ lint      pass
+✅ preflight pass
+❌ bindings  unavailable
+   no cards examined under tasks: the board was not measured
+
+UNAVAILABLE — task_gate_unavailable (the gate could not judge; fix the cause above)

@@ -1,0 +1,2 @@
+e8eac11a60399596ab9b4e7235924142d26a2e7ca2c13867570532662fee2066  .git/ce/card-id-reservations/highest.json
+32387cf8ce85357d80e871877f086d1cdea0a19f9fdde5eb812a5c16f2f2a206  tasks/todo/001-fixture-scaffold-card.md

@@ -1,0 +1,25 @@
+Validation tool: CE v0.8.4-400-gbb970b24 (bb970b24adfc29f75e7555cb3cc45716d6973f3b)
+📋 Validating all tasks...
+
+Validating: tasks/plan/010-with-roster.md
+  ❌ Invalid status: plan
+  ❌ Invalid type "plan" for task
+  ⚠️  task document filed under a plan zone
+  ❌ Invalid: 2 error(s), 1 warning(s)
+
+Validating: tasks/plan/011-no-roster.md
+  ❌ Invalid status: plan
+  ❌ Invalid type "plan" for task
+  ❌ Plan progress counters require a children roster
+  ⚠️  task document filed under a plan zone
+  ❌ Invalid: 3 error(s), 1 warning(s)
+
+Validating: tasks/todo/012-child-alpha.md
+  ✅ Valid (no errors or warnings)
+
+Validating: tasks/todo/013-child-beta.md
+  ✅ Valid (no errors or warnings)
+
+---
+Summary: 2 valid, 2 invalid (total: 4)
+Path citations: 4 binding(s) examined, 0 skipped as unreadable without a shell

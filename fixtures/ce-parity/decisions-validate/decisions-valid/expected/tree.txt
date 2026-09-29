@@ -1,0 +1,2 @@
+51affb77d4e9079296bcc254d42581e69ce873fc942ee2f57a154248e42b65c5  decisions/README.md
+c7715ef0ff318041ca0be97d0b99b06cf1c641bc2c4ba448768d2de7c7510baf  decisions/adr/0001-fixture-decision.md

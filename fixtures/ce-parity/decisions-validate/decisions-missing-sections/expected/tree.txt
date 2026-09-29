@@ -1,0 +1,2 @@
+ac8ed8fdb22e51024690d15e8b23bd1e8d3a3d7cbf81b567963218bddc5b279e  decisions/README.md
+c44806f6afd68829bd7ddf9d86b3c95ce1ffe8e1855a6fb5996e2c9e040edb05  decisions/adr/0001-incomplete-decision.md

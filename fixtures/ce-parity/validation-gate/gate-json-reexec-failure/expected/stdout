@@ -1,0 +1,26 @@
+{
+  "status": "not-ready",
+  "summary": "task_binding_failed",
+  "tool_version": "v0.8.4-400-gbb970b24",
+  "tool_revision": "bb970b24adfc29f75e7555cb3cc45716d6973f3b",
+  "failed_step": "bindings",
+  "steps": [
+    {
+      "step": "validate",
+      "status": "pass"
+    },
+    {
+      "step": "lint",
+      "status": "pass"
+    },
+    {
+      "step": "preflight",
+      "status": "pass"
+    },
+    {
+      "step": "bindings",
+      "status": "fail",
+      "detail": "tasks/done/001-checked.md:19: test -f absent-gate-marker.txt: exit status 1"
+    }
+  ]
+}

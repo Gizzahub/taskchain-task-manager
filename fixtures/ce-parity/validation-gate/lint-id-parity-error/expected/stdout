@@ -1,0 +1,14 @@
+TASK LINT — 0 STRAY(S), 0 STRUCTURAL ISSUE(S)
+
+DIRS
+  todo/            zone                   1
+
+ID PARITY (1 card(s) filed under a number their id does not name)
+  tasks/todo/999-mislabeled.md     filename 999 vs id 1 — the frontmatter id is authoritative, renumber the file to 1
+
+STRAYS
+
+NEXT
+  1. re-run `ce task lint` until it reports CLEAN
+
+NOT DONE: nothing was moved or modified.

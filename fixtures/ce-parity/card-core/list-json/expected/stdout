@@ -1,0 +1,42 @@
+{
+  "directory": "<WS>/tasks",
+  "total": 3,
+  "tasks": [
+    {
+      "path": "tasks/doing/003-active.md",
+      "title": "active card",
+      "status": "in-progress",
+      "priority": "High",
+      "effort": "L",
+      "category": "doing",
+      "created": "2026-09-29",
+      "acceptance_criteria": [
+        "bound | verify: `test -f absent-active-marker.txt`"
+      ]
+    },
+    {
+      "path": "tasks/todo/001-draft.md",
+      "title": "draft card",
+      "status": "pending",
+      "priority": "Low",
+      "effort": "S",
+      "category": "todo",
+      "created": "2026-09-29",
+      "acceptance_criteria": [
+        "bound | verify: `test -f absent-draft-marker.txt`"
+      ]
+    },
+    {
+      "path": "tasks/todo/002-second.md",
+      "title": "second draft card",
+      "status": "pending",
+      "priority": "Medium",
+      "effort": "M",
+      "category": "todo",
+      "created": "2026-09-29",
+      "acceptance_criteria": [
+        "bound | verify: `test -f absent-second-marker.txt`"
+      ]
+    }
+  ]
+}
