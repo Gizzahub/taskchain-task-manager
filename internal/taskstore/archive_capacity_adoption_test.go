@@ -3,11 +3,66 @@ package taskstore
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestArchiveCapacityResultKeepsPublicProtocolAndSchema(t *testing.T) {
+	t.Parallel()
+	dir, _, _ := archiveBoardFixture(t)
+	result, err := ArchiveCapacity(dir, strings.Repeat("a", 32), true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.StorageProtocol != 5 || result.JournalSchema != 2 {
+		t.Fatalf("public result changed: %+v", result)
+	}
+}
+
+func TestArchiveCapacityResumeAcceptsPreSeparationAdoptionJournal(t *testing.T) {
+	t.Parallel()
+	dir, r, _ := archiveBoardFixture(t)
+	original, err := boundedSnapshotFile(r, archivesFile, maxRepairsBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal, err := decodeArchiveJournal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal.SchemaVersion = 2
+	target, err := archiveCapacityJournalBytes(journal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := publishArchiveCapacityPayload(r, original, target, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	upgradeID := strings.Repeat("f", 32)
+	legacy := fmt.Sprintf(`{"schemaVersion":1,"phase":"pending","upgradeId":%q,"boardPath":%q,"namespace":%q,"sourceJournalSchema":1,"targetJournalSchema":2,"storageProtocol":5,"journalMode":384,"originalLength":%d,"originalSha256":%q,"targetLength":%d,"targetSha256":%q,"payloadSha256":%q}`+"\n", upgradeID, journal.BoardPath, journal.Namespace, len(original), bytesDigest(original), len(target), bytesDigest(target), payload)
+	if err := os.WriteFile(filepath.Join(dir, archiveCapacityFile), []byte(legacy), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := loadArchiveCapacityAdoption(r)
+	if err != nil {
+		t.Fatalf("load old adoption journal: %v", err)
+	}
+	if loaded.SchemaVersion != 1 || loaded.SourceJournalSchema != 1 || loaded.TargetJournalSchema != 2 || loaded.StorageProtocol != 5 {
+		t.Fatalf("old adoption journal decoded differently: %+v", loaded)
+	}
+	result, err := ArchiveCapacity(dir, upgradeID, false, true)
+	if err != nil {
+		t.Fatalf("resume old adoption journal: %v", err)
+	}
+	if result.StorageProtocol != 5 || result.JournalSchema != 2 {
+		t.Fatalf("resume result changed: %+v", result)
+	}
+}
 
 func TestArchiveCapacityAdoptionPublishesExactPayloadAndPermanentBarrier(t *testing.T) {
 	t.Parallel()

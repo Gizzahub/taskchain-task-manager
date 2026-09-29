@@ -7,6 +7,14 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
+// These describe the public ArchiveCapacityResult document. They intentionally
+// do not name the independently versioned values persisted in the adoption
+// journal.
+const (
+	archiveCapacityOutputStorageProtocol = 5
+	archiveCapacityOutputJournalSchema   = 2
+)
+
 type ArchiveCapacityResult struct {
 	UpgradeID       string                   `json:"upgradeId"`
 	Status          outputvocab.ResultStatus `json:"status"`
@@ -50,7 +58,7 @@ func archiveCapacityWithStep(dir, upgradeID string, adopt, resume bool, step fun
 	if err := resumeArchiveCapacity(s, step); err != nil {
 		return result, err
 	}
-	return ArchiveCapacityResult{UpgradeID: upgradeID, Status: outputvocab.Completed, StorageProtocol: 5, JournalSchema: 2}, nil
+	return ArchiveCapacityResult{UpgradeID: upgradeID, Status: outputvocab.Completed, StorageProtocol: archiveCapacityOutputStorageProtocol, JournalSchema: archiveCapacityOutputJournalSchema}, nil
 }
 
 func startArchiveCapacity(s *archiveCapacitySession, upgradeID string, step func(string) error) error {
