@@ -77,6 +77,19 @@ func TestStoreUsageDoesNotCreate(t *testing.T) {
 	}
 }
 
+func TestStoreRejectsUnknownCommand(t *testing.T) {
+	var out, diagnostics bytes.Buffer
+	if code := runStore([]string{"not-a-store-command", "--dir", "tasks", "--json"}, &out, &diagnostics); code != 2 {
+		t.Fatalf("code = %d, want 2; stderr = %s", code, diagnostics.String())
+	}
+	if out.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", out.String())
+	}
+	if got, want := diagnostics.String(), "unknown store command: not-a-store-command\n"; got != want {
+		t.Fatalf("stderr = %q, want %q", got, want)
+	}
+}
+
 func TestReadyCLIAndRepeatedDependencies(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "tasks")
 	call := func(args ...string) []byte {

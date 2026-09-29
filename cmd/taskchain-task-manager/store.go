@@ -84,6 +84,9 @@ func runStore(args []string, out, errOut io.Writer) int {
 			return 1
 		}
 		result, err = taskstore.Create(*dir, taskstore.CreateRequest{ID: *id, Title: *title, DependsOn: dependsOn, Kind: *kind, Template: template, Module: *module, Category: *category})
+	default:
+		fmt.Fprintln(errOut, "unknown store command:", args[0])
+		return 2
 	}
 	if err != nil {
 		fmt.Fprintln(errOut, args[0]+":", err)
