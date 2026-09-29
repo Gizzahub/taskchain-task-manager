@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
 )
 
 // ErrNewCardInput marks a refusal caused by what the caller asked for, as
@@ -122,6 +124,12 @@ func Create(ctx context.Context, opts NewCardOptions) (*NewCardResult, error) {
 	}
 	number, _ := strconv.Atoi(strings.TrimPrefix(id, prefix+"-"))
 	filename := fmt.Sprintf("%03d-%s.md", number, slug)
+	// The ledger refuses its own overflow, but an explicit --id and a
+	// repository-less tree scan can still name a number the filename pattern
+	// cannot spell; none of them reaches the board.
+	if number > cardid.MaxCardNumber {
+		return nil, fmt.Errorf("%w: filename %q does not match the card filename pattern", ErrNewCardInput, filename)
+	}
 	content := render(kind, id, fields, opts)
 	cardPath := filepath.Join(TasksDir, zone, filename)
 	if err := writeNewFile(filepath.Join(opts.Root, cardPath), content); err != nil {
@@ -171,12 +179,12 @@ func PrefixForKind(kind string) (string, error) {
 	return "", fmt.Errorf("unsupported card kind %q", kind)
 }
 
+// checkID validates an explicit --id through the canonical card-id grammar.
+// The prefix must still be the kind's own: an id is not merely well-formed,
+// it must name a card of the kind being created.
 func checkID(id, prefix string) error {
-	pfx, rest, ok := strings.Cut(id, "-")
-	if !ok || pfx != prefix || rest == "" {
-		return fmt.Errorf("%w: --id %q must look like %s-N", ErrNewCardInput, id, prefix)
-	}
-	if _, err := strconv.Atoi(rest); err != nil {
+	parsed, err := cardid.Parse(id)
+	if err != nil || parsed.Prefix != prefix {
 		return fmt.Errorf("%w: --id %q must look like %s-N", ErrNewCardInput, id, prefix)
 	}
 	return nil
@@ -201,8 +209,14 @@ func hasNonASCIITitleWord(title string) bool {
 
 // allocateID takes the next number through the shared reservation ledger when
 // a repository exists, falling back to its own tree scan when it does not.
+// The floor is cardid's frontmatter-only scan; the history scan it is maxed
+// with stays this package's, because the pinned scanner returns failures
+// instead of folding them into an empty floor.
 func allocateID(ctx context.Context, root, prefix string) (string, error) {
-	floor := TreeFloor(root, prefix)
+	floor, err := cardid.ScanFloor(filepath.Join(root, TasksDir), prefix)
+	if err != nil {
+		return "", err
+	}
 	if commonDir, ok := GitCommonDir(root); ok {
 		refFloor, err := RefFloor(ctx, root, prefix)
 		if err != nil {
@@ -211,7 +225,7 @@ func allocateID(ctx context.Context, root, prefix string) (string, error) {
 		if refFloor > floor {
 			floor = refFloor
 		}
-		next, err := NewReservationStore(filepath.Join(commonDir, "ce")).Next(prefix, floor)
+		next, err := cardid.NewReservationLedger(filepath.Join(commonDir, "ce")).Next(prefix, floor)
 		if err != nil {
 			return "", err
 		}

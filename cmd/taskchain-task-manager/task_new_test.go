@@ -7,18 +7,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
-// initGitRepo turns the test's working directory into a repository, because
-// the reservation ledger lives in the git common dir and a caller without a
-// repository falls back to tree-scan numbering.
+// initGitRepo turns the test's working directory into a COMMITTED repository.
+// The reservation ledger lives in the git common dir, and the ported
+// allocator also scans git history, whose scan aborts over a repository with
+// no commits rather than folding to zero — so the seed commit is part of the
+// fixture, not decoration.
 func initGitRepo(t *testing.T) {
 	t.Helper()
 	for _, args := range [][]string{
 		{"init", "-q"},
 		{"config", "user.email", "test@example.invalid"},
 		{"config", "user.name", "test"},
+		{"add", "-A"},
+		{"commit", "-qm", "board", "--allow-empty"},
 	} {
 		cmd := exec.Command("git", args...)
 		if out, err := cmd.CombinedOutput(); err != nil {
@@ -38,6 +41,12 @@ func writeCardFile(t *testing.T, rel, content string) {
 	}
 }
 
+// TestTaskNewReservesThroughLedgerFloor is the id-reservation bundle's ledger
+// boundary, re-driven through the converged `task new` wiring: the ledger
+// floor beats the tree scan, and a body-quoted id in a fence is prose that
+// raises neither. The card's full byte shape is covered by the scaffold test
+// in internal/taskflow, so this boundary only tracks where the number came
+// from.
 func TestTaskNewReservesThroughLedgerFloor(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -59,18 +68,6 @@ func TestTaskNewReservesThroughLedgerFloor(t *testing.T) {
 	if got := out.String(); got != "✅ Created tasks/todo/006-floor-probe.md (TASK-006)\n" {
 		t.Fatalf("stdout=%q", got)
 	}
-	// The quoted TASK-999 is prose; the floor is frontmatter 1 under ledger 5.
-	created := filepath.Join(dir, "tasks", "todo", "006-floor-probe.md")
-	b, err := os.ReadFile(created)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "---\nid: TASK-006\ntitle: \"Floor probe\"\ntype: feature\npriority: P2\ncreated: " +
-		time.Now().Format("2006-01-02") +
-		"\n---\n\n## Summary\n\n<!-- One paragraph: what changes and why. -->\n\n## Completion Criteria\n\n- [ ] bound | verify: `test -f absent-floor-probe-marker.txt`\n"
-	if string(b) != want {
-		t.Fatalf("created card bytes:\n%q\nwant:\n%q", string(b), want)
-	}
 	ledger, err := os.ReadFile(filepath.Join(dir, ".git", "ce", "card-id-reservations", "highest.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -80,6 +77,9 @@ func TestTaskNewReservesThroughLedgerFloor(t *testing.T) {
 	}
 }
 
+// TestTaskNewRefusesFullNumberSpace is the id-reservation bundle's ceiling
+// boundary through the converged wiring: a tree at the three-digit ceiling
+// refuses creation, and the refusal reserves nothing.
 func TestTaskNewRefusesFullNumberSpace(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -100,6 +100,9 @@ func TestTaskNewRefusesFullNumberSpace(t *testing.T) {
 	}
 }
 
+// TestTaskNewFloorIgnoresBodyQuotedIDWithoutLedger is the id-reservation
+// bundle's no-ledger boundary: with the ledger absent, the tree scan alone
+// numbers the board, and it counts frontmatter ids only.
 func TestTaskNewFloorIgnoresBodyQuotedIDWithoutLedger(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -120,6 +123,9 @@ func TestTaskNewFloorIgnoresBodyQuotedIDWithoutLedger(t *testing.T) {
 	}
 }
 
+// TestTaskNewUsageAndInputRefusals pins the exit-code boundary of the
+// converged `task new`: every refusal caused by what the caller typed exits 2
+// with an empty stdout, whatever engine refuses it.
 func TestTaskNewUsageAndInputRefusals(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
