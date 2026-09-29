@@ -103,6 +103,7 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "       taskchain-task-manager enable-shared --dir <board> --all-worktrees [--resume] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager inspect-worktrees --repo <root> --board <path> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager <init|list|ready|queue> --dir <board> --json")
+		fmt.Fprintln(out, "       taskchain-task-manager "+taskUsage)
 		fmt.Fprintln(out, "       taskchain-task-manager import-ids --repo <root> --board <path> (--preview | --dir <target> [--adopt]) --json")
 		fmt.Fprintln(out, "       taskchain-task-manager reserve-ids --dir <board> [--adopt] [--id TASK-N ...] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager create-bundle <file> --dir <board> [--adopt] [--resume] --json")
