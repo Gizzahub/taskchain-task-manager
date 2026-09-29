@@ -55,6 +55,7 @@ func TestClassifyProbe(t *testing.T) {
 		"[ -f absent-marker.txt ]",
 		"ls tasks",
 		"grep -c root README.md",
+		"rg needle tasks",
 		"find tasks -name '*.md'",
 		"! test -f absent-marker.txt",
 	}
@@ -72,6 +73,12 @@ func TestClassifyProbe(t *testing.T) {
 		"!":                            "space",
 		"sh -c 'echo hi'":              "allowlist",
 		"find tasks -name x -fprint p": "action",
+		// rg's command-running flags: the reference passes them, this
+		// boundary refuses them, and the negation carve-out does not apply
+		// because inverting the exit code does not stop the command running.
+		"rg --pre rm tasks":   "may not run as a probe",
+		"rg --pager less":     "may not run as a probe",
+		"! rg --pre rm tasks": "may not run as a probe",
 	}
 	for cmd, wantErr := range refused {
 		err := classifyProbe(cmd)

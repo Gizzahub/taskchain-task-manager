@@ -28,6 +28,17 @@ var findActionFlags = map[string]bool{
 	"-delete": true, "-exec": true, "-execdir": true, "-ok": true, "-okdir": true, "-fprint": true,
 }
 
+// rgExecFlags are the rg flags that run a command of their own: --pre filters
+// every searched file through a command and --pager pipes the output through
+// one. The pinned reference boundary at bb970b24 filters find's action
+// primaries but passes these; this product honors the boundary's declared
+// rule instead — read-only file predicates and nothing else — because
+// inverting rg's exit code with a ! does not uninvent the command it ran, so
+// unlike a negated find primary the negation carve-out does not transfer.
+var rgExecFlags = map[string]bool{
+	"--pre": true, "--pager": true,
+}
+
 // shellMetacharacters end a probe's read-only guarantee the moment one
 // appears outside quotes.
 const shellMetacharacters = ";&|<>$`()"
@@ -107,6 +118,13 @@ func classifyProbe(cmd string) error {
 		for _, arg := range args[1:] {
 			if findActionFlags[arg] {
 				return fmt.Errorf("find action %q may not run as a probe", arg)
+			}
+		}
+	}
+	if args[0] == "rg" {
+		for _, arg := range args[1:] {
+			if rgExecFlags[arg] {
+				return fmt.Errorf("rg flag %q may not run as a probe: it executes a command", arg)
 			}
 		}
 	}

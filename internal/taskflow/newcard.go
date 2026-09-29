@@ -165,6 +165,10 @@ func zoneForKind(kind string) string {
 	return StatusPending.Dir()
 }
 
+// PrefixForKind maps a kind to its id prefix. Unlike cardid.PrefixForKind,
+// there is no empty-kind default here on purpose: an omitted kind is already
+// resolveKind's required-input refusal, so defaulting "" to task would be a
+// silently unreachable second spelling of the same decision.
 func PrefixForKind(kind string) (string, error) {
 	switch kind {
 	case "task":

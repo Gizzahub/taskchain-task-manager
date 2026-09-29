@@ -41,7 +41,9 @@ func toTaskJSON(card *Card) taskJSON {
 	}
 }
 
-// ListJSON writes the whole board as CE's `task list --json` payload.
+// ListJSON writes the whole board as CE's `task list --json` payload. The
+// task noun deliberately bypasses outputformat.Encode: the CE contract bytes
+// are bare 2-space pretty JSON, with no outputVersion splice around them.
 func ListJSON(w io.Writer, root string) error {
 	cards, err := ListCards(root)
 	if err != nil {
