@@ -114,9 +114,12 @@ func TestTaskNewFloorIgnoresBodyQuotedIDWithoutLedger(t *testing.T) {
 		t.Fatalf("code=%d stderr=%s", code, diag.String())
 	}
 	// Frontmatter 1, ledger absent: the next number is 2. Counting the quoted
-	// 999 would have spelled 1000, which is no card number at all. The
-	// placeholder hint follows the Created line because no criterion was given.
+	// 999 would have spelled 1000, which is no card number at all. With no
+	// criterion given the template's placeholder is all the validator sees, so
+	// the post-write verdict carries its warning between the Created line and
+	// the placeholder hint — the reference's own new-then-validate order.
 	want := "✅ Created tasks/todo/002-second.md (TASK-002)\n" +
+		"   ⚠️  criterion_placeholder: criterion is an unfilled <...> placeholder: <observable condition>\n" +
 		"   next: replace the placeholder criterion with real ones, each bound with `| verify:`\n"
 	if got := out.String(); got != want {
 		t.Fatalf("stdout=%q", got)

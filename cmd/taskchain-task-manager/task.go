@@ -17,7 +17,7 @@ import (
 // taskUsage is the noun's one-line contract, shown when the noun itself is
 // mistyped. Per-subcommand misuse is reported by the subcommand, at the exit
 // code the pinned reference gives that subcommand's own refusals.
-const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate> ..."
+const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate|lint|preflight|gate> ..."
 
 // runTask dispatches the CE-parity `task` noun. The pinned reference splits
 // its refusals two ways, and the split is preserved here: what the caller
@@ -33,6 +33,12 @@ func runTask(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, taskUsage)
 		return 0
 	}
+	// TASKS_DIR redirects the whole noun at another corpus; an absolute value
+	// is refused once here so no subcommand can silently read an empty board.
+	if _, err := taskflow.ResolveTasksDir(); err != nil {
+		fmt.Fprintln(errOut, "Error: "+err.Error())
+		return 2
+	}
 	ctx := context.Background()
 	var err error
 	switch args[0] {
@@ -46,8 +52,14 @@ func runTask(args []string, out, errOut io.Writer) int {
 		err = taskArchive(ctx, args[1:], out)
 	case "validate":
 		err = taskValidate(ctx, args[1:], out)
+	case "lint":
+		err = taskLint(ctx, args[1:], out)
+	case "preflight":
+		err = taskPreflight(ctx, args[1:], out)
+	case "gate":
+		err = taskGate(ctx, args[1:], out)
 	default:
-		fmt.Fprintf(errOut, "Error: unknown task command %q (valid: list, new, move, archive, validate)\n", args[0])
+		fmt.Fprintf(errOut, "Error: unknown task command %q (valid: list, new, move, archive, validate, lint, preflight, gate)\n", args[0])
 		return 2
 	}
 	if err == nil {
@@ -311,7 +323,7 @@ func taskMove(ctx context.Context, args []string, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("move failed: %s", err)
 	}
-	fmt.Fprintf(out, "✅ Moved to %s: %s\n", dest.Zone, filepath.Join(taskflow.TasksDir, newRel))
+	fmt.Fprintf(out, "✅ Moved to %s: %s\n", dest.Zone, filepath.Join(taskflow.TasksDirName(), newRel))
 	switch {
 	case synced:
 		fmt.Fprintf(out, "   Status cell synced → %s\n", dest.Status.StatusCell())
@@ -383,7 +395,7 @@ func taskArchive(ctx context.Context, args []string, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("archive failed: %s", err)
 	}
-	fmt.Fprintf(out, "✅ Archived: %s → %s\n", taskFile, filepath.Join(taskflow.TasksDir, newRel))
+	fmt.Fprintf(out, "✅ Archived: %s → %s\n", taskFile, filepath.Join(taskflow.TasksDirName(), newRel))
 	printTaskLinkUpdate(out, "   ", links)
 	return nil
 }
@@ -424,7 +436,7 @@ func qualityReviewNote(card *taskflow.Card) string {
 // reader and the mover see the same file.
 func cardTasksRel(root, taskFile string) string {
 	cleaned := filepath.Clean(taskFile)
-	if rel, err := filepath.Rel(filepath.Join(root, taskflow.TasksDir), filepath.Join(root, cleaned)); err == nil && !strings.HasPrefix(rel, "..") {
+	if rel, err := filepath.Rel(filepath.Join(root, taskflow.TasksDirName()), filepath.Join(root, cleaned)); err == nil && !strings.HasPrefix(rel, "..") {
 		return filepath.ToSlash(rel)
 	}
 	return filepath.ToSlash(cleaned)
