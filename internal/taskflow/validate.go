@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -33,6 +34,14 @@ type ValidationResult struct {
 // Valid reports a clean verdict: no errors and no warnings. A card with only
 // warnings is "valid with warnings", which is still not clean.
 func (r *ValidationResult) Valid() bool { return len(r.Errors) == 0 && len(r.Warnings) == 0 }
+
+func (r *ValidationResult) addError(field, message string) {
+	r.Errors = append(r.Errors, Finding{Field: field, Message: message})
+}
+
+func (r *ValidationResult) addWarning(field, message string) {
+	r.Warnings = append(r.Warnings, Finding{Field: field, Message: message})
+}
 
 // Citations counts the path bindings validate examined across the board.
 type Citations struct {
@@ -78,8 +87,8 @@ func (d canonicalDocument) scalar(name string) (string, bool) {
 // The remaining validation-gate checks (alias warnings, binding-shape errors,
 // placeholder findings, gate receipts) are later bundles' scope; the skeleton
 // below is where they slot in.
-func validateCard(ctx context.Context, root string, card *Card, citations *Citations) ValidationResult {
-	result := ValidationResult{Path: card.RepoRel()}
+func validateCard(ctx context.Context, root, tasksDir string, card *Card, citations *Citations) ValidationResult {
+	result := ValidationResult{Path: pathJoin(tasksDir, card.TasksRel)}
 	doc := parseCanonicalDocument(card.Raw)
 
 	// Detection: a card is canonical-shaped when a frontmatter fence exists
@@ -268,22 +277,78 @@ const truncationHint = "a | verify: command looks truncated by an unclosed code 
 // ValidateAll validates every live card and returns the per-card verdicts in
 // walk order.
 func ValidateAll(ctx context.Context, root string) ([]ValidationResult, Citations, error) {
-	cards, err := FindCards(root, true)
+	return ValidateAllIn(ctx, root, TasksDir)
+}
+
+// ValidateAllIn validates the board rooted at tasksDir — the directory
+// TASKS_DIR redirects the walk at, e.g. a decisions corpus — and returns the
+// per-document verdicts in walk order. Decision documents under the scan root
+// are validated by the decision schema, not the card schema, and the
+// decisions index corpus rule appends its synthetic README verdict when the
+// catalog drifts.
+func ValidateAllIn(ctx context.Context, root, tasksDir string) ([]ValidationResult, Citations, error) {
+	cards, err := FindCardsIn(root, tasksDir, true)
 	if err != nil {
 		return nil, Citations{}, err
 	}
 	citations := Citations{}
 	results := make([]ValidationResult, 0, len(cards))
 	for _, card := range cards {
-		results = append(results, validateCard(ctx, root, card, &citations))
+		if isDecisionDoc(card.TasksRel) && !isNonCardFile(filepath.Base(card.TasksRel)) {
+			results = append(results, validateDecisionDocument(ctx, root, tasksDir, card))
+			continue
+		}
+		results = append(results, validateCard(ctx, root, tasksDir, card, &citations))
+	}
+	// The decisions index is a corpus rule whose finding belongs to a file the
+	// walk never yields: README.md is not a card. It gets a result of its own
+	// so the drift is counted and printed like any other failure.
+	files := make([]string, 0, len(cards))
+	for _, card := range cards {
+		files = append(files, pathJoin(tasksDir, card.TasksRel))
+	}
+	if index := reportDecisionIndexDrift(root, files, tasksDir); index != nil && !index.Valid() {
+		results = append(results, *index)
 	}
 	return results, citations, nil
+}
+
+// validateDecisionDocument validates one ADR/decision document by the
+// decision schema. It never touches the citations census: decision documents
+// carry no verify bindings.
+func validateDecisionDocument(ctx context.Context, root, tasksDir string, card *Card) ValidationResult {
+	result := ValidationResult{Path: pathJoin(tasksDir, card.TasksRel)}
+	content := string(card.Raw)
+	validateDecisionDoc(content, &result)
+	validateDecisionLinks(ctx, root, result.Path, content, &result)
+	return result
+}
+
+// ResolveTasksDir reads the board root from TASKS_DIR, defaulting to the
+// canonical tasks/ directory. A relative directory name redirects the whole
+// task noun at another corpus; an absolute path is refused, because every
+// caller resolves the board against the working directory it reports on.
+func ResolveTasksDir() (string, error) {
+	tasksDir := os.Getenv("TASKS_DIR")
+	if tasksDir == "" {
+		return TasksDir, nil
+	}
+	if filepath.IsAbs(tasksDir) {
+		return "", fmt.Errorf("TASKS_DIR must be a directory name relative to the working directory, not an absolute path: %s", tasksDir)
+	}
+	return tasksDir, nil
 }
 
 // RenderValidateAll writes the whole-board validate output. It returns the
 // number of invalid cards for the caller's exit decision.
 func RenderValidateAll(ctx context.Context, w io.Writer, root string) (int, error) {
-	results, citations, err := ValidateAll(ctx, root)
+	return RenderValidateAllIn(ctx, w, root, TasksDir)
+}
+
+// RenderValidateAllIn writes the whole-board validate output for the board
+// rooted at tasksDir.
+func RenderValidateAllIn(ctx context.Context, w io.Writer, root, tasksDir string) (int, error) {
+	results, citations, err := ValidateAllIn(ctx, root, tasksDir)
 	if err != nil {
 		return 0, err
 	}

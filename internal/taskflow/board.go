@@ -60,23 +60,29 @@ func pathJoin(a, b string) string {
 	return a + "/" + b
 }
 
-// FindCards walks the tasks tree lexically and reads every card it holds,
-// excluding storage when excludeArchive is set. README/INDEX/TEMPLATE files
-// and .ce/evidence subtrees are not cards.
+// FindCards walks the default tasks tree lexically and reads every card it
+// holds, excluding storage when excludeArchive is set. README/INDEX/TEMPLATE
+// files and .ce/evidence subtrees are not cards.
 func FindCards(root string, excludeArchive bool) ([]*Card, error) {
-	tasksDir := filepath.Join(root, TasksDir)
+	return FindCardsIn(root, TasksDir, excludeArchive)
+}
+
+// FindCardsIn walks the board rooted at tasksDir — the directory TASKS_DIR
+// redirects the walk at — with the same card exclusions as FindCards.
+func FindCardsIn(root, tasksDir string, excludeArchive bool) ([]*Card, error) {
+	tasksPath := filepath.Join(root, tasksDir)
 	var cards []*Card
-	err := filepath.WalkDir(tasksDir, func(p string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(tasksPath, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil // unreadable entries are not cards
 		}
-		relToTasks, relErr := filepath.Rel(tasksDir, p)
+		relToTasks, relErr := filepath.Rel(tasksPath, p)
 		if relErr != nil {
 			return nil
 		}
 		name := d.Name()
 		if d.IsDir() {
-			if p == tasksDir {
+			if p == tasksPath {
 				return nil
 			}
 			if name == ".ce" || name == "evidence" {
@@ -94,7 +100,7 @@ func FindCards(root string, excludeArchive bool) ([]*Card, error) {
 		case "readme.md", "index.md", "template.md":
 			return nil
 		}
-		card, readErr := ReadCard(root, filepath.ToSlash(relToTasks))
+		card, readErr := ReadCardIn(root, tasksDir, filepath.ToSlash(relToTasks))
 		if readErr != nil || card == nil {
 			return nil
 		}
@@ -107,10 +113,15 @@ func FindCards(root string, excludeArchive bool) ([]*Card, error) {
 	return cards, nil
 }
 
-// ReadCard reads one card given its path relative to the tasks directory.
-// A card outside any zone keeps its frontmatter status.
+// ReadCard reads one card given its path relative to the default tasks
+// directory. A card outside any zone keeps its frontmatter status.
 func ReadCard(root, tasksRel string) (*Card, error) {
-	full := filepath.Join(root, TasksDir, filepath.FromSlash(tasksRel))
+	return ReadCardIn(root, TasksDir, tasksRel)
+}
+
+// ReadCardIn reads one card relative to the board rooted at tasksDir.
+func ReadCardIn(root, tasksDir, tasksRel string) (*Card, error) {
+	full := filepath.Join(root, tasksDir, filepath.FromSlash(tasksRel))
 	raw, err := os.ReadFile(full)
 	if err != nil {
 		return nil, err
