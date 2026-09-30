@@ -175,7 +175,7 @@ func relUnderTasks(path string) (string, bool) {
 	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
 		return "", false
 	}
-	rel, err := filepath.Rel(TasksDir, cleaned)
+	rel, err := filepath.Rel(tasksDirName(), cleaned)
 	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", false
 	}

@@ -290,9 +290,10 @@ func cardSectionHeading(line string) bool {
 }
 
 // findCriteriaSection locates the first top-level criteria heading outside
-// fences and indented code, and returns the section body plus the document
-// line number of the body's first line.
-func findCriteriaSection(document string) (section string, bodyLine int, found bool) {
+// fences and indented code, and returns the section body, the document line
+// number of the body's first line, and the heading text as written (an
+// accepted alias keeps its own spelling, which validate reports).
+func findCriteriaSection(document string) (section string, bodyLine int, heading string, found bool) {
 	var body strings.Builder
 	var fences FenceScanner
 	for i, raw := range strings.Split(document, "\n") {
@@ -301,10 +302,12 @@ func findCriteriaSection(document string) (section string, bodyLine int, found b
 		}
 		if cardSectionHeading(raw) {
 			if found {
-				return body.String(), bodyLine, true
+				return body.String(), bodyLine, heading, true
 			}
-			if IsCriteriaHeading(strings.TrimSpace(raw)) {
+			trimmed := strings.TrimSpace(raw)
+			if IsCriteriaHeading(trimmed) {
 				found = true
+				heading = strings.TrimSpace(strings.TrimPrefix(trimmed, "## "))
 				bodyLine = i + 2
 			}
 			continue
@@ -314,7 +317,7 @@ func findCriteriaSection(document string) (section string, bodyLine int, found b
 			body.WriteByte('\n')
 		}
 	}
-	return body.String(), bodyLine, found
+	return body.String(), bodyLine, heading, found
 }
 
 // scanCriteriaFrom walks a body collecting column-zero, unfenced,
@@ -366,7 +369,7 @@ func scanVisibleCriteriaLine(scan *criteriaScan, visible string, lineNo int) {
 // section's checkboxes, or the whole body when no `## ` heading exists.
 func criterionLines(body string) []Criterion {
 	if documentHasHeading(body) {
-		section, bodyLine, _ := findCriteriaSection(body)
+		section, bodyLine, _, _ := findCriteriaSection(body)
 		if bodyLine == 0 {
 			bodyLine = 1
 		}

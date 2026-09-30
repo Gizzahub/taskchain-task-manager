@@ -1,6 +1,7 @@
 package taskflow
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -11,8 +12,38 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TasksDir is the board root the task noun reads.
+// TasksDir is the board root the task noun reads by default. TASKS_DIR
+// redirects the whole noun at another corpus directory.
 const TasksDir = "tasks"
+
+// ResolveTasksDir reads TASKS_DIR from the environment, defaulting to
+// "tasks", and is the one place every task command asks the question, so an
+// invalid value is caught once rather than at each call site. An absolute
+// override is refused rather than passed through: joining an absolute second
+// argument onto the working directory silently names a directory nothing
+// populated, and every command would report an empty board instead of the
+// misconfiguration.
+func ResolveTasksDir() (string, error) {
+	tasksDir := os.Getenv("TASKS_DIR")
+	if tasksDir == "" {
+		return TasksDir, nil
+	}
+	if filepath.IsAbs(tasksDir) {
+		return "", fmt.Errorf("TASKS_DIR must be a directory name relative to the working directory, not an absolute path: %s", tasksDir)
+	}
+	return tasksDir, nil
+}
+
+// tasksDirName is the resolved spelling the engine's readers use. Commands
+// refuse an absolute override at dispatch; the fallback here only keeps a
+// library caller reading the default board.
+func tasksDirName() string {
+	name, err := ResolveTasksDir()
+	if err != nil {
+		return TasksDir
+	}
+	return name
+}
 
 // Card is the lenient view of one task file. A field a malformed card cannot
 // supply is simply empty: the reader never refuses a board CE could still see.
@@ -46,7 +77,7 @@ type Card struct {
 }
 
 // RepoRel returns the tasks-prefixed spelling ("tasks/todo/001-draft.md").
-func (c *Card) RepoRel() string { return pathJoin(TasksDir, c.TasksRel) }
+func (c *Card) RepoRel() string { return pathJoin(tasksDirName(), c.TasksRel) }
 
 // Criteria are the graded checkbox lines of the card body.
 func (c *Card) Criteria() []Criterion {
@@ -64,7 +95,7 @@ func pathJoin(a, b string) string {
 // holds, excluding storage when excludeArchive is set. README/INDEX/TEMPLATE
 // files and .ce/evidence subtrees are not cards.
 func FindCards(root string, excludeArchive bool) ([]*Card, error) {
-	return FindCardsIn(root, TasksDir, excludeArchive)
+	return FindCardsIn(root, tasksDirName(), excludeArchive)
 }
 
 // FindCardsIn walks the board rooted at tasksDir — the directory TASKS_DIR
@@ -116,7 +147,7 @@ func FindCardsIn(root, tasksDir string, excludeArchive bool) ([]*Card, error) {
 // ReadCard reads one card given its path relative to the default tasks
 // directory. A card outside any zone keeps its frontmatter status.
 func ReadCard(root, tasksRel string) (*Card, error) {
-	return ReadCardIn(root, TasksDir, tasksRel)
+	return ReadCardIn(root, tasksDirName(), tasksRel)
 }
 
 // ReadCardIn reads one card relative to the board rooted at tasksDir.
@@ -271,3 +302,8 @@ func parseTaskEffort(raw string) string {
 	}
 	return "M"
 }
+
+// TasksDirName is the resolved board-root spelling for callers outside the
+// engine. Commands refuse an absolute TASKS_DIR at dispatch, so the fallback
+// here only covers a library caller that skipped that guard.
+func TasksDirName() string { return tasksDirName() }

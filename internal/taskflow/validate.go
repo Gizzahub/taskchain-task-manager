@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -16,6 +16,14 @@ import (
 // fixtures were captured against CE bb970b24; the byte contract includes this
 // line, so the port prints the pinned reference stamp it is measured against.
 const ReferenceStamp = "Validation tool: CE v0.8.4-400-gbb970b24 (bb970b24adfc29f75e7555cb3cc45716d6973f3b)"
+
+// ReferenceStampVersion and ReferenceStampRevision are the two halves of that
+// stamp, carried separately because the gate's machine verdict reports them
+// as distinct fields a consumer can quote.
+const (
+	ReferenceStampVersion  = "v0.8.4-400-gbb970b24"
+	ReferenceStampRevision = "bb970b24adfc29f75e7555cb3cc45716d6973f3b"
+)
 
 // Finding is one validation error or warning. Field names the schema key the
 // finding is about; rendering shows only the message.
@@ -31,9 +39,9 @@ type ValidationResult struct {
 	Warnings []Finding
 }
 
-// Valid reports a clean verdict: no errors and no warnings. A card with only
-// warnings is "valid with warnings", which is still not clean.
-func (r *ValidationResult) Valid() bool { return len(r.Errors) == 0 && len(r.Warnings) == 0 }
+// Valid reports whether the card passes: errors fail it, warnings do not. A
+// card with only warnings is "valid with warnings" — advisory, still valid.
+func (r *ValidationResult) Valid() bool { return len(r.Errors) == 0 }
 
 func (r *ValidationResult) addError(field, message string) {
 	r.Errors = append(r.Errors, Finding{Field: field, Message: message})
@@ -49,214 +57,307 @@ type Citations struct {
 	Skipped  int
 }
 
-var cardIDShapeRe = regexp.MustCompile(`^(TASK|PLAN|ISSUE|BACKLOG)-[0-9]+$`)
-
 var cardFilenameShapeRe = regexp.MustCompile(`^([0-9]{2,3}|P[0-9])-[a-z0-9]+(-[a-z0-9]+)*\.md$`)
 
-// canonicalDocument is a parsed frontmatter block kept in yaml node form, so
-// an unfilled or malformed value can still be reported.
-type canonicalDocument struct {
-	Fields map[string]yaml.Node
-	HasFM  bool
-}
+// --- per-card validation --------------------------------------------------------
+// validateCard applies the canonical card checks in the pinned reference's
+// order. The order is load-bearing: findings render errors-then-warnings per
+// card, and the fixture contract pins the sequence within each list.
 
-func parseCanonicalDocument(raw []byte) canonicalDocument {
-	doc := canonicalDocument{Fields: map[string]yaml.Node{}}
-	fm, _ := splitFrontmatter(raw)
-	if fm == nil {
-		return doc
-	}
-	doc.HasFM = true
-	var parsed map[string]yaml.Node
-	if err := yaml.Unmarshal(fm, &parsed); err != nil {
-		return doc
-	}
-	doc.Fields = parsed
-	return doc
-}
-
-func (d canonicalDocument) scalar(name string) (string, bool) {
-	node, ok := d.Fields[name]
-	if !ok || node.Kind != yaml.ScalarNode || node.Tag == "!!null" {
-		return "", false
-	}
-	return strings.TrimSpace(node.Value), true
-}
-
-// validateCard applies the canonical card checks the card-core contract pins.
-// The remaining validation-gate checks (alias warnings, binding-shape errors,
-// placeholder findings, gate receipts) are later bundles' scope; the skeleton
-// below is where they slot in.
-func validateCard(ctx context.Context, root, tasksDir string, card *Card, citations *Citations) ValidationResult {
+func validateCard(ctx context.Context, root, tasksDir string, card *Card, index *corpusIndex, citations *Citations) ValidationResult {
 	result := ValidationResult{Path: pathJoin(tasksDir, card.TasksRel)}
-	doc := parseCanonicalDocument(card.Raw)
-
-	// Detection: a card is canonical-shaped when a frontmatter fence exists
-	// and carries an id or type. Anything else is not schema-checked here.
-	if !doc.HasFM {
-		result.Errors = append(result.Errors, Finding{"frontmatter", "task file has no frontmatter"})
+	fields, body, detected, err := parseCanonicalDocument(string(card.Raw))
+	if !detected {
 		return result
 	}
-
-	validateCanonicalFilename(&result, card)
-	validateCanonicalID(&result, doc)
-	validateCanonicalType(&result, doc)
-	validateOptionalEffort(&result, doc)
-	validateCanonicalWorkTask(&result, doc, card)
-	validateCanonicalStatus(&result, doc, card)
-
-	criteria := card.Criteria()
-	for _, criterion := range criteria {
-		// Citations count every command binding the board shows, valid or not:
-		// the summary line reports how much of the board's verification was
-		// even examinable without a shell.
-		if criterion.Command != "" {
-			if classifyProbe(criterion.Command) == nil {
-				citations.Examined++
-			} else {
-				citations.Skipped++
-			}
+	if err != nil {
+		result.Errors = append(result.Errors, Finding{"frontmatter", "Invalid YAML frontmatter: " + err.Error()})
+		return result
+	}
+	// A file with neither an id nor a type key is not canonical-shaped; the
+	// schema checks do not apply to it.
+	if _, hasID := fields["id"]; !hasID {
+		if _, hasType := fields["type"]; !hasType {
+			return result
 		}
 	}
-	orphanAndMalformedBindings(&result, card.Body, criteria)
-	reportVacuousCriteria(ctx, root, card, criteria, &result)
 
-	// TODO(validation-gate bundle): corpus rules (duplicate ids, filename-id
-	// agreement, one-sided dependency edges, plan metadata, decision index),
-	// placeholder-value warnings, absence-asserted verify-path warnings, gate
-	// receipts, and the single-card `validate <path>` mode.
+	kind, ok := resolveCanonicalKind(card.RepoRel(), fields, &result)
+	if !ok {
+		// The file carries canonical task frontmatter, has no usable ID to
+		// derive its kind from, and lives in a directory this schema does not
+		// own. Skip it with a warning rather than a hard error.
+		result.Warnings = append(result.Warnings, Finding{"location", "Skipped: no CE schema for this task directory"})
+		return result
+	}
+	validateCanonicalFilename(&result, card)
+	if kind != canonicalPlan {
+		validateCanonicalStatus(card.RepoRel(), fields, &result)
+	}
+	validateZonePathCitations(&result, card, index)
+	warnDoingZoneExit(&result, card)
+
+	// The default dialect requires an id on work cards, and every other kind
+	// keeps it: plan, issue, and backlog documents are identified by their
+	// prefix, so id, title, and type are required throughout.
+	requireScalarFields(&result, fields, "id", "title", "type")
+	validateCanonicalID(&result, fields)
+	validateCanonicalType(&result, fields, kind)
+	validateOptionalEffort(&result, fields)
+
+	switch kind {
+	case canonicalTask:
+		validateCanonicalWorkTask(&result, fields, body)
+	case canonicalPlan:
+		validateCanonicalPlan(&result, fields, body)
+	case canonicalIssue, canonicalBacklog:
+		// The issue and backlog schemas are not exercised by any pinned
+		// fixture and are deliberate divergences of this port; a card whose
+		// id or zone names those kinds still gets every shared check.
+	}
+
+	warnPlaceholderFields(&result, fields)
+	validateDependencyFieldShapes(&result, fields)
+
+	reportVacuousCriteria(ctx, root, card, &result)
+
+	examined, skipped := countPathBindings(criterionLines(body))
+	citations.Examined += examined
+	citations.Skipped += skipped
+
+	validateBindingShape(&result, body)
 	return result
 }
 
 func validateCanonicalFilename(result *ValidationResult, card *Card) {
-	base := filepath.Base(card.TasksRel)
-	if !cardFilenameShapeRe.MatchString(base) {
-		result.Warnings = append(result.Warnings,
-			Finding{"filename", "Non-standard filename (should be ##-kebab-case.md or P#-kebab-case.md)"})
-	}
-}
-
-func validateCanonicalID(result *ValidationResult, doc canonicalDocument) {
-	id, ok := doc.scalar("id")
-	if !ok {
-		result.Errors = append(result.Errors, Finding{"id", "Missing required frontmatter field: id"})
+	if cardFilenameShapeRe.MatchString(filepath.Base(card.TasksRel)) {
 		return
 	}
-	if !cardIDShapeRe.MatchString(id) {
-		result.Errors = append(result.Errors, Finding{"id", "Invalid id: " + id})
-	}
+	result.Warnings = append(result.Warnings,
+		Finding{"filename", "Non-standard filename (should be ##-kebab-case.md or P#-kebab-case.md)"})
 }
 
-func validateCanonicalType(result *ValidationResult, doc canonicalDocument) {
-	cardType, ok := doc.scalar("type")
-	if !ok {
-		result.Errors = append(result.Errors, Finding{"type", "Missing required frontmatter field: type"})
+// warnDoingZoneExit warns when a doing card's every criterion is checked but
+// the card never left the zone: the work looks finished, the board disagrees.
+func warnDoingZoneExit(result *ValidationResult, card *Card) {
+	zone, ok := statusZone(card.RepoRel())
+	if !ok || zone != StatusInProgress.Dir() {
 		return
 	}
-	if !contains(TaskTypes, cardType) {
-		result.Errors = append(result.Errors, Finding{"type", "Invalid type: " + cardType})
-	}
-}
-
-func validateOptionalEffort(result *ValidationResult, doc canonicalDocument) {
-	effort, ok := doc.scalar("effort")
-	if !ok {
+	lines := criterionLines(card.Body)
+	if len(lines) == 0 {
 		return
 	}
-	if !contains([]string{"XS", "S", "M", "L", "XL"}, effort) {
-		result.Errors = append(result.Errors, Finding{"effort", "Invalid effort: " + effort})
+	for _, line := range lines {
+		if !line.Checked {
+			return
+		}
+	}
+	result.Warnings = append(result.Warnings, Finding{"doing_zone_exit",
+		"every criterion is checked while the card is still in doing"})
+}
+
+func requireScalarFields(result *ValidationResult, fields map[string]yaml.Node, names ...string) {
+	for _, name := range names {
+		value, ok := scalarField(fields, name)
+		if !ok || value == "" {
+			result.Errors = append(result.Errors, Finding{name, "Missing required frontmatter field: " + name})
+		}
 	}
 }
 
-func validateCanonicalWorkTask(result *ValidationResult, doc canonicalDocument, card *Card) {
-	priority, ok := doc.scalar("priority")
-	if ok && !contains(PriorityValues, priority) {
+// validateCanonicalID checks the ID's shape only. The prefix cannot be wrong
+// for the kind — resolveCanonicalKind derives the kind from it — so the only
+// failure left is an ID that does not parse as PREFIX-NNN.
+func validateCanonicalID(result *ValidationResult, fields map[string]yaml.Node) {
+	id, ok := scalarField(fields, "id")
+	if !ok || id == "" {
+		return
+	}
+	if _, _, ok := parseCanonicalTaskID(id); !ok {
+		result.Errors = append(result.Errors, Finding{"id", "Invalid canonical task ID: " + id})
+	}
+}
+
+// validateCanonicalType checks `type:` against the set for the document kind.
+// Only the work-card set comes from the product's own vocabulary; plan, issue,
+// and backlog documents carry the reference's own taxonomy.
+func validateCanonicalType(result *ValidationResult, fields map[string]yaml.Node, kind canonicalTaskKind) {
+	value, ok := scalarField(fields, "type")
+	if !ok || value == "" {
+		return
+	}
+	allowed := map[canonicalTaskKind][]string{
+		canonicalTask:    TaskTypes,
+		canonicalPlan:    {"plan", "roadmap", "phase"},
+		canonicalIssue:   {"bug", "blocker", "tech-debt"},
+		canonicalBacklog: {"idea", "feature", "improvement", "tech-debt"},
+	}
+	if !contains(allowed[kind], value) {
+		result.Errors = append(result.Errors, Finding{"type", fmt.Sprintf("Invalid type %q for %s", value, kind)})
+	}
+}
+
+func validateOptionalEffort(result *ValidationResult, fields map[string]yaml.Node) {
+	value, ok := scalarField(fields, "effort")
+	if !ok || value == "" {
+		return
+	}
+	if !contains([]string{"XS", "S", "M", "L", "XL", "unknown"}, value) {
+		result.Errors = append(result.Errors, Finding{"effort", "Invalid effort: " + value})
+	}
+}
+
+// validateCanonicalStatus keeps the frontmatter state claim aligned with the
+// directory state. The reader deliberately lets the directory win so list and
+// preflight stay safe, but validate must report a malformed claim instead of
+// silently discarding it.
+func validateCanonicalStatus(path string, fields map[string]yaml.Node, result *ValidationResult) {
+	value, present := scalarField(fields, "status")
+	if !present {
+		return
+	}
+	if value == "" {
+		result.Errors = append(result.Errors, Finding{"status", "status must not be empty"})
+		return
+	}
+	zone, ok := statusZone(path)
+	if !ok {
+		if _, recognised := StatusFromWord(value); !recognised && value != "backlog" && value != supersededTerminal {
+			result.Errors = append(result.Errors, Finding{"status", "Invalid status: " + value})
+		}
+		return
+	}
+	if zone == "backlog" {
+		if strings.ToLower(strings.TrimSpace(value)) != "backlog" {
+			result.Errors = append(result.Errors, Finding{"status",
+				fmt.Sprintf("status %q does not match zone %q (expected backlog)", value, zone)})
+		}
+		return
+	}
+	if zone == StorageWriteDir || zone == LegacyStorageDir {
+		if value != StatusDone.Dir() && value != supersededTerminal {
+			result.Errors = append(result.Errors, Finding{"status",
+				fmt.Sprintf("status %q is not permitted in archive zone (expected done or %s)", value, supersededTerminal)})
+		}
+		return
+	}
+	if zone == "issue" {
+		if !statusMatches(value, StatusPending) {
+			result.Errors = append(result.Errors, Finding{"status",
+				fmt.Sprintf("status %q does not match zone %q (expected todo)", value, zone)})
+		}
+		return
+	}
+	expected, expectedOK := StatusFromDir(zone)
+	if !expectedOK || !statusMatches(value, expected) {
+		result.Errors = append(result.Errors, Finding{"status",
+			fmt.Sprintf("status %q does not match zone %q (expected %s)", value, zone, expected.Dir())})
+	}
+}
+
+// validateCanonicalWorkTask is the work-card shape: a priority from the
+// dialect's scale, a Summary heading, and a completion-criteria section.
+func validateCanonicalWorkTask(result *ValidationResult, fields map[string]yaml.Node, body string) {
+	requireScalarFields(result, fields, "priority")
+	if priority, ok := scalarField(fields, "priority"); ok && priority != "" && !contains(PriorityValues, priority) {
 		result.Errors = append(result.Errors, Finding{"priority", "Invalid priority: " + priority})
 	}
-	if _, ok := doc.scalar("title"); !ok {
-		result.Errors = append(result.Errors, Finding{"title", "Missing required frontmatter field: title"})
-	}
-	if !documentHasHeading(card.Body) || !hasSummaryHeading(card.Body) {
-		result.Errors = append(result.Errors, Finding{"sections", "Missing required section heading: Summary"})
-	}
-	if len(card.Criteria()) == 0 {
-		result.Errors = append(result.Errors, Finding{"criteria", "card has no completion criteria"})
-	}
+	requireHeading(result, body, "Summary")
+	requireCriteria(result, body, "Completion Criteria")
 }
 
-func hasSummaryHeading(body string) bool {
-	var fences FenceScanner
-	for _, raw := range strings.Split(body, "\n") {
-		if fences.Classify(raw) != OutsideFence {
-			continue
-		}
-		if cardSectionHeading(raw) && strings.EqualFold(strings.TrimSpace(raw), "## Summary") {
-			return true
+// validateCanonicalPlan is the plan-document shape: the rollup counters it
+// reports on, a children roster, and the two structural headings.
+func validateCanonicalPlan(result *ValidationResult, fields map[string]yaml.Node, body string) {
+	requireScalarFields(result, fields, "scope", "progress", "total-tasks", "completed-tasks")
+	for _, name := range []string{"children", "target-date"} {
+		if _, present := fields[name]; !present {
+			result.Errors = append(result.Errors, Finding{name, "Missing required frontmatter field: " + name})
 		}
 	}
-	return false
+	validatePlanCounts(result, fields)
+	requireHeading(result, body, "Goal")
+	requireHeading(result, body, "Children")
 }
 
-func validateCanonicalStatus(result *ValidationResult, doc canonicalDocument, card *Card) {
-	status, ok := doc.scalar("status")
-	if !ok {
-		// A missing status is an error only where a status is required; the
-		// default dialect's zone directory carries the state instead.
+func validatePlanCounts(result *ValidationResult, fields map[string]yaml.Node) {
+	children, ok := fields["children"]
+	if ok && children.Kind != yaml.SequenceNode {
+		result.Errors = append(result.Errors, Finding{"children", "Frontmatter field children must be a sequence"})
 		return
 	}
-	if status == "" {
-		result.Errors = append(result.Errors, Finding{"status", "status is present but empty"})
-		return
+	atoi := func(name string) (int, bool) {
+		value, ok := scalarField(fields, name)
+		if !ok || value == "" {
+			return 0, false
+		}
+		n, err := strconv.Atoi(value)
+		return n, err == nil
 	}
-	if card.Zone != "" {
-		return // the zone segment is authoritative and already matched
+	total, totalOK := atoi("total-tasks")
+	completed, completedOK := atoi("completed-tasks")
+	progress, progressOK := atoi("progress")
+	if totalOK && ok && total != len(children.Content) {
+		result.Errors = append(result.Errors, Finding{"total-tasks", "total-tasks must equal the number of children"})
 	}
-	if _, known := StatusFromWord(status); !known {
-		result.Errors = append(result.Errors, Finding{"status", "Unknown status: " + status})
+	if totalOK && completedOK && (completed < 0 || completed > total) {
+		result.Errors = append(result.Errors, Finding{"completed-tasks", "completed-tasks must be between 0 and total-tasks"})
+	}
+	if progressOK && (progress < 0 || progress > 100) {
+		result.Errors = append(result.Errors, Finding{"progress", "progress must be between 0 and 100"})
 	}
 }
 
-// reportVacuousCriteria probes unchecked command bindings of todo cards and
-// reports the ones the tree already satisfies.
-func reportVacuousCriteria(ctx context.Context, root string, card *Card, criteria []Criterion, result *ValidationResult) {
-	vacuous, err := vacuousCriteria(ctx, root, card.Zone, criteria)
-	if err != nil {
-		return
-	}
-	for _, criterion := range vacuous {
+// requireHeading demands a literal `## <heading>` line in the body. The
+// pattern reads the rendered card, so a heading inside a fenced example still
+// satisfies it — the pinned check is textual, not structural.
+func requireHeading(result *ValidationResult, body, heading string) {
+	pattern := regexp.MustCompile(`(?m)^##\s+` + regexp.QuoteMeta(heading) + `\s*$`)
+	if !pattern.MatchString(body) {
 		result.Errors = append(result.Errors, Finding{
-			"verify",
-			fmt.Sprintf("Criterion already passes on the current tree, so completing this card would prove nothing: %s", criterion.Text),
-		})
+			strings.ToLower(strings.ReplaceAll(heading, " ", "_")), "Missing " + heading + " section"})
 	}
 }
 
-// orphanAndMalformedBindings applies the pinned binding shape rules to one
-// card's criteria population.
-func orphanAndMalformedBindings(result *ValidationResult, body string, criteria []Criterion) {
-	var scan criteriaScan
-	var fences FenceScanner
-	var comments htmlCommentScanner
-	for _, raw := range strings.Split(body, "\n") {
-		if comments.inComment {
-			visible := comments.visible(raw)
-			if fences.Classify(visible) == InsideFence {
-				continue
-			}
-			scanVisibleCriteriaLine(&scan, visible, 0)
-			continue
-		}
-		if fences.Classify(raw) != OutsideFence {
-			continue
-		}
-		scanVisibleCriteriaLine(&scan, comments.visible(raw), 0)
+// requireCriteria enforces the criteria-section half of the population rule
+// through the same selection the scanner and the card reader use, so validate
+// can no longer refuse a section preflight reads — or accept one preflight
+// cannot see. An accepted alias heading satisfies the presence requirement
+// and is reported with the canonical name: the corpus carries several
+// spellings, and a hard refusal would break boards the reader already serves.
+func requireCriteria(result *ValidationResult, body, heading string) {
+	section, _, found, ok := findCriteriaSection(body)
+	if !ok {
+		result.Errors = append(result.Errors, Finding{"completion_criteria", "Missing " + heading + " section"})
+		return
 	}
+	if found != heading {
+		result.Warnings = append(result.Warnings, Finding{"criteria_heading", fmt.Sprintf(
+			"Criteria heading %q is an accepted alias; the canonical heading is %q", found, heading)})
+	}
+	// Commented-out template examples do not count: the scanner reads what
+	// the card renders, and a section whose only checkboxes are inside an
+	// HTML comment defines nothing.
+	if len(scanCriteriaFrom(section, 1).Lines) == 0 {
+		result.Errors = append(result.Errors, Finding{"completion_criteria", "No criteria defined under " + found})
+	}
+	warnMalformedVerifyBindings(result, section)
+}
+
+// warnMalformedVerifyBindings checks the verify markers of one criteria
+// section: an orphan marker (no checkbox owns it) and a command truncated by
+// an unclosed fence are errors; a value that is neither a backtick command
+// nor `human — …` is a warning. First finding wins — each is a reading the
+// later shape checks cannot improve on.
+func warnMalformedVerifyBindings(result *ValidationResult, section string) {
+	scan := scanCriteriaFrom(section, 1)
 	if scan.OrphanVerifyMarker {
 		result.Errors = append(result.Errors, Finding{"verify",
 			"a | verify: binding must be on the same checkbox line as its completion criterion"})
 		return
 	}
-	for _, criterion := range criteria {
+	for _, criterion := range scan.Lines {
 		if !hasVerifyBindingToken(criterion.Text) {
 			continue
 		}
@@ -274,10 +375,73 @@ func orphanAndMalformedBindings(result *ValidationResult, body string, criteria 
 
 const truncationHint = "a | verify: command looks truncated by an unclosed code fence"
 
+// warnPlaceholderFields warns on scalar frontmatter values still carrying the
+// scaffold's `<...>` placeholder shape.
+func warnPlaceholderFields(result *ValidationResult, fields map[string]yaml.Node) {
+	for name, node := range fields {
+		if node.Kind != yaml.ScalarNode || node.Tag == "!!null" {
+			continue
+		}
+		value := strings.TrimSpace(node.Value)
+		if placeholderValueRe.MatchString(value) {
+			result.Warnings = append(result.Warnings, Finding{name,
+				"placeholder value " + value + " is still unfilled"})
+		}
+	}
+}
+
+// validateDependencyFieldShapes rejects frontmatter dependency fields whose
+// YAML node kind is not a sequence. A scalar `blocks: TASK-999` is an
+// unreadable shape that would otherwise quietly escape edge census.
+func validateDependencyFieldShapes(result *ValidationResult, fields map[string]yaml.Node) {
+	for _, name := range []string{"blocks", "depends-on"} {
+		node, ok := fields[name]
+		if !ok || node.Tag == "!!null" {
+			continue
+		}
+		if node.Kind != yaml.SequenceNode {
+			result.Errors = append(result.Errors, Finding{name, fmt.Sprintf(
+				"Frontmatter field %s must be a sequence, got %s", name, yamlKindName(node.Kind))})
+		}
+	}
+}
+
+func yamlKindName(kind yaml.Kind) string {
+	switch kind {
+	case yaml.DocumentNode:
+		return "document"
+	case yaml.SequenceNode:
+		return "sequence"
+	case yaml.MappingNode:
+		return "mapping"
+	case yaml.ScalarNode:
+		return "scalar"
+	case yaml.AliasNode:
+		return "alias"
+	default:
+		return "unknown"
+	}
+}
+
+// reportVacuousCriteria probes unchecked command bindings of todo cards and
+// reports the ones the tree already satisfies.
+func reportVacuousCriteria(ctx context.Context, root string, card *Card, result *ValidationResult) {
+	vacuous, err := vacuousCriteria(ctx, root, card.Zone, card.Criteria())
+	if err != nil {
+		return
+	}
+	for _, criterion := range vacuous {
+		result.Errors = append(result.Errors, Finding{
+			"verify",
+			fmt.Sprintf("Criterion already passes on the current tree, so completing this card would prove nothing: %s", criterion.Text),
+		})
+	}
+}
+
 // ValidateAll validates every live card and returns the per-card verdicts in
 // walk order.
 func ValidateAll(ctx context.Context, root string) ([]ValidationResult, Citations, error) {
-	return ValidateAllIn(ctx, root, TasksDir)
+	return ValidateAllIn(ctx, root, tasksDirName())
 }
 
 // ValidateAllIn validates the board rooted at tasksDir — the directory
@@ -291,6 +455,7 @@ func ValidateAllIn(ctx context.Context, root, tasksDir string) ([]ValidationResu
 	if err != nil {
 		return nil, Citations{}, err
 	}
+	index := buildCorpusIndex(root)
 	citations := Citations{}
 	results := make([]ValidationResult, 0, len(cards))
 	for _, card := range cards {
@@ -298,8 +463,10 @@ func ValidateAllIn(ctx context.Context, root, tasksDir string) ([]ValidationResu
 			results = append(results, validateDecisionDocument(ctx, root, tasksDir, card))
 			continue
 		}
-		results = append(results, validateCard(ctx, root, tasksDir, card, &citations))
+		results = append(results, validateCard(ctx, root, tasksDir, card, index, &citations))
 	}
+	// Corpus-level plan-metadata findings fold into the cards they belong to.
+	reportInvalidPlanMetadata(buildPlanMetadataCensus(cards), results)
 	// The decisions index is a corpus rule whose finding belongs to a file the
 	// walk never yields: README.md is not a card. It gets a result of its own
 	// so the drift is counted and printed like any other failure.
@@ -324,25 +491,10 @@ func validateDecisionDocument(ctx context.Context, root, tasksDir string, card *
 	return result
 }
 
-// ResolveTasksDir reads the board root from TASKS_DIR, defaulting to the
-// canonical tasks/ directory. A relative directory name redirects the whole
-// task noun at another corpus; an absolute path is refused, because every
-// caller resolves the board against the working directory it reports on.
-func ResolveTasksDir() (string, error) {
-	tasksDir := os.Getenv("TASKS_DIR")
-	if tasksDir == "" {
-		return TasksDir, nil
-	}
-	if filepath.IsAbs(tasksDir) {
-		return "", fmt.Errorf("TASKS_DIR must be a directory name relative to the working directory, not an absolute path: %s", tasksDir)
-	}
-	return tasksDir, nil
-}
-
 // RenderValidateAll writes the whole-board validate output. It returns the
 // number of invalid cards for the caller's exit decision.
 func RenderValidateAll(ctx context.Context, w io.Writer, root string) (int, error) {
-	return RenderValidateAllIn(ctx, w, root, TasksDir)
+	return RenderValidateAllIn(ctx, w, root, tasksDirName())
 }
 
 // RenderValidateAllIn writes the whole-board validate output for the board
@@ -356,7 +508,11 @@ func RenderValidateAllIn(ctx context.Context, w io.Writer, root, tasksDir string
 	fmt.Fprintln(w, "📋 Validating all tasks...")
 	fmt.Fprintln(w)
 	if len(results) == 0 {
+		// An empty board ends the report after the bare notice: there are no
+		// per-card verdicts to sum, so the ---, the summary, and the citation
+		// counter have nothing to count and are omitted.
 		fmt.Fprintln(w, "No task files found")
+		return 0, nil
 	}
 	valid := 0
 	invalid := 0

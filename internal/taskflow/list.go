@@ -54,7 +54,7 @@ func ListJSON(w io.Writer, root string) error {
 		Total     int        `json:"total"`
 		Tasks     []taskJSON `json:"tasks"`
 	}{
-		Directory: filepath.Join(root, TasksDir),
+		Directory: filepath.Join(root, tasksDirName()),
 		Total:     len(cards),
 		Tasks:     make([]taskJSON, 0, len(cards)),
 	}
@@ -76,7 +76,7 @@ func ListText(w io.Writer, root string) error {
 		return err
 	}
 	fmt.Fprintf(w, "=== Task List ===\n")
-	fmt.Fprintf(w, "Directory: %s\n", filepath.Join(root, TasksDir))
+	fmt.Fprintf(w, "Directory: %s\n", filepath.Join(root, tasksDirName()))
 	fmt.Fprintf(w, "\n")
 	for _, card := range cards {
 		fmt.Fprintf(w, "%s %s\n", card.Status.Symbol(), card.RepoRel())

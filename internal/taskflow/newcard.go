@@ -131,7 +131,7 @@ func Create(ctx context.Context, opts NewCardOptions) (*NewCardResult, error) {
 		return nil, fmt.Errorf("%w: filename %q does not match the card filename pattern", ErrNewCardInput, filename)
 	}
 	content := render(kind, id, fields, opts)
-	cardPath := filepath.Join(TasksDir, zone, filename)
+	cardPath := filepath.Join(tasksDirName(), zone, filename)
 	if err := writeNewFile(filepath.Join(opts.Root, cardPath), content); err != nil {
 		return nil, err
 	}
@@ -217,7 +217,7 @@ func hasNonASCIITitleWord(title string) bool {
 // with stays this package's, because the pinned scanner returns failures
 // instead of folding them into an empty floor.
 func allocateID(ctx context.Context, root, prefix string) (string, error) {
-	floor, err := cardid.ScanFloor(filepath.Join(root, TasksDir), prefix)
+	floor, err := cardid.ScanFloor(filepath.Join(root, tasksDirName()), prefix)
 	if err != nil {
 		return "", err
 	}

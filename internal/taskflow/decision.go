@@ -71,15 +71,6 @@ func validateDecisionDoc(content string, result *ValidationResult) {
 	}
 }
 
-// requireHeading reports the section as missing unless the content carries a
-// real `## Heading` line.
-func requireHeading(result *ValidationResult, content, heading string) {
-	pattern := regexp.MustCompile(`(?m)^##\s+` + regexp.QuoteMeta(heading) + `\s*$`)
-	if !pattern.MatchString(content) {
-		result.addError(strings.ToLower(strings.ReplaceAll(heading, " ", "_")), "Missing "+heading+" section")
-	}
-}
-
 // decisionLinkPattern captures the two halves of a promotion link:
 // `promoted-to:` on the deliberation log and `source:` on the ADR it was
 // promoted into. `Supersedes:`/`Superseded by:` carry an ADR id, not a path,

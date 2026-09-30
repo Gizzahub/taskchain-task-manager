@@ -37,7 +37,7 @@ type LinkUpdate struct {
 func MoveCard(root, cardPath string, dest MoveDestination) (newRel string, synced bool, links LinkUpdate, err error) {
 	srcRel, ok := relUnderTasks(cardPath)
 	if !ok {
-		return "", false, links, fmt.Errorf("%q is not under %s/", cardPath, TasksDir)
+		return "", false, links, fmt.Errorf("%q is not under %s/", cardPath, tasksDirName())
 	}
 	parts := strings.Split(srcRel, "/")
 	zoneIdx, _, inZone := ZoneSegment(parts)
@@ -48,7 +48,7 @@ func MoveCard(root, cardPath string, dest MoveDestination) (newRel string, synce
 	if parts[zoneIdx] == dest.Zone {
 		// Already in the target zone: sync the cell and the frontmatter status.
 		// A card with no Status cell still has to stop claiming the zone it left.
-		full := filepath.Join(root, TasksDir, filepath.FromSlash(srcRel))
+		full := filepath.Join(root, tasksDirName(), filepath.FromSlash(srcRel))
 		synced, err = rewriteStatusCell(full, dest.Status)
 		if err != nil {
 			return srcRel, synced, links, err
@@ -62,8 +62,8 @@ func MoveCard(root, cardPath string, dest MoveDestination) (newRel string, synce
 	destParts := append([]string{}, parts...)
 	destParts[zoneIdx] = dest.Zone
 	destRel := strings.Join(destParts, "/")
-	srcFull := filepath.Join(root, TasksDir, filepath.FromSlash(srcRel))
-	dstFull := filepath.Join(root, TasksDir, filepath.FromSlash(destRel))
+	srcFull := filepath.Join(root, tasksDirName(), filepath.FromSlash(srcRel))
+	dstFull := filepath.Join(root, tasksDirName(), filepath.FromSlash(destRel))
 
 	if _, err := os.Stat(dstFull); err == nil {
 		return "", false, links, fmt.Errorf("destination already exists: %s", destRel)
@@ -93,7 +93,7 @@ func MoveCard(root, cardPath string, dest MoveDestination) (newRel string, synce
 func ArchiveCard(root, cardPath string) (newRel string, links LinkUpdate, err error) {
 	srcRel, ok := relUnderTasks(cardPath)
 	if !ok {
-		return "", links, fmt.Errorf("%q is not under %s/", cardPath, TasksDir)
+		return "", links, fmt.Errorf("%q is not under %s/", cardPath, tasksDirName())
 	}
 	parts := strings.Split(srcRel, "/")
 	destRel := StorageWriteDir
@@ -106,16 +106,16 @@ func ArchiveCard(root, cardPath string) (newRel string, links LinkUpdate, err er
 		}
 		destRel = path.Join(archiveDirParts(parts)...)
 	}
-	if err := os.MkdirAll(filepath.Join(root, TasksDir, filepath.FromSlash(destRel)), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, tasksDirName(), filepath.FromSlash(destRel)), 0o755); err != nil {
 		return "", links, fmt.Errorf("create archive directory: %w", err)
 	}
 	destRel = path.Join(destRel, path.Base(srcRel))
-	dstFull := filepath.Join(root, TasksDir, filepath.FromSlash(destRel))
+	dstFull := filepath.Join(root, tasksDirName(), filepath.FromSlash(destRel))
 	if _, err := os.Stat(dstFull); err == nil {
 		return "", links, fmt.Errorf("already archived: %s", dstFull)
 	}
 
-	srcFull := filepath.Join(root, TasksDir, filepath.FromSlash(srcRel))
+	srcFull := filepath.Join(root, tasksDirName(), filepath.FromSlash(srcRel))
 	if err := stampArchivedStatus(srcFull); err != nil {
 		return "", links, err
 	}
@@ -194,8 +194,8 @@ func archiveDirParts(parts []string) []string {
 // are never edited, and the moved card is skipped on the inbound pass.
 func reconcileCardLinks(root, oldTasksRel, newTasksRel string) LinkUpdate {
 	update := LinkUpdate{}
-	oldRepoRel := path.Join(TasksDir, oldTasksRel)
-	newRepoRel := path.Join(TasksDir, newTasksRel)
+	oldRepoRel := path.Join(tasksDirName(), oldTasksRel)
+	newRepoRel := path.Join(tasksDirName(), newTasksRel)
 	oldDir := path.Dir(oldRepoRel)
 	newDir := path.Dir(newRepoRel)
 
@@ -221,7 +221,7 @@ func reconcileCardLinks(root, oldTasksRel, newTasksRel string) LinkUpdate {
 // the whole reconciliation.
 func reconcileArchiveLinks(root, oldTasksRel, newTasksRel string) LinkUpdate {
 	update := LinkUpdate{}
-	reconcileInbound(root, path.Join(TasksDir, oldTasksRel), path.Join(TasksDir, newTasksRel), &update)
+	reconcileInbound(root, path.Join(tasksDirName(), oldTasksRel), path.Join(tasksDirName(), newTasksRel), &update)
 	return update
 }
 
@@ -229,17 +229,17 @@ func reconcileArchiveLinks(root, oldTasksRel, newTasksRel string) LinkUpdate {
 // card's old repo-relative path.
 func reconcileInbound(root, oldRepoRel, newRepoRel string, update *LinkUpdate) {
 	for _, doc := range treeMarkdown(root) {
-		docRepoRel := path.Join(TasksDir, doc)
+		docRepoRel := path.Join(tasksDirName(), doc)
 		if docRepoRel == newRepoRel || IsStorageDir(path.Dir(doc)) {
 			continue
 		}
-		full := filepath.Join(root, TasksDir, filepath.FromSlash(doc))
+		full := filepath.Join(root, tasksDirName(), filepath.FromSlash(doc))
 		contentBytes, err := os.ReadFile(full)
 		if err != nil {
 			update.Skipped = docRepoRel
 			return
 		}
-		docDir := path.Join(TasksDir, path.Dir(doc))
+		docDir := path.Join(tasksDirName(), path.Dir(doc))
 		retargeted, lines := retargetLinksIn(
 			string(contentBytes),
 			docDir,
@@ -267,7 +267,7 @@ func reconcileInbound(root, oldRepoRel, newRepoRel string, update *LinkUpdate) {
 // included: the caller decides which documents may be edited.
 func treeMarkdown(root string) []string {
 	var docs []string
-	_ = filepath.WalkDir(filepath.Join(root, TasksDir), func(p string, d os.DirEntry, err error) error {
+	_ = filepath.WalkDir(filepath.Join(root, tasksDirName()), func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -277,7 +277,7 @@ func treeMarkdown(root string) []string {
 			}
 			return nil
 		}
-		rel, err := filepath.Rel(filepath.Join(root, TasksDir), p)
+		rel, err := filepath.Rel(filepath.Join(root, tasksDirName()), p)
 		if err != nil || filepath.Ext(rel) != ".md" {
 			return nil
 		}

@@ -16,7 +16,7 @@ import (
 // zero: a floor that silently reports empty reissues numbers.
 func RefFloor(ctx context.Context, root, prefix string) (int, error) {
 	cmd := exec.CommandContext(ctx, "git", "-c", "core.quotepath=false", "--no-replace-objects",
-		"--no-lazy-fetch", "log", "--all", "--format=%s %b", "--", TasksDir)
+		"--no-lazy-fetch", "log", "--all", "--format=%s %b", "--", tasksDirName())
 	cmd.Dir = root
 	var stderr strings.Builder
 	cmd.Stderr = &stderr

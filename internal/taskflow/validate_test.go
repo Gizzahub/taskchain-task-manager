@@ -13,9 +13,11 @@ func TestValidateCardFrontmatterErrors(t *testing.T) {
 		wantErr []string
 	}{
 		{
-			name:    "no frontmatter",
+			// A file with no frontmatter fence is not canonical-shaped: the
+			// schema checks do not apply and the card renders clean.
+			name:    "no frontmatter is skipped, not an error",
 			raw:     "## Summary\n\nbody\n",
-			wantErr: []string{"task file has no frontmatter"},
+			wantErr: nil,
 		},
 		{
 			name:    "missing id and title",
@@ -24,8 +26,8 @@ func TestValidateCardFrontmatterErrors(t *testing.T) {
 		},
 		{
 			name:    "invalid id shape",
-			raw:     "---\nid: task-1\ntype: feature\ntitle: x\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] bound | verify: `test -f x`\n",
-			wantErr: []string{"Invalid id: task-1"},
+			raw:     "---\nid: task-1\ntype: feature\ntitle: x\npriority: P2\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] bound | verify: `test -f x`\n",
+			wantErr: []string{"Invalid canonical task ID: task-1"},
 		},
 		{
 			name:    "bad priority and effort",
@@ -34,8 +36,8 @@ func TestValidateCardFrontmatterErrors(t *testing.T) {
 		},
 		{
 			name:    "missing summary and criteria",
-			raw:     "---\nid: TASK-1\ntype: feature\ntitle: x\n---\n\n## Goal\n\nbody\n",
-			wantErr: []string{"Missing required section heading: Summary", "card has no completion criteria"},
+			raw:     "---\nid: TASK-1\ntype: feature\ntitle: x\npriority: P2\n---\n\n## Goal\n\nbody\n",
+			wantErr: []string{"Missing Summary section", "Missing Completion Criteria section"},
 		},
 	}
 	for _, tt := range cases {
@@ -67,7 +69,7 @@ func TestValidateCardFrontmatterErrors(t *testing.T) {
 
 func TestValidateFilenameWarningIsNotAnError(t *testing.T) {
 	root := t.TempDir()
-	raw := "---\nid: TASK-1\ntype: feature\ntitle: x\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] bound | verify: `test -f x`\n"
+	raw := "---\nid: TASK-1\ntype: feature\ntitle: x\npriority: P2\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] bound | verify: `test -f x`\n"
 	if err := writeFileForTest(root, "tasks/todo/Weird Name.md", []byte(raw)); err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +86,7 @@ func TestValidateFilenameWarningIsNotAnError(t *testing.T) {
 }
 
 func TestValidateOrphanBindingIsAnError(t *testing.T) {
-	orphan := "---\nid: TASK-1\ntype: feature\ntitle: x\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] bound\n  | verify: `test -f x`\n"
+	orphan := "---\nid: TASK-1\ntype: feature\ntitle: x\npriority: P2\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] bound\n  | verify: `test -f x`\n"
 	root := t.TempDir()
 	if err := writeFileForTest(root, "tasks/todo/001-a.md", []byte(orphan)); err != nil {
 		t.Fatal(err)
@@ -93,16 +95,18 @@ func TestValidateOrphanBindingIsAnError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(results) != 1 || len(results[0].Errors) != 1 {
-		t.Fatalf("verdict = %#v, want exactly one error", results)
+	if len(results) != 1 || len(results[0].Errors) != 2 {
+		t.Fatalf("verdict = %#v, want exactly two errors", results)
 	}
-	if !strings.Contains(results[0].Errors[0].Message, "binding must be on the same checkbox line") {
-		t.Fatalf("error = %q", results[0].Errors[0].Message)
+	joined := results[0].Errors[0].Message + "\n" + results[0].Errors[1].Message
+	if !strings.Contains(joined, "binding must be on the same checkbox line") ||
+		!strings.Contains(joined, "checkbox has no verify binding: bound") {
+		t.Fatalf("errors = %q", joined)
 	}
 }
 
 func TestValidateMalformedBindingValueIsAWarning(t *testing.T) {
-	malformed := "---\nid: TASK-1\ntype: feature\ntitle: x\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] bound | verify: just prose\n"
+	malformed := "---\nid: TASK-1\ntype: feature\ntitle: x\npriority: P2\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] bound | verify: just prose\n"
 	root := t.TempDir()
 	if err := writeFileForTest(root, "tasks/todo/001-a.md", []byte(malformed)); err != nil {
 		t.Fatal(err)
@@ -122,7 +126,7 @@ func TestValidateMalformedBindingValueIsAWarning(t *testing.T) {
 func TestValidateUnknownStatusOutsideAnyZone(t *testing.T) {
 	// A card filed outside a zone directory has no zone to speak for it, so
 	// its own frontmatter word is validated.
-	raw := "---\nid: TASK-1\ntype: feature\ntitle: x\nstatus: fishing\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] bound | verify: `test -f x`\n"
+	raw := "---\nid: TASK-1\ntype: feature\ntitle: x\npriority: P2\nstatus: fishing\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] bound | verify: `test -f x`\n"
 	root := t.TempDir()
 	if err := writeFileForTest(root, "tasks/001-a.md", []byte(raw)); err != nil {
 		t.Fatal(err)
@@ -132,14 +136,14 @@ func TestValidateUnknownStatusOutsideAnyZone(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(results) != 1 || len(results[0].Errors) != 1 ||
-		!strings.Contains(results[0].Errors[0].Message, "Unknown status: fishing") {
-		t.Fatalf("verdict = %#v, want Unknown status error", results)
+		!strings.Contains(results[0].Errors[0].Message, "Invalid status: fishing") {
+		t.Fatalf("verdict = %#v, want Invalid status error", results)
 	}
 }
 
 func TestValidateCitationsCountBindings(t *testing.T) {
 	root := t.TempDir()
-	raw := "---\nid: TASK-1\ntype: feature\ntitle: x\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] good | verify: `test -f x`\n- [ ] odd | verify: `curl example.com`\n"
+	raw := "---\nid: TASK-1\ntype: feature\ntitle: x\npriority: P2\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] good | verify: `test -f x`\n- [ ] odd | verify: `echo hi | cat`\n"
 	if err := writeFileForTest(root, "tasks/todo/001-a.md", []byte(raw)); err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +160,7 @@ func TestValidateInsideFenceIsNotCriteria(t *testing.T) {
 	root := t.TempDir()
 	// A fenced block must not satisfy the criteria requirement, and a checkbox
 	// indented inside it must not become a criterion.
-	raw := "---\nid: TASK-1\ntype: feature\ntitle: x\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n```bash\n- [ ] fake | verify: `test -f x`\n```\n\n- [ ] real | verify: `test -f x`\n"
+	raw := "---\nid: TASK-1\ntype: feature\ntitle: x\npriority: P2\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n```bash\n- [ ] fake | verify: `test -f x`\n```\n\n- [ ] real | verify: `test -f x`\n"
 	if err := writeFileForTest(root, "tasks/todo/001-a.md", []byte(raw)); err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +178,7 @@ func TestValidateInsideFenceIsNotCriteria(t *testing.T) {
 
 func TestRenderValidateAllSummaryShape(t *testing.T) {
 	root := t.TempDir()
-	valid := "---\nid: TASK-1\ntype: feature\ntitle: x\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] good | verify: `test -f absent-x`\n"
+	valid := "---\nid: TASK-1\ntype: feature\ntitle: x\npriority: P2\n---\n\n## Summary\n\nbody\n\n## Completion Criteria\n\n- [ ] good | verify: `test -f absent-x`\n"
 	if err := writeFileForTest(root, "tasks/todo/001-a.md", []byte(valid)); err != nil {
 		t.Fatal(err)
 	}
