@@ -32,9 +32,11 @@ var preflightReasonHelp = map[string]string{
 const preflightRunnableListLimit = 10
 
 // RenderPreflightReport writes the text report. allowNoQueue renders the
-// board-integration one-liner for a NO_QUEUE verdict; the standalone command
-// prints the long form, because a caller that named no scope is asking the
-// wrong tree rather than closing one.
+// board-integration one-liner for a NO_QUEUE verdict — the verdict line with
+// the cleared-board clause and no counter line, because a board with nothing
+// in scope has nothing to count; the standalone command prints the long form,
+// because a caller that named no scope is asking the wrong tree rather than
+// closing one.
 func RenderPreflightReport(w io.Writer, report *PreflightReport, maxCardBytes int, allowNoQueue bool) {
 	zones := "all"
 	if len(report.Zones) > 0 {
@@ -44,6 +46,11 @@ func RenderPreflightReport(w io.Writer, report *PreflightReport, maxCardBytes in
 		maxCardBytes = DefaultMaxCardBytes
 	}
 	dialect := "ce"
+
+	if report.Verdict == PreflightNoQueue && allowNoQueue {
+		fmt.Fprintf(w, "TASK PREFLIGHT — %s (valid cleared/reference-only board; no execution queue)\n", report.Verdict)
+		return
+	}
 
 	fmt.Fprintf(w, "TASK PREFLIGHT — %s\n", report.Verdict)
 	fmt.Fprintf(w, "zones: %s    dialect: %s    total %d    runnable %d    unrunnable %d\n",
