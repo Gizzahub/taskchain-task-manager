@@ -478,7 +478,14 @@ func taskValidate(ctx context.Context, args []string, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("get working directory: %w", err)
 	}
-	invalid, err := taskflow.RenderValidateAll(ctx, out, root)
+	tasksDir, err := taskflow.ResolveTasksDir()
+	if err != nil {
+		// The reference stamps its tool line before it reads TASKS_DIR, so a
+		// refused redirection is still announced by the tool that refused it.
+		fmt.Fprintln(out, taskflow.ReferenceStamp)
+		return err
+	}
+	invalid, err := taskflow.RenderValidateAllIn(ctx, out, root, tasksDir)
 	if err != nil {
 		return err
 	}
