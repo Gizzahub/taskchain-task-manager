@@ -140,6 +140,38 @@ func IsKindDir(name string) bool {
 	return false
 }
 
+// idCardKind maps a card id's prefix to its kind word. An id that names no
+// known kind is read as the default: the board's work card.
+func idCardKind(id string) string {
+	prefix, _, _ := strings.Cut(id, "-")
+	switch prefix {
+	case "TASK":
+		return "task"
+	case "PLAN":
+		return "plan"
+	case "ISSUE":
+		return "issue"
+	case "BACKLOG":
+		return "backlog"
+	}
+	return "task"
+}
+
+// typesForKind is the type vocabulary a kind's cards draw from. One table
+// serves both the creator (which writes a type) and the validator (which
+// checks one), so the two readings cannot drift.
+func typesForKind(kind string) []string {
+	switch kind {
+	case "plan":
+		return []string{"plan", "roadmap", "phase"}
+	case "issue":
+		return []string{"bug", "blocker", "tech-debt"}
+	case "backlog":
+		return []string{"idea", "feature", "improvement", "tech-debt"}
+	}
+	return TaskTypes
+}
+
 // ZoneSegment returns the index of the first workflow-zone segment of an
 // already-split task path (the file name is never considered) and the status
 // that segment encodes.

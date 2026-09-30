@@ -241,16 +241,15 @@ func allocateID(ctx context.Context, root, prefix string) (string, error) {
 type cardFields struct{ Type, Priority, Effort, ExecTier, Agent string }
 
 func resolveFields(kind string, opts NewCardOptions) (cardFields, error) {
-	var types, priorities []string
+	types := typesForKind(kind)
+	var priorities []string
 	switch kind {
-	case "plan":
-		types, priorities = []string{"plan", "roadmap", "phase"}, nil
 	case "issue":
-		types, priorities = []string{"bug", "blocker", "tech-debt"}, []string{"P0", "P1", "P2", "P3"}
+		priorities = []string{"P0", "P1", "P2", "P3"}
 	case "backlog":
-		types, priorities = []string{"idea", "feature", "improvement", "tech-debt"}, []string{"P1", "P2", "P3"}
+		priorities = []string{"P1", "P2", "P3"}
 	default:
-		types, priorities = TaskTypes, PriorityValues
+		priorities = PriorityValues
 	}
 	f := cardFields{
 		Type:     strings.TrimSpace(opts.Type),

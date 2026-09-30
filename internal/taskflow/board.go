@@ -41,6 +41,9 @@ type Card struct {
 	Frontmatter map[string]string
 	// Body is everything after the closing frontmatter fence.
 	Body string
+	// BodyLineOffset is the file line the body's first line sits on, so a
+	// body-relative line number can be cited as the file line a reader opens.
+	BodyLineOffset int
 	// Raw is the exact file bytes.
 	Raw []byte
 }
@@ -51,6 +54,12 @@ func (c *Card) RepoRel() string { return pathJoin(TasksDir, c.TasksRel) }
 // Criteria are the graded checkbox lines of the card body.
 func (c *Card) Criteria() []Criterion {
 	return criterionLines(c.Body)
+}
+
+// CriterionFileLine maps a criterion's body-relative line to its file line,
+// which is the number a diagnostic cites and a reader opens.
+func (c *Card) CriterionFileLine(criterion Criterion) int {
+	return c.BodyLineOffset + criterion.Line
 }
 
 func pathJoin(a, b string) string {
@@ -129,6 +138,7 @@ func ParseCard(tasksRel string, raw []byte) *Card {
 	}
 	fm, body := splitFrontmatter(raw)
 	card.Body = body
+	card.BodyLineOffset = strings.Count(string(raw[:len(raw)-len(body)]), "\n")
 	if fm != nil {
 		var doc map[string]any
 		_ = yaml.Unmarshal(fm, &doc)

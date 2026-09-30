@@ -17,7 +17,7 @@ import (
 // taskUsage is the noun's one-line contract, shown when the noun itself is
 // mistyped. Per-subcommand misuse is reported by the subcommand, at the exit
 // code the pinned reference gives that subcommand's own refusals.
-const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate> ..."
+const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate|lint|preflight|gate> ..."
 
 // runTask dispatches the CE-parity `task` noun. The pinned reference splits
 // its refusals two ways, and the split is preserved here: what the caller
@@ -46,8 +46,17 @@ func runTask(args []string, out, errOut io.Writer) int {
 		err = taskArchive(ctx, args[1:], out)
 	case "validate":
 		err = taskValidate(ctx, args[1:], out)
+	case "lint":
+		err = taskLint(args[1:], out)
+	case "preflight":
+		err = taskPreflight(args[1:], out)
+	case "gate":
+		// The gate owns its exit codes outright -- READY 0, NOT READY 1,
+		// UNAVAILABLE 2 -- because its verdicts are outcomes, not errors a
+		// wrapper should re-classify.
+		return runTaskGate(ctx, args[1:], out, errOut)
 	default:
-		fmt.Fprintf(errOut, "Error: unknown task command %q (valid: list, new, move, archive, validate)\n", args[0])
+		fmt.Fprintf(errOut, "Error: unknown task command %q (valid: list, new, move, archive, validate, lint, preflight, gate)\n", args[0])
 		return 2
 	}
 	if err == nil {
@@ -123,8 +132,11 @@ func taskNew(ctx context.Context, args []string, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("validate %s after writing it: %w", result.Path, err)
 	}
+	// The scaffold's own unfilled placeholder is covered by the next-step hint
+	// `new` prints anyway, so it is not repeated as a finding here.
+	warnings := scaffoldCoveredWarnings(verdict)
 	if asJSON {
-		if err := printNewCardJSON(out, result, verdict); err != nil {
+		if err := printNewCardJSON(out, result, verdict, warnings); err != nil {
 			return err
 		}
 	} else {
@@ -132,17 +144,31 @@ func taskNew(ctx context.Context, args []string, out io.Writer) error {
 		for _, e := range verdict.Errors {
 			fmt.Fprintf(out, "   ❌ %s: %s\n", e.Field, e.Message)
 		}
-		for _, w := range verdict.Warnings {
+		for _, w := range warnings {
 			fmt.Fprintf(out, "   ⚠️  %s: %s\n", w.Field, w.Message)
 		}
 		if strings.Contains(result.Content, "<observable condition>") {
 			fmt.Fprintln(out, "   next: replace the placeholder criterion with real ones, each bound with `| verify:`")
 		}
 	}
-	if !verdict.Valid() {
+	if len(verdict.Errors) > 0 {
 		return fmt.Errorf("%s was written but does not validate", result.Path)
 	}
 	return nil
+}
+
+// scaffoldCoveredWarnings drops the warning the scaffold's own placeholder
+// criterion earns: `new` wrote that placeholder on purpose and its next-step
+// hint already says to replace it.
+func scaffoldCoveredWarnings(verdict taskflow.ValidationResult) []taskflow.Finding {
+	var warnings []taskflow.Finding
+	for _, w := range verdict.Warnings {
+		if w.Field == "criteria" && strings.HasPrefix(w.Message, "criterion is an unfilled <...> placeholder:") {
+			continue
+		}
+		warnings = append(warnings, w)
+	}
+	return warnings
 }
 
 func parseTaskNewArgs(args []string, out io.Writer) (taskflow.NewCardOptions, bool, error) {
@@ -221,8 +247,10 @@ func flagValue(args []string, i int) (string, error) {
 }
 
 // printNewCardJSON is the machine-readable side of `new`. It is the same
-// verdict the prose prints, so a script gating on either sees one truth.
-func printNewCardJSON(out io.Writer, result *taskflow.NewCardResult, verdict taskflow.ValidationResult) error {
+// verdict the prose prints, so a script gating on either sees one truth:
+// valid names an error-free write, and the warnings shown are the ones the
+// prose shows.
+func printNewCardJSON(out io.Writer, result *taskflow.NewCardResult, verdict taskflow.ValidationResult, warnings []taskflow.Finding) error {
 	payload := struct {
 		Path     string   `json:"path"`
 		ID       string   `json:"id"`
@@ -232,12 +260,12 @@ func printNewCardJSON(out io.Writer, result *taskflow.NewCardResult, verdict tas
 		Warnings []string `json:"warnings"`
 	}{
 		Path: result.Path, ID: result.ID, Kind: result.Kind,
-		Valid: verdict.Valid(), Errors: []string{}, Warnings: []string{},
+		Valid: len(verdict.Errors) == 0, Errors: []string{}, Warnings: []string{},
 	}
 	for _, e := range verdict.Errors {
 		payload.Errors = append(payload.Errors, e.Field+": "+e.Message)
 	}
-	for _, w := range verdict.Warnings {
+	for _, w := range warnings {
 		payload.Warnings = append(payload.Warnings, w.Field+": "+w.Message)
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")

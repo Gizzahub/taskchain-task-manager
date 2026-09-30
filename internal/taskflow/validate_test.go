@@ -35,7 +35,7 @@ func TestValidateCardFrontmatterErrors(t *testing.T) {
 		{
 			name:    "missing summary and criteria",
 			raw:     "---\nid: TASK-1\ntype: feature\ntitle: x\n---\n\n## Goal\n\nbody\n",
-			wantErr: []string{"Missing required section heading: Summary", "card has no completion criteria"},
+			wantErr: []string{"Missing Summary section", "Missing Completion Criteria section"},
 		},
 	}
 	for _, tt := range cases {
@@ -132,8 +132,8 @@ func TestValidateUnknownStatusOutsideAnyZone(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(results) != 1 || len(results[0].Errors) != 1 ||
-		!strings.Contains(results[0].Errors[0].Message, "Unknown status: fishing") {
-		t.Fatalf("verdict = %#v, want Unknown status error", results)
+		!strings.Contains(results[0].Errors[0].Message, "Invalid status: fishing") {
+		t.Fatalf("verdict = %#v, want Invalid status error", results)
 	}
 }
 

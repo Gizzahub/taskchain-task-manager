@@ -149,12 +149,19 @@ func probeRoot(root string) (string, error) {
 // exited zero, false when it exited nonzero, and an error when it could not
 // start at all (a start failure means the probe said nothing either way).
 func execProbe(ctx context.Context, root string, cmd string) (passed bool, executable bool, err error) {
+	passed, _, executable, err = execProbeStatus(ctx, root, cmd)
+	return passed, executable, err
+}
+
+// execProbeStatus is execProbe with the nonzero exit's own text, which a gate
+// detail line cites as the reason a checked binding no longer holds.
+func execProbeStatus(ctx context.Context, root string, cmd string) (passed bool, status string, executable bool, err error) {
 	if err := classifyProbe(cmd); err != nil {
-		return false, false, err
+		return false, "", false, err
 	}
 	args, err := splitProbeArgs(strings.TrimSpace(cmd))
 	if err != nil {
-		return false, false, err
+		return false, "", false, err
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
@@ -165,11 +172,11 @@ func execProbe(ctx context.Context, root string, cmd string) (passed bool, execu
 	if err := probe.Run(); err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			return false, true, nil
+			return false, exitErr.Error(), true, nil
 		}
-		return false, false, err
+		return false, "", false, err
 	}
-	return true, true, nil
+	return true, "", true, nil
 }
 
 // vacuousCriteria reports the criteria whose command bindings already pass on
