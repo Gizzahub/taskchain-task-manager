@@ -27,7 +27,9 @@ func validateArchiveRequest(req ArchiveRequest) error {
 	if req.Token != "" && !claimToken.MatchString(req.Token) {
 		return fmt.Errorf("invalid archive request token")
 	}
-	if req.Operation != "archive" && req.Operation != "supersede" && req.Operation != "force" {
+	switch req.Operation {
+	case diskArchiveOperationArchive, diskArchiveOperationSupersede, diskArchiveOperationForce:
+	default:
 		return fmt.Errorf("unsupported archive operation %q", req.Operation)
 	}
 	if !utf8.ValidString(req.Source) || req.Source == "" || req.Source == "." || req.Source == ".." || strings.HasPrefix(req.Source, "../") || len(req.Source) > 1023 || path.IsAbs(req.Source) || path.Clean(req.Source) != req.Source || strings.ContainsAny(req.Source, "\\\x00") {
@@ -36,10 +38,10 @@ func validateArchiveRequest(req ArchiveRequest) error {
 	if !utf8.ValidString(req.Assertion) || len(req.Assertion) > 4096 || strings.ContainsAny(req.Assertion, "\x00\r\n") {
 		return fmt.Errorf("invalid archive assertion")
 	}
-	if req.Operation == "force" && strings.TrimSpace(req.Assertion) == "" {
+	if req.Operation == diskArchiveOperationForce && strings.TrimSpace(req.Assertion) == "" {
 		return fmt.Errorf("forced archive requires explicit assertion")
 	}
-	if req.Operation != "force" && req.Assertion != "" {
+	if req.Operation != diskArchiveOperationForce && req.Assertion != "" {
 		return fmt.Errorf("archive assertion is only valid for force")
 	}
 	cfg, err := archivepolicy.ParseConfig(req.Rules)
@@ -89,8 +91,10 @@ func prepareArchiveRecord(req ArchiveRequest, raw []byte, mode uint32, policy bo
 	}
 	patched := append([]byte(nil), raw...)
 	decision := archivepolicy.Decision{}
+	operation := ""
 	switch req.Operation {
-	case "archive":
+	case diskArchiveOperationArchive:
+		operation = diskArchiveOperationArchive
 		decision, err = observeArchiveAdmission(raw, req.ID, req.Source, policy, cfg, resolve)
 		if err != nil {
 			return out, err
@@ -98,23 +102,27 @@ func prepareArchiveRecord(req ArchiveRequest, raw []byte, mode uint32, policy bo
 		if !decision.Allowed {
 			return out, fmt.Errorf("archive admission denied: %s", strings.Join(decision.Reasons, "; "))
 		}
-	case "supersede":
+	case diskArchiveOperationSupersede:
+		operation = diskArchiveOperationSupersede
 		patched, _, err = doc.SetFrontmatterStatus("superseded")
 		if err != nil {
 			return out, err
 		}
-	case "force":
+	case diskArchiveOperationForce:
+		operation = diskArchiveOperationForce
 		// Force preserves source bytes and records explicit operator provenance.
+	default:
+		return out, fmt.Errorf("unsupported archive operation %q", req.Operation)
 	}
 	out = archiveRecord{
-		State: "pending", Operation: req.Operation, RequestID: req.RequestID, ID: req.ID, Owner: req.Owner, Token: req.Token,
+		State: "pending", Operation: operation, RequestID: req.RequestID, ID: req.ID, Owner: req.Owner, Token: req.Token,
 		BoardPath: board, Namespace: namespace, Source: req.Source, Target: target,
 		OriginalSHA256: bytesDigest(raw), FinalSHA256: bytesDigest(patched), Mode: mode,
 		PolicyCanonical: append([]byte(nil), pCanonical...), PolicyDigest: bytesDigest(pCanonical),
 		RulesCanonical: append([]byte(nil), rulesCanonical...), RulesDigest: bytesDigest(rulesCanonical), Assertion: req.Assertion,
 		Original: append([]byte(nil), raw...), Patched: append([]byte(nil), patched...),
 	}
-	if req.Operation == "archive" && decision.CompletionEligible {
+	if operation == diskArchiveOperationArchive && decision.CompletionEligible {
 		out.Completion = &archiveCompletionBinding{SchemaVersion: 1, Provenance: "workflow-done", RequestID: req.RequestID, BoardPath: board, ID: req.ID, Identity: identityKey(req.ID), Source: req.Source, Target: target, FinalSHA256: out.FinalSHA256, PolicyCanonical: append([]byte(nil), pCanonical...), PolicyDigest: bytesDigest(pCanonical), RulesCanonical: append([]byte(nil), rulesCanonical...), RulesDigest: bytesDigest(rulesCanonical)}
 	}
 	if err := validateArchiveRecord(out); err != nil {

@@ -69,7 +69,7 @@ func validateArchiveRecord(r archiveRecord) error {
 	}
 	zone := ""
 	switch r.Operation {
-	case "archive", "supersede", "force":
+	case diskArchiveOperationArchive, diskArchiveOperationSupersede, diskArchiveOperationForce:
 		var target string
 		zone, target, err = archiveDestination(r.Source, p)
 		if err != nil {
@@ -78,13 +78,13 @@ func validateArchiveRecord(r archiveRecord) error {
 		if target != r.Target {
 			return fmt.Errorf("archive target does not preserve source scope")
 		}
-		if r.Operation == "archive" && r.Assertion != "" {
+		if r.Operation == diskArchiveOperationArchive && r.Assertion != "" {
 			return fmt.Errorf("normal archive cannot use an override assertion")
 		}
-		if r.Operation == "force" && strings.TrimSpace(r.Assertion) == "" {
+		if r.Operation == diskArchiveOperationForce && strings.TrimSpace(r.Assertion) == "" {
 			return fmt.Errorf("forced archive requires explicit assertion")
 		}
-	case "legacy-adoption":
+	case diskArchiveOperationLegacyAdoption:
 		if r.Source != r.Target || strings.TrimSpace(r.Assertion) == "" {
 			return fmt.Errorf("legacy adoption requires unchanged target and explicit assertion")
 		}
@@ -94,10 +94,10 @@ func validateArchiveRecord(r archiveRecord) error {
 	default:
 		return fmt.Errorf("unknown archive operation")
 	}
-	if r.Operation != "supersede" && r.OriginalSHA256 != r.FinalSHA256 {
+	if r.Operation != diskArchiveOperationSupersede && r.OriginalSHA256 != r.FinalSHA256 {
 		return fmt.Errorf("archive operation unexpectedly changes source bytes")
 	}
-	needsCompletion := r.Operation == "archive" && isWorkTask(r.ID) && p.Workflow(zone) && zone == p.DoneZone()
+	needsCompletion := r.Operation == diskArchiveOperationArchive && isWorkTask(r.ID) && p.Workflow(zone) && zone == p.DoneZone()
 	if needsCompletion && r.Completion == nil {
 		return fmt.Errorf("normal done TASK archive requires completion binding")
 	}
@@ -122,11 +122,11 @@ func validateArchiveRecord(r archiveRecord) error {
 	if doc.View().ID != r.ID {
 		return fmt.Errorf("archive pending raw identity mismatch")
 	}
-	if r.Operation == "archive" && strings.EqualFold(doc.View().Status, "superseded") {
+	if r.Operation == diskArchiveOperationArchive && strings.EqualFold(doc.View().Status, "superseded") {
 		return fmt.Errorf("superseded card requires separate archive operation")
 	}
 	patch := doc.Bytes()
-	if r.Operation == "supersede" {
+	if r.Operation == diskArchiveOperationSupersede {
 		patch, _, err = doc.SetFrontmatterStatus("superseded")
 		if err != nil {
 			return err
@@ -148,7 +148,7 @@ func validateArchiveRecordCompletion(r archiveRecord) error {
 	if err := validateArchiveCompletion(*b); err != nil {
 		return err
 	}
-	if (r.Operation != "archive" && r.Operation != "legacy-adoption") || (r.Operation == "archive" && b.Provenance != "workflow-done") || (r.Operation == "legacy-adoption" && b.Provenance != "legacy-completion") {
+	if (r.Operation != diskArchiveOperationArchive && r.Operation != diskArchiveOperationLegacyAdoption) || (r.Operation == diskArchiveOperationArchive && b.Provenance != "workflow-done") || (r.Operation == diskArchiveOperationLegacyAdoption && b.Provenance != "legacy-completion") {
 		return fmt.Errorf("archive operation cannot publish this completion provenance")
 	}
 	if b.RequestID != r.RequestID || b.BoardPath != r.BoardPath || b.ID != r.ID || b.Source != r.Source || b.Target != r.Target || b.FinalSHA256 != r.FinalSHA256 || b.PolicyDigest != r.PolicyDigest || b.RulesDigest != r.RulesDigest || b.Assertion != r.Assertion || !bytes.Equal(b.PolicyCanonical, r.PolicyCanonical) || !bytes.Equal(b.RulesCanonical, r.RulesCanonical) {

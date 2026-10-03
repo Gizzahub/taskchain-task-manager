@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
-	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 func AdoptLegacyArchive(dir string, req LegacyArchiveRequest, adopt bool) (ArchiveResult, error) {
@@ -19,11 +18,11 @@ func RecoverLegacyArchive(dir string, req LegacyArchiveRequest) (ArchiveResult, 
 }
 
 func legacyArchiveWithStep(dir string, req LegacyArchiveRequest, adopt, recoverOnly bool, step func(string) error) (result ArchiveResult, err error) {
-	if req.Operation != "legacy-adoption" {
+	if req.Operation != diskArchiveOperationLegacyAdoption {
 		return result, fmt.Errorf("legacy archive operation is required")
 	}
 	common := req.ArchiveRequest
-	common.Operation = string(outputvocab.Force)
+	common.Operation = diskArchiveOperationForce
 	if err := validateArchiveRequest(common); err != nil {
 		return result, err
 	}
@@ -55,7 +54,7 @@ func legacyArchiveWithStep(dir string, req LegacyArchiveRequest, adopt, recoverO
 			if err := s.clearArchive(req.ArchiveRequest); err != nil {
 				return result, err
 			}
-			return archiveResult(rec), nil
+			return archiveResult(rec)
 		}
 		return s.finishLegacy(rec, req, step)
 	}
@@ -210,7 +209,7 @@ func (s *archiveSession) finishLegacy(rec archiveRecord, req LegacyArchiveReques
 	}
 	completedRecord := rec
 	completedRecord.State, completedRecord.Original, completedRecord.Patched = "completed", nil, nil
-	return archiveResult(completedRecord), nil
+	return archiveResult(completedRecord)
 }
 
 func (s *archiveSession) verifyPendingLegacy(rec archiveRecord, req LegacyArchiveRequest) error {

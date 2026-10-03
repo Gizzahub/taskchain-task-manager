@@ -54,6 +54,11 @@ preserves source bytes. Neither operation publishes dependency completion.
 Rules, request ID, source hash and all other request fields must be preserved
 for a retry, including after a stdout failure. JSON success has top-level outputVersion 1.
 
+Successful JSON reports `operation` as exactly `archive`, `supersede`, or `force`.
+The archive journal stores that same spelling. Pending records include `original`
+and `patched`; completed records omit both. Any other operation is rejected and
+is not reported. `legacy-adoption` belongs to legacy adoption, not this command.
+
 Existing archives use the separate [legacy adoption command](legacy-archive.md),
 which requires explicit operator approval to publish dependency completion.
 Protocol 5 boards use a completed capacity receipt and a schema-2 archive.

@@ -8,7 +8,6 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/archivepolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/card"
-	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 // LegacyArchiveRequest records an operator's explicit observation of an
@@ -20,11 +19,11 @@ type LegacyArchiveRequest struct {
 }
 
 func validateLegacyArchiveRequest(req LegacyArchiveRequest, actualMode uint32, policy boardpolicy.Policy, board, namespace string) ([]byte, error) {
-	if req.Operation != "legacy-adoption" {
+	if req.Operation != diskArchiveOperationLegacyAdoption {
 		return nil, fmt.Errorf("legacy archive operation is required")
 	}
 	common := req.ArchiveRequest
-	common.Operation = string(outputvocab.Force)
+	common.Operation = diskArchiveOperationForce
 	if err := validateArchiveRequest(common); err != nil {
 		return nil, err
 	}
@@ -52,7 +51,7 @@ func validateLegacyArchiveRequest(req LegacyArchiveRequest, actualMode uint32, p
 // record. The caller supplies the locked board's current mode and identity.
 func prepareLegacyArchiveRecord(req LegacyArchiveRequest, raw []byte, actualMode uint32, policy boardpolicy.Policy, board, namespace string) (archiveRecord, error) {
 	var zero archiveRecord
-	if req.Operation != "legacy-adoption" {
+	if req.Operation != diskArchiveOperationLegacyAdoption {
 		return zero, fmt.Errorf("legacy archive operation is required")
 	}
 	if strings.TrimSpace(req.Assertion) == "" || !utf8.ValidString(req.Assertion) {
@@ -83,7 +82,7 @@ func prepareLegacyArchiveRecord(req LegacyArchiveRequest, raw []byte, actualMode
 		return zero, err
 	}
 	record := archiveRecord{
-		State: "pending", Operation: string(outputvocab.LegacyAdoption), RequestID: req.RequestID, ID: req.ID,
+		State: "pending", Operation: diskArchiveOperationLegacyAdoption, RequestID: req.RequestID, ID: req.ID,
 		Owner: req.Owner, Token: req.Token, BoardPath: board, Namespace: namespace,
 		Source: req.Source, Target: req.Source, OriginalSHA256: bytesDigest(raw), FinalSHA256: bytesDigest(raw),
 		Mode: actualMode, PolicyCanonical: append([]byte(nil), pCanonical...), PolicyDigest: bytesDigest(pCanonical),
@@ -105,7 +104,7 @@ func prepareLegacyArchiveRecord(req LegacyArchiveRequest, raw []byte, actualMode
 }
 
 func sameLegacyArchive(rec archiveRecord, req LegacyArchiveRequest) bool {
-	if !sameArchive(rec, req.ArchiveRequest) || rec.Operation != "legacy-adoption" || rec.Mode != req.ExpectedMode {
+	if !sameArchive(rec, req.ArchiveRequest) || rec.Operation != diskArchiveOperationLegacyAdoption || rec.Mode != req.ExpectedMode {
 		return false
 	}
 	return (rec.Completion != nil) == req.ApproveCompletion

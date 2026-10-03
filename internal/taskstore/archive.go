@@ -2,6 +2,7 @@ package taskstore
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
@@ -25,8 +26,24 @@ func RecoverArchive(dir string, req ArchiveRequest) (ArchiveResult, error) {
 	return archiveWithStep(dir, req, false, true, nil)
 }
 
-func archiveResult(rec archiveRecord) ArchiveResult {
-	return ArchiveResult{RequestID: rec.RequestID, ID: rec.ID, Source: rec.Source, Target: rec.Target, Status: outputvocab.Completed, Operation: outputvocab.ArchiveOperation(rec.Operation), CompletionEligible: rec.Completion != nil}
+// archiveResult reports one validated disk operation on stdout. Each case names
+// the journal literal and the stdout constant separately. A cast would publish
+// any stored string, including one the journal validator rejects.
+func archiveResult(rec archiveRecord) (ArchiveResult, error) {
+	var operation outputvocab.ArchiveOperation
+	switch rec.Operation {
+	case diskArchiveOperationArchive:
+		operation = outputvocab.ArchiveOp
+	case diskArchiveOperationSupersede:
+		operation = outputvocab.Supersede
+	case diskArchiveOperationForce:
+		operation = outputvocab.Force
+	case diskArchiveOperationLegacyAdoption:
+		operation = outputvocab.LegacyAdoption
+	default:
+		return ArchiveResult{}, fmt.Errorf("unknown archive operation")
+	}
+	return ArchiveResult{RequestID: rec.RequestID, ID: rec.ID, Source: rec.Source, Target: rec.Target, Status: outputvocab.Completed, Operation: operation, CompletionEligible: rec.Completion != nil}, nil
 }
 
 func archiveWithStep(dir string, req ArchiveRequest, adopt, recoverOnly bool, step func(string) error) (result ArchiveResult, err error) {
@@ -52,7 +69,7 @@ func archiveWithStep(dir string, req ArchiveRequest, adopt, recoverOnly bool, st
 			if err := s.clearArchive(req); err != nil {
 				return result, err
 			}
-			return archiveResult(rec), nil
+			return archiveResult(rec)
 		}
 		return s.finishArchive(rec, req, step)
 	}
@@ -125,5 +142,5 @@ func (s *archiveSession) finishArchive(rec archiveRecord, req ArchiveRequest, st
 	if err := s.clearArchive(req); err != nil {
 		return ArchiveResult{}, err
 	}
-	return archiveResult(rec), nil
+	return archiveResult(rec)
 }

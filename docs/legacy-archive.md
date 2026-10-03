@@ -15,6 +15,9 @@ taskchain-task-manager adopt-legacy-archive --dir tasks --id TASK-1 \
 
 The archive rules file uses the [archive rules format](archive.md). An assertion
 is an operator statement, not authentication or independent quality verification.
+The journal and success JSON both use the operation spelling `legacy-adoption`.
+Pending records keep the card payload; completed records omit `original` and
+`patched`. This spelling is not `archive`, `supersede`, or `force`.
 This operation requires a previously reserved ID; reserving that ID does not
 itself approve completion. Existing held claims still require their owner/token.
 

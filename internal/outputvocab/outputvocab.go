@@ -17,17 +17,13 @@
 // which directories and statuses the board policy accepts — a behavioural
 // coupling this package's own TestZoneVocabularyMatchesDefaultPolicy pins.
 //
-// ArchiveOperation is a third exception, and unlike those two it is a defect
-// rather than a design. Its members are also written to disk: the archive
-// journal's archiveRecord.Operation holds them (internal/taskstore/
-// archive_record.go:19), and that record's validator still compares bare
-// literals (archive_record.go:71-151). Renaming an ArchiveOperation constant
-// would therefore change the on-disk format and the validator would stop
-// matching journals already written. One field being both a public output
-// and a storage format is the thing to fix — by splitting the two contracts,
-// not by widening this package's scope to cover the journal. Every other
-// journal write in this repository deliberately uses a bare literal for
-// exactly that reason.
+// ArchiveOperation is stdout-only. The archive journal owns a separate set of
+// literals — archive, supersede, force, and legacy-adoption — and writers
+// persist those literals. Renaming an ArchiveOperation constant changes the
+// stdout JSON spelling. It does not change journal bytes, and the journal
+// validator does not follow the rename. Result translation maps a known
+// validated disk operation onto one of these constants explicitly. The
+// spellings match; that match is compatibility, not shared ownership.
 //
 // completed means TRANSACTION completion, not work completion. A rejoin,
 // archive, repair, relocation, transition, or policy activation reports
@@ -196,17 +192,12 @@ func AllRejoinModes() []RejoinMode {
 // — the only matches are the Mode field declaration and the rejoinMode
 // constructor.
 
-// ArchiveOperation is the kind of archive transaction requested or
-// recorded, as reported by ArchiveResult.Operation.
+// ArchiveOperation is the archive transaction kind reported by
+// ArchiveResult.Operation.
 //
-// Unlike every other type here, these values are not confined to stdout.
-// They are also stored in the on-disk archiveRecord.Operation
-// (internal/taskstore/archive_record.go:19), written at
-// legacy_archive_request.go:86 and, by way of a flag default, at
-// cmd/taskchain-task-manager/archive.go:32. The record validator at
-// archive_record.go:71-151 checks that stored value against bare literals.
-// Renaming a constant here changes the on-disk format; the validator will
-// not follow it.
+// These constants are the stdout spellings. The journal stores its own
+// literals. Renaming ArchiveOp, Supersede, Force, or LegacyAdoption changes
+// the JSON operation value on stdout and does not change journal bytes.
 type ArchiveOperation string
 
 const (

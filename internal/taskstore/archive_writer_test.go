@@ -237,15 +237,10 @@ func TestArchiveWriterCollisionAndNonNormalOperations(t *testing.T) {
 	}
 }
 
-// TestArchiveOperationVocabularyExhaustive exercises the real switch that
-// consumes ArchiveOperation end to end: validateArchiveRecord's
-// "switch r.Operation" in archive_record.go. Together with
-// TestArchiveWriterCollisionAndNonNormalOperations (which already covers
-// "supersede" and "force"), this drives every outputvocab.AllArchiveOperations()
-// member through Archive or AdoptLegacyArchive and checks the resulting
-// ArchiveResult.Operation round-trips to the matching constant, then checks
-// that a value outside the vocabulary hits the switch's default case and is
-// rejected rather than silently accepted.
+// TestArchiveOperationVocabularyExhaustive drives every supported archive
+// operation through Archive or AdoptLegacyArchive and checks stdout reports
+// that spelling. validateArchiveRecord rejects a value outside the persisted
+// operation literals instead of accepting it.
 func TestArchiveOperationVocabularyExhaustive(t *testing.T) {
 	t.Parallel()
 	t.Run("archive", func(t *testing.T) {
