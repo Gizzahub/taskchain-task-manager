@@ -1,0 +1,4 @@
+# The native check allows 40m; the integration probe must allow it to finish.
+# Keep target selection and reclaim behavior in the existing explicit workflow.
+branch:
+  makeTimeout: "45m"
