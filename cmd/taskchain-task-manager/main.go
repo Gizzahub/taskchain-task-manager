@@ -52,6 +52,12 @@ func run(args []string, out, errOut io.Writer) int {
 	if len(args) > 0 && args[0] == "show-context" {
 		return runShowContext(args, out, errOut)
 	}
+	if len(args) > 0 && args[0] == "link-evidence" {
+		return runLinkEvidence(args, out, errOut)
+	}
+	if len(args) > 0 && args[0] == "evidence-links" {
+		return runEvidenceLinks(args, out, errOut)
+	}
 	if len(args) > 0 && args[0] == "query-workspace" {
 		return runWorkspaceQuery(args, out, errOut)
 	}
@@ -98,6 +104,8 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "       taskchain-task-manager validate-context <intent-batch-or-iteration.json> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager register-context <file> --dir <board> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager show-context --dir <board> --kind intent|batch|iteration --id ID --revision N --json")
+		fmt.Fprintln(out, "       taskchain-task-manager link-evidence <file> --dir <board> --task-id TASK-N --sha256 HEX --json")
+		fmt.Fprintln(out, "       taskchain-task-manager evidence-links --dir <board> --task-id TASK-N --json")
 		fmt.Fprintln(out, "       taskchain-task-manager", workspaceQueryUsage)
 		fmt.Fprintln(out, "       taskchain-task-manager", workspaceContextUsage)
 		fmt.Fprintln(out, "       taskchain-task-manager enable-shared --dir <board> --all-worktrees [--resume] --json")

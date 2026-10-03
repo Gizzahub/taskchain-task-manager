@@ -60,6 +60,11 @@ SHA-256 digest를 출력합니다. 보드 등록, TASK 존재 확인, 권한 부
 자세한 참조 검증과 재시도 경계는 [Intent/Batch context registry](docs/context-registry.md)를
 참조하세요.
 
+`link-evidence`와 `evidence-links`는 기존 TASK와 중단 영수증을 불변 메타데이터로
+연결하고 조회합니다. 카드 상태·claim·review 판단을 바꾸지 않으며 원문 payload나
+대화는 저장하지 않습니다. 계약과 예시는 [중단 증거 링크](docs/evidence-links.md)를
+참조하세요.
+
 `query-workspace`는 strict JSON manifest에 명시한 저장소만 읽습니다. 카드 ID 또는
 등록 context의 정확한 revision을 조회하며 충돌은 명시한 저장소 이름으로 해소합니다.
 입력·경로 경계와 결과 규칙은 [Workspace 조회](docs/workspace-query.md)를 따릅니다.
