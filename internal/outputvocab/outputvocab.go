@@ -19,11 +19,12 @@
 //
 // ArchiveOperation is stdout-only. The archive journal owns a separate set of
 // literals — archive, supersede, force, and legacy-adoption — and writers
-// persist those literals. Renaming an ArchiveOperation constant changes the
-// stdout JSON spelling. It does not change journal bytes, and the journal
-// validator does not follow the rename. Result translation maps a known
-// validated disk operation onto one of these constants explicitly. The
-// spellings match; that match is compatibility, not shared ownership.
+// persist those literals. Renaming a Go identifier such as ArchiveOp does not
+// change stdout JSON. Changing that identifier's literal value does. Neither
+// change rewrites journal bytes, and the journal validator does not follow
+// this package. Result translation maps a known validated disk operation onto
+// one of these constants explicitly. The spellings match; that match is
+// compatibility, not shared ownership.
 //
 // completed means TRANSACTION completion, not work completion. A rejoin,
 // archive, repair, relocation, transition, or policy activation reports
@@ -196,8 +197,9 @@ func AllRejoinModes() []RejoinMode {
 // ArchiveResult.Operation.
 //
 // These constants are the stdout spellings. The journal stores its own
-// literals. Renaming ArchiveOp, Supersede, Force, or LegacyAdoption changes
-// the JSON operation value on stdout and does not change journal bytes.
+// literals. Renaming the identifier ArchiveOp, Supersede, Force, or
+// LegacyAdoption does not change stdout JSON. Changing the literal value
+// assigned to that identifier does. Journal bytes stay the same either way.
 type ArchiveOperation string
 
 const (

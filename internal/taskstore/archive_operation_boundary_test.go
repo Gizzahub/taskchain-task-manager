@@ -2,6 +2,7 @@ package taskstore
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputformat"
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
 func TestDiskArchiveOperationLiteralsStayFixed(t *testing.T) {
@@ -143,6 +145,71 @@ func assertArchiveWire(t *testing.T, dir, state, operation string, payload bool)
 	}
 	if hasOriginal || hasPatched || len(rec.Original) != 0 || len(rec.Patched) != 0 {
 		t.Fatal("completed archive schema retained payload")
+	}
+}
+
+// TestFrozenPreRefactorArchiveWires reads static schema-1 journals. It decodes
+// those bytes and translates known operations. It does not build a journal
+// with the current writer.
+func TestFrozenPreRefactorArchiveWires(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		operation string
+		state     string
+		stdout    outputvocab.ArchiveOperation
+	}{
+		{operation: "archive", state: "pending", stdout: outputvocab.ArchiveOp},
+		{operation: "archive", state: "completed", stdout: outputvocab.ArchiveOp},
+		{operation: "supersede", state: "pending", stdout: outputvocab.Supersede},
+		{operation: "supersede", state: "completed", stdout: outputvocab.Supersede},
+		{operation: "force", state: "pending", stdout: outputvocab.Force},
+		{operation: "force", state: "completed", stdout: outputvocab.Force},
+		{operation: "legacy-adoption", state: "pending", stdout: outputvocab.LegacyAdoption},
+		{operation: "legacy-adoption", state: "completed", stdout: outputvocab.LegacyAdoption},
+	}
+	for _, tc := range cases {
+		t.Run(tc.operation+"/"+tc.state, func(t *testing.T) {
+			t.Parallel()
+			encoded := mustReadFile(t, filepath.Join("testdata", "frozen-archive", tc.operation+"-"+tc.state+".b64"))
+			raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(encoded)))
+			if err != nil {
+				t.Fatalf("frozen bytes: %v", err)
+			}
+			if !bytes.Contains(raw, []byte(`"schemaVersion":1`)) || !bytes.Contains(raw, []byte(`"state":"`+tc.state+`"`)) || !bytes.Contains(raw, []byte(`"operation":"`+tc.operation+`"`)) {
+				t.Fatalf("frozen spelling mismatch for %s %s", tc.operation, tc.state)
+			}
+			pending := tc.state == "pending"
+			hasOriginal := bytes.Contains(raw, []byte(`"original"`))
+			hasPatched := bytes.Contains(raw, []byte(`"patched"`))
+			if hasOriginal != pending || hasPatched != pending {
+				t.Fatalf("payload keys original=%v patched=%v pending=%v", hasOriginal, hasPatched, pending)
+			}
+			journal, err := decodeArchiveJournal(raw)
+			if err != nil {
+				t.Fatalf("read frozen journal: %v", err)
+			}
+			if journal.SchemaVersion != 1 || journal.BoardPath != "/synthetic/tasks" || len(journal.Records) != 1 {
+				t.Fatalf("journal schema=%d board=%s records=%d", journal.SchemaVersion, journal.BoardPath, len(journal.Records))
+			}
+			rec := journal.Records[0]
+			if rec.State != tc.state || rec.Operation != tc.operation || rec.ID != "TASK-001" || rec.BoardPath != "/synthetic/tasks" {
+				t.Fatalf("record state=%s operation=%s id=%s board=%s", rec.State, rec.Operation, rec.ID, rec.BoardPath)
+			}
+			if pending {
+				if len(rec.Original) == 0 || len(rec.Patched) == 0 {
+					t.Fatal("pending frozen record lost payload")
+				}
+			} else if len(rec.Original) != 0 || len(rec.Patched) != 0 {
+				t.Fatal("completed frozen record retained payload")
+			}
+			result, err := archiveResult(rec)
+			if err != nil {
+				t.Fatalf("translate: %v", err)
+			}
+			if result.Operation != tc.stdout || string(result.Operation) != tc.operation || result.Status != outputvocab.Completed || result.ID != "TASK-001" {
+				t.Fatalf("stdout result=%+v", result)
+			}
+		})
 	}
 }
 
