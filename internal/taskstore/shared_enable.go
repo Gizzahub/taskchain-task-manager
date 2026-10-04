@@ -91,7 +91,7 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 				return result, errors.New("active namespace has an unbound worktree; explicitly initialize or adopt its local ledger")
 			}
 		}
-		return sharedResult(*s.state), nil
+		return sharedResult(*s.state)
 	}
 	var state sharedState
 	if s.state == nil {
@@ -213,7 +213,7 @@ func enableSharedStep(dir string, resume bool, step func(string) error) (result 
 			return result, err
 		}
 	}
-	return sharedResult(state), nil
+	return sharedResult(state)
 }
 
 func verifyActivationBoards(boards []activationBoard, state sharedState) error {
@@ -259,6 +259,18 @@ func verifyActivationBoards(boards []activationBoard, state sharedState) error {
 	return nil
 }
 
-func sharedResult(s sharedState) SharedResult {
-	return SharedResult{NamespaceID: s.NamespaceID, Phase: outputvocab.SharedPhase(s.Phase), Worktrees: len(s.Participants), ReservedCount: len(s.Reserved)}
+// sharedResult maps the two on-disk phases that enable publishes onto the
+// existing stdout constants. Any other disk phase is the same header error
+// the journal reader already returns.
+func sharedResult(s sharedState) (SharedResult, error) {
+	var phase outputvocab.SharedPhase
+	switch s.Phase {
+	case "initializing":
+		phase = outputvocab.SharedInitializing
+	case "active":
+		phase = outputvocab.SharedActive
+	default:
+		return SharedResult{}, errors.New("invalid shared state header")
+	}
+	return SharedResult{NamespaceID: s.NamespaceID, Phase: phase, Worktrees: len(s.Participants), ReservedCount: len(s.Reserved)}, nil
 }
