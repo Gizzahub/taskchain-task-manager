@@ -454,6 +454,12 @@ func Queue(dir string) (projection QueueProjection, err error) {
 		if entryZone(entry.Path, policy) == "issue" && strings.HasPrefix(entry.Card.ID, "ISSUE-") && entry.Card.Priority == "P0" && activeIssueStatus(entry.Card.Status) {
 			candidates = append(candidates, entry)
 		}
+		if nativeDecisionProposed(entry) {
+			if err := validateNativeDecisionRoute(entry); err != nil {
+				return QueueProjection{}, err
+			}
+			candidates = append(candidates, entry)
+		}
 	}
 	// Ready entries and issue candidates arrive from independently derived
 	// lists. Sort the combined result so queue order is stable by board path.

@@ -10,6 +10,27 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 )
 
+// nativeDecisionProposedStatus is the only native decision state Queue admits.
+// It is an input spelling, not a workflow status or a stdout vocabulary member.
+const nativeDecisionProposedStatus = "Proposed"
+
+// nativeDecisionProposed admits only a direct child of the root decision
+// directory. Nested categories and declared module paths fail this parent
+// check and stay out of Queue.
+func nativeDecisionProposed(entry Entry) bool {
+	return filepath.Dir(entry.Path) == string(outputvocab.ZoneDecision) && entry.Card.Status == nativeDecisionProposedStatus
+}
+
+// validateNativeDecisionRoute refuses to treat a Proposed decision as
+// implementation work. Missing human ownership, another execution mode, or
+// any allowed-paths declaration fails the whole queue.
+func validateNativeDecisionRoute(entry Entry) error {
+	if entry.ExecutionMode != string(outputvocab.QueueDecision) || !entry.NeedsHuman || entry.HasAllowedPaths {
+		return fmt.Errorf("queue card %s: native decision Proposed requires execution-mode decision, needs-human true, and no allowed-paths", entry.Path)
+	}
+	return nil
+}
+
 // queueEntry validates the execution route only for cards that Queue admits.
 // Ready and claim continue to use their existing eligibility rules.
 func queueEntry(entry Entry) (QueueEntry, error) {

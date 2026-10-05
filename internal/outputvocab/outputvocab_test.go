@@ -160,6 +160,7 @@ func TestVocabularySpelling(t *testing.T) {
 		outputvocab.ZoneIssue:         "issue",
 		outputvocab.ZonePlan:          "plan",
 		outputvocab.ZoneBacklog:       "backlog",
+		outputvocab.ZoneDecision:      "decision",
 		outputvocab.ZoneArchive:       "archive",
 		outputvocab.ZoneArchiveHidden: "_archive",
 	}

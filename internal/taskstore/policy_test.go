@@ -10,7 +10,7 @@ import (
 
 func TestDefaultPolicyPreservesStoreDirectories(t *testing.T) {
 	t.Parallel()
-	want := []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "archive", "_archive"}
+	want := []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "decision", "archive", "_archive"}
 	if got := currentPolicy().KnownDirs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("default store directories=%v want=%v", got, want)
 	}

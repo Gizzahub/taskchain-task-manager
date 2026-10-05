@@ -21,6 +21,8 @@ func TestSnapshotTreatsStatusOpaqueZonesAsNonStatus(t *testing.T) {
 		"issue/blocked/TASK-1.md",
 		"backlog/doing/TASK-1.md",
 		"backend/plan/done/TASK-1.md",
+		"decision/todo/TASK-1.md",
+		"backend/decision/todo/TASK-1.md",
 	}
 	for _, path := range opaque {
 		if got := doc.Snapshot(path).Status; got != "pending" {
@@ -33,5 +35,15 @@ func TestSnapshotTreatsStatusOpaqueZonesAsNonStatus(t *testing.T) {
 		if got := doc.Snapshot(path).Status; got != "done" {
 			t.Fatalf("%s: a real workflow zone must still win, got %q", path, got)
 		}
+	}
+	proposed, err := Parse([]byte("---\nid: TASK-2\ntitle: t\nstatus: Proposed\n---\n\n# t\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := proposed.Snapshot("decision/todo/TASK-2.md").Status; got != "Proposed" {
+		t.Fatalf("decision/todo stole status %q", got)
+	}
+	if got := proposed.Snapshot("todo/TASK-2.md").Status; got != "pending" {
+		t.Fatalf("todo zone status = %q", got)
 	}
 }

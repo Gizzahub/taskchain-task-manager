@@ -7,7 +7,7 @@ import (
 
 func TestDefaultPolicyHasWorkflowStatusesAndEdges(t *testing.T) {
 	p := Default()
-	if !reflect.DeepEqual(p.KnownDirs(), []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "archive", "_archive"}) {
+	if !reflect.DeepEqual(p.KnownDirs(), []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "decision", "archive", "_archive"}) {
 		t.Fatalf("dirs=%v", p.KnownDirs())
 	}
 	for zone, want := range map[string]string{"todo": "pending", "doing": "in-progress", "review": "review", "blocked": "blocked", "done": "done"} {
@@ -42,7 +42,7 @@ func TestCustomParkedZoneIsNotWorkflow(t *testing.T) {
 	if !p.Allows("manual", "todo") || p.Allows("manual", "doing") || p.Allows("todo", "done") {
 		t.Fatal("custom graph semantics wrong")
 	}
-	if !reflect.DeepEqual(p.KnownDirs(), []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "archive", "_archive", "manual"}) {
+	if !reflect.DeepEqual(p.KnownDirs(), []string{"todo", "doing", "review", "blocked", "done", "issue", "plan", "backlog", "decision", "archive", "_archive", "manual"}) {
 		t.Fatalf("dirs=%v", p.KnownDirs())
 	}
 }

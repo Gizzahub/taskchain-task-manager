@@ -39,7 +39,7 @@ func WorkflowStatus(segment string) string {
 // module root, so a reader holding no policy can still recognise them.
 func IsStatusOpaqueZone(segment string) bool {
 	switch strings.ToLower(segment) {
-	case "archive", "_archive", "plan", "issue", "backlog":
+	case "archive", "_archive", "plan", "issue", "backlog", "decision":
 		return true
 	}
 	return false

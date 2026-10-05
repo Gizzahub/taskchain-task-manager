@@ -227,15 +227,16 @@ func AllArchiveOperations() []ArchiveOperation {
 type Zone string
 
 const (
-	ZoneTodo    Zone = "todo"
-	ZoneDoing   Zone = "doing"
-	ZoneReview  Zone = "review"
-	ZoneBlocked Zone = "blocked"
-	ZoneDone    Zone = "done"
-	ZoneIssue   Zone = "issue"
-	ZonePlan    Zone = "plan"
-	ZoneBacklog Zone = "backlog"
-	ZoneArchive Zone = "archive"
+	ZoneTodo     Zone = "todo"
+	ZoneDoing    Zone = "doing"
+	ZoneReview   Zone = "review"
+	ZoneBlocked  Zone = "blocked"
+	ZoneDone     Zone = "done"
+	ZoneIssue    Zone = "issue"
+	ZonePlan     Zone = "plan"
+	ZoneBacklog  Zone = "backlog"
+	ZoneDecision Zone = "decision"
+	ZoneArchive  Zone = "archive"
 	// ZoneArchiveHidden is the dotfile-adjacent "_archive" spelling.
 	ZoneArchiveHidden Zone = "_archive"
 )
@@ -245,7 +246,7 @@ const (
 func AllZones() []Zone {
 	return []Zone{
 		ZoneTodo, ZoneDoing, ZoneReview, ZoneBlocked, ZoneDone,
-		ZoneIssue, ZonePlan, ZoneBacklog, ZoneArchive, ZoneArchiveHidden,
+		ZoneIssue, ZonePlan, ZoneBacklog, ZoneDecision, ZoneArchive, ZoneArchiveHidden,
 	}
 }
 

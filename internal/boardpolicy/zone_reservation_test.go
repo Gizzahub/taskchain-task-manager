@@ -11,7 +11,7 @@ import (
 // enforces that here; this pins the two lists together so neither can grow
 // alone.
 func TestStatusOpaqueZoneNamesCannotBeModules(t *testing.T) {
-	for _, name := range []string{"archive", "_archive", "plan", "issue", "backlog"} {
+	for _, name := range []string{"archive", "_archive", "plan", "issue", "backlog", "decision"} {
 		if !cardpath.IsStatusOpaqueZone(name) {
 			t.Fatalf("%q lost its status-opaque marking", name)
 		}

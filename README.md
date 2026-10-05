@@ -152,7 +152,17 @@ kind 디렉터리(plan/issue 등)·archive·중첩 카드의 상태 표기만으
 위해 읽을 수 있지만 카드 자체나 소유 원장이 잘못된 형식이면 실패합니다.
 기존 도구의 전체 dialect·완료 증거 계약을 이 기능만으로 대체하지 마세요.
 
-`queue --dir ./tasks --json`은 `ready`의 todo 준비 조건과 활성 P0 issue를 대상으로 `runnable`과
+`tasks/decision/`은 읽기 전용 입력 종류입니다. 큐에 오르는 카드는 `tasks/decision`의
+직접 자식뿐이며, 상태가 정확히 `Proposed`이고 `execution-mode: decision`,
+`needs-human: true`이며 `allowed-paths`가 없는 경우만 사람용 `runnable`에 들어갑니다.
+중첩된 분류 카드와 활성화된 모듈의 decision 카드는 읽기 전용 목록으로 남고
+`queue`와 `ready`에 들어가지 않습니다. `Accepted`를 비롯한 다른 상태는 큐에 올리지 않고
+done 의존성을 만족시키지 않습니다. 조건이 어긋난 `Proposed`는 구현 범위로
+올리지 않고 큐 전체를 거부합니다. `decision` 아래의 `todo` 같은 이름은 상태가
+아니며, 이 종류는 생성·전이·claim 자격을 추가하지 않습니다.
+
+`queue --dir ./tasks --json`은 `ready`의 todo 준비 조건, 활성 P0 issue, 그리고
+위 조건의 native decision `Proposed`를 대상으로 `runnable`과
 `agentRunnable`을 반환하며 각 항목에 `needsHuman`을 표시합니다.
 `needs-human: true`인 카드는 `runnable`에만 포함됩니다. 결과에는
 `runnableCount`와 `agentRunnableCount`도 있습니다. 선언한

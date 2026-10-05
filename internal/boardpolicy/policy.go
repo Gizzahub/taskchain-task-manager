@@ -222,7 +222,9 @@ func isZoneAlias(zone string) bool {
 	}
 	return false
 }
-func isKindDir(zone string) bool { return zone == "plan" || zone == "issue" || zone == "backlog" }
+func isKindDir(zone string) bool {
+	return zone == "plan" || zone == "issue" || zone == "backlog" || zone == string(outputvocab.ZoneDecision)
+}
 func isReserved(zone string) bool {
 	switch zone {
 	case "archive", "_archive", "evidence", ".ce", "readme", "index", "template", "git":
