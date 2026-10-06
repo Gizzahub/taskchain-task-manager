@@ -70,7 +70,73 @@ jobs:
           test "$ref_type" = "commit"
           test "$ref_sha" = "dd3ec0a0848586bcbdecaf598bde2b6d38b979c4"
           test "$(gh api "repos/${REPO}/git/commits/${ref_sha}" --jq '.tree.sha')" = "a0ee91bd7169bc228262b829f08ff1fcf00fe910"
-          gh api "repos/${REPO}/releases/tags/v0.1.0" > "$work/release.json"
+          # Draft releases are omitted by tag lookup and that request returns 404.
+          # Page the authenticated releases list, require one v0.1.0 tag, reject a
+          # public, nonmatching, or duplicate match, then fetch the release by numeric id.
+          lookup_draft_release() {
+            local page count match_count match_tag match_draft match_id
+            page=1
+            : > "$work/tag-matches.ndjson"
+            while :; do
+              if [ "$page" -gt 100 ]; then
+                printf '%s\n' "refusing release list: pagination did not end" >&2
+                exit 1
+              fi
+              gh api "repos/${REPO}/releases?per_page=100&page=${page}" > "$work/releases-page.json"
+              if [ "$(jq -r 'type' "$work/releases-page.json")" != "array" ]; then
+                printf '%s\n' "refusing release list: page ${page} was not a JSON array" >&2
+                exit 1
+              fi
+              count=$(jq 'length' "$work/releases-page.json")
+              jq -c '.[] | select(.tag_name == "v0.1.0") | {id, draft, tag_name}' "$work/releases-page.json" >> "$work/tag-matches.ndjson"
+              if [ "$count" -lt 100 ]; then
+                break
+              fi
+              page=$((page + 1))
+            done
+            if [ ! -s "$work/tag-matches.ndjson" ]; then
+              match_count=0
+            else
+              match_count=$(jq -s 'length' "$work/tag-matches.ndjson")
+            fi
+            if [ "$match_count" -eq 0 ]; then
+              printf '%s\n' "v0.1.0 draft is missing; refusing to create or overwrite a release" >&2
+              exit 1
+            fi
+            if [ "$match_count" -ne 1 ]; then
+              printf '%s\n' "v0.1.0 matches more than one release; refusing duplicate" >&2
+              exit 1
+            fi
+            match_tag=$(jq -r '.tag_name' "$work/tag-matches.ndjson")
+            match_draft=$(jq -r '.draft' "$work/tag-matches.ndjson")
+            match_id=$(jq -r '.id' "$work/tag-matches.ndjson")
+            if [ "$match_tag" != "v0.1.0" ]; then
+              printf '%s\n' "refusing nonmatching release tag" >&2
+              exit 1
+            fi
+            if [ "$match_draft" != "true" ]; then
+              printf '%s\n' "v0.1.0 is already public; refusing to recreate or overwrite" >&2
+              exit 1
+            fi
+            if ! printf '%s' "$match_id" | grep -Eq '^[0-9]+$'; then
+              printf '%s\n' "refusing nonmatching release id" >&2
+              exit 1
+            fi
+            gh api "repos/${REPO}/releases/${match_id}" > "$work/release.json"
+            if [ "$(jq -r '.tag_name' "$work/release.json")" != "v0.1.0" ]; then
+              printf '%s\n' "refusing nonmatching release tag" >&2
+              exit 1
+            fi
+            if [ "$(jq -r '.id' "$work/release.json")" != "$match_id" ]; then
+              printf '%s\n' "refusing nonmatching release id" >&2
+              exit 1
+            fi
+            if [ "$(jq -r '.draft' "$work/release.json")" != "true" ]; then
+              printf '%s\n' "v0.1.0 is already public; refusing to recreate or overwrite" >&2
+              exit 1
+            fi
+          }
+          lookup_draft_release
           if [ "$(jq -r '.draft' "$work/release.json")" != "true" ]; then
             printf '%s\n' "v0.1.0 is already public; refusing to recreate or overwrite" >&2
             exit 1
