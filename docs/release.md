@@ -126,3 +126,50 @@ darwin/arm64 `CGO_ENABLED=1` 빌드는 ubuntu 러너가 제공하지 않습니�
 
 공개 배포는 별도의 승인된 작업이며, 그 단계는 [릴리스 후보와
 출처](release-candidate.md)의 「공개 릴리스 전 절차」를 따릅니다.
+
+## v0.1.0 서명, 설치, 검증
+
+승인된 공개 릴리스는 `v0.1.0` 하나이고 플랫폼은 `darwin/arm64`만입니다. Linux
+바이너리는 없습니다. 바이너리 출처는 tag `v0.1.0`이 가리키는 source commit
+`dd3ec0a0848586bcbdecaf598bde2b6d38b979c4`, tree
+`a0ee91bd7169bc228262b829f08ff1fcf00fe910`입니다. 서명 워크플로가 들어 있는
+커밋은 그 출처가 아니며, tag를 만들거나 옮기지 않습니다.
+
+신원은 [v0.1.0 공개 계약](release-v0.1.0.json)과 릴리스 자산 `provenance.json`이
+같습니다. 빌드는 Actions에서 다시 하지 않습니다. 서명은 SLSA build provenance가
+아니라 predicate type
+`https://github.com/Gizzahub/taskchain-task-manager/verified-release/v1`입니다.
+checksum이 같거나 워크플로 단계가 성공했다는 사실만으로 서명으로 치지 않습니다.
+
+`.github/workflows/release-v0.1.0.yml`은 `workflow_dispatch`로만 실행합니다.
+저장소가 `Gizzahub/taskchain-task-manager`가 아니거나 ref가 `refs/heads/master`가
+아니면 거부합니다. 대상은 기존 `v0.1.0` draft뿐이고, 이미 공개된 릴리스는 덮어쓰지
+않습니다. draft의 바이너리, `SHA256SUMS`, `provenance.json`을 계약과 대조한 뒤에만
+세 파일을 함께 서명하고, `gh attestation verify`가 바이너리의 predicate type,
+인증서 SAN, GitHub OIDC issuer를 확인한 다음 원격 자산 다이제스트와 tag
+commit을 다시 확인한 뒤에만 draft를 공개합니다.
+
+계약을 포함한 master를 checkout한 뒤 자산을 받아 검증하고 설치합니다. source
+tag checkout에는 이 계약과 서명 워크플로가 없습니다.
+
+```sh
+set -eu
+repo=Gizzahub/taskchain-task-manager
+predicate=https://github.com/Gizzahub/taskchain-task-manager/verified-release/v1
+identity=https://github.com/Gizzahub/taskchain-task-manager/.github/workflows/release-v0.1.0.yml@refs/heads/master
+issuer=https://token.actions.githubusercontent.com
+gh release download v0.1.0 --repo "$repo" \
+  --pattern taskchain-task-manager-darwin-arm64 \
+  --pattern SHA256SUMS \
+  --pattern provenance.json \
+  --pattern bundle.json
+shasum -a 256 -c SHA256SUMS
+cmp provenance.json docs/release-v0.1.0.json
+gh attestation verify taskchain-task-manager-darwin-arm64 \
+  --repo "$repo" --predicate-type "$predicate" \
+  --cert-identity "$identity" --cert-oidc-issuer "$issuer" \
+  --bundle bundle.json
+install taskchain-task-manager-darwin-arm64 ~/bin/taskchain-task-manager
+```
+
+`install`의 목적 경로는 예시입니다. `PATH`에 있는 디렉터리를 직접 선택하세요.

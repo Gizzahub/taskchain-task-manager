@@ -1,0 +1,197 @@
+# Signs the existing v0.1.0 draft. Does not build, create a tag, move a tag,
+# or publish before verification. The workflow revision is not the binary source.
+name: release-v0.1.0
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+concurrency:
+  group: release-v0.1.0
+  cancel-in-progress: false
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Refuse other repository, event, or ref
+        env:
+          ACTUAL_REPOSITORY: ${{ github.repository }}
+          ACTUAL_REF: ${{ github.ref }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          test "$ACTUAL_REPOSITORY" = "Gizzahub/taskchain-task-manager"
+          test "$EVENT_NAME" = "workflow_dispatch"
+          test "$ACTUAL_REF" = "refs/heads/master"
+
+      - name: Checkout signing revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Verify draft, tag source, and asset bytes
+        id: verify-draft
+        env:
+          REPO: Gizzahub/taskchain-task-manager
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          contract=docs/release-v0.1.0.json
+          work=build/release-signing
+          test ! -e "$work"
+          mkdir -p "$work"
+          deny() {
+            if grep -E -q '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}' "$1" \
+              || grep -F -q -e '/Users/' -e '/home/' -e 'mydevbox' -e 'devenv' -e 'worktrees' \
+                -e 'release-session' -e '.codex' -e 'tasks/todo' -e 'tasks/doing' -e 'tasks/review' -e 'tasks/blocked' "$1"; then
+              printf '%s\n' "refusing ${2}: private path, board, session, or devbox marker" >&2
+              exit 1
+            fi
+          }
+          jq -e '.schemaVersion == 1 and .releaseTag == "v0.1.0" and .sourceCommit == "dd3ec0a0848586bcbdecaf598bde2b6d38b979c4" and .sourceTree == "a0ee91bd7169bc228262b829f08ff1fcf00fe910" and .goVersion == "go1.27.1" and .cgoEnabled == "1" and .goarm64 == "v8.0" and .buildCommand == "GOWORK=off GOOS=darwin GOARCH=arm64 GOARM64=v8.0 CGO_ENABLED=1 go build -trimpath -buildvcs=false -mod=readonly -o build/public-v0.1.0/taskchain-task-manager-darwin-arm64 ./cmd/taskchain-task-manager" and .artifact == {"name":"taskchain-task-manager-darwin-arm64","platform":"darwin/arm64","sha256":"c01ce7aad3638ddc87acda2c9bd52e6d72a52f2a40d932d7e238f246f91e939e","bytes":8451634} and ((keys | sort) == ["artifact","buildCommand","cgoEnabled","goVersion","goarm64","releaseTag","schemaVersion","sourceCommit","sourceTree"]) and ((.artifact | keys | sort) == ["bytes","name","platform","sha256"])' "$contract" >/dev/null
+          deny "$contract" "public contract"
+          test "$(git rev-parse HEAD)" != "dd3ec0a0848586bcbdecaf598bde2b6d38b979c4"
+          test "$(git rev-parse 'v0.1.0^{commit}')" = "dd3ec0a0848586bcbdecaf598bde2b6d38b979c4"
+          test "$(git rev-parse 'v0.1.0^{tree}')" = "a0ee91bd7169bc228262b829f08ff1fcf00fe910"
+          ref_type=$(gh api "repos/${REPO}/git/ref/tags/v0.1.0" --jq '.object.type')
+          ref_sha=$(gh api "repos/${REPO}/git/ref/tags/v0.1.0" --jq '.object.sha')
+          if [ "$ref_type" = "tag" ]; then
+            ref_type=$(gh api "repos/${REPO}/git/tags/${ref_sha}" --jq '.object.type')
+            ref_sha=$(gh api "repos/${REPO}/git/tags/${ref_sha}" --jq '.object.sha')
+          fi
+          test "$ref_type" = "commit"
+          test "$ref_sha" = "dd3ec0a0848586bcbdecaf598bde2b6d38b979c4"
+          test "$(gh api "repos/${REPO}/git/commits/${ref_sha}" --jq '.tree.sha')" = "a0ee91bd7169bc228262b829f08ff1fcf00fe910"
+          gh api "repos/${REPO}/releases/tags/v0.1.0" > "$work/release.json"
+          if [ "$(jq -r '.draft' "$work/release.json")" != "true" ]; then
+            printf '%s\n' "v0.1.0 is already public; refusing to recreate or overwrite" >&2
+            exit 1
+          fi
+          test "$(jq -r '.tag_name' "$work/release.json")" = "v0.1.0"
+          release_id=$(jq -r '.id' "$work/release.json")
+          printf '%s' "$release_id" | grep -Eq '^[0-9]+$'
+          test "$(jq -r '.target_commitish' "$work/release.json")" = "dd3ec0a0848586bcbdecaf598bde2b6d38b979c4"
+          jq -r '.name // ""' "$work/release.json" > "$work/release-name.txt"
+          jq -r '.body // ""' "$work/release.json" > "$work/release-body.txt"
+          jq -r '.assets[].name' "$work/release.json" | sort > "$work/asset-names.txt"
+          deny "$work/release-name.txt" "release name"
+          deny "$work/release-body.txt" "release body"
+          deny "$work/asset-names.txt" "asset names"
+          printf '%s\n' SHA256SUMS provenance.json taskchain-task-manager-darwin-arm64 > "$work/required-names.txt"
+          cmp -s "$work/required-names.txt" "$work/asset-names.txt"
+          gh release download v0.1.0 --repo "$REPO" --dir "$work" --pattern taskchain-task-manager-darwin-arm64 --pattern SHA256SUMS --pattern provenance.json
+          deny "$work/SHA256SUMS" "SHA256SUMS"
+          deny "$work/provenance.json" "provenance"
+          test "$(sha256sum "$work/taskchain-task-manager-darwin-arm64" | awk '{print $1}')" = "c01ce7aad3638ddc87acda2c9bd52e6d72a52f2a40d932d7e238f246f91e939e"
+          test "$(wc -c < "$work/taskchain-task-manager-darwin-arm64" | tr -d '[:space:]')" = "8451634"
+          printf '%s  %s\n' "c01ce7aad3638ddc87acda2c9bd52e6d72a52f2a40d932d7e238f246f91e939e" "taskchain-task-manager-darwin-arm64" > "$work/SHA256SUMS.expected"
+          cmp -s "$work/SHA256SUMS.expected" "$work/SHA256SUMS"
+          cmp -s "$contract" "$work/provenance.json"
+          jq '[.assets[] | {name,id,size}] | sort_by(.name)' "$work/release.json" > "$work/assets.json"
+          printf 'release-id=%s\n' "$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Attest verified release assets
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: |
+            build/release-signing/taskchain-task-manager-darwin-arm64
+            build/release-signing/SHA256SUMS
+            build/release-signing/provenance.json
+          predicate-type: https://github.com/Gizzahub/taskchain-task-manager/verified-release/v1
+          predicate-path: build/release-signing/provenance.json
+          create-storage-record: false
+
+      - name: Verify attestation, recheck draft, and publish
+        env:
+          REPO: Gizzahub/taskchain-task-manager
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ steps.verify-draft.outputs.release-id }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          ATTESTATION_ID: ${{ steps.attest.outputs.attestation-id }}
+        run: |
+          set -euo pipefail
+          contract=docs/release-v0.1.0.json
+          work=build/release-signing
+          predicate=https://github.com/Gizzahub/taskchain-task-manager/verified-release/v1
+          identity=https://github.com/Gizzahub/taskchain-task-manager/.github/workflows/release-v0.1.0.yml@refs/heads/master
+          issuer=https://token.actions.githubusercontent.com
+          test -n "$RELEASE_ID" -a -n "$ATTESTATION_ID" -a -n "$BUNDLE" -a -s "$BUNDLE"
+          printf '%s' "$RELEASE_ID" | grep -Eq '^[0-9]+$'
+          verify_file() {
+            attempt=1
+            file=$1
+            shift
+            while [ "$attempt" -le 6 ]; do
+              if gh attestation verify "$file" --repo "$REPO" --predicate-type "$predicate" --cert-identity "$identity" --cert-oidc-issuer "$issuer" "$@"; then
+                return 0
+              fi
+              attempt=$((attempt + 1))
+              sleep 10
+            done
+            printf '%s\n' "attestation verification failed" >&2
+            return 1
+          }
+          verify_file "$work/taskchain-task-manager-darwin-arm64"
+          verify_file "$work/SHA256SUMS"
+          verify_file "$work/provenance.json"
+          sources() {
+            test "$(git rev-parse 'v0.1.0^{commit}')" = "dd3ec0a0848586bcbdecaf598bde2b6d38b979c4"
+            test "$(git rev-parse 'v0.1.0^{tree}')" = "a0ee91bd7169bc228262b829f08ff1fcf00fe910"
+            api_type=$(gh api "repos/${REPO}/git/ref/tags/v0.1.0" --jq '.object.type')
+            api_commit=$(gh api "repos/${REPO}/git/ref/tags/v0.1.0" --jq '.object.sha')
+            if [ "$api_type" = "tag" ]; then api_commit=$(gh api "repos/${REPO}/git/tags/${api_commit}" --jq '.object.sha'); fi
+            test "$api_commit" = "dd3ec0a0848586bcbdecaf598bde2b6d38b979c4"
+            test "$(gh api "repos/${REPO}/git/commits/${api_commit}" --jq '.tree.sha')" = "a0ee91bd7169bc228262b829f08ff1fcf00fe910"
+          }
+          assets() {
+            gh api "repos/${REPO}/releases/${RELEASE_ID}" > "$work/release-now.json"
+            jq -e --argjson id "$RELEASE_ID" '.draft == true and .id == $id and .tag_name == "v0.1.0"' "$work/release-now.json" >/dev/null
+            if [ "$1" = "no" ]; then test "$(jq '.assets | length' "$work/release-now.json")" = "3"; else test "$(jq '[.assets[].name] | index("bundle.json")' "$work/release-now.json")" != "null"; test "$(jq '.assets | length' "$work/release-now.json")" = "4"; fi
+            jq -e --slurpfile previous "$work/assets.json" '([.assets[] | select(.name == "SHA256SUMS" or .name == "provenance.json" or .name == "taskchain-task-manager-darwin-arm64") | {name,id,size}] | sort_by(.name)) == $previous[0]' "$work/release-now.json" >/dev/null
+            dir=$(mktemp -d "$work/recheck.XXXXXX")
+            gh release download v0.1.0 --repo "$REPO" --dir "$dir" --pattern taskchain-task-manager-darwin-arm64 --pattern SHA256SUMS --pattern provenance.json
+            cmp -s "$work/taskchain-task-manager-darwin-arm64" "$dir/taskchain-task-manager-darwin-arm64"
+            cmp -s "$work/SHA256SUMS" "$dir/SHA256SUMS"
+            cmp -s "$contract" "$dir/provenance.json"
+            test "$(sha256sum "$dir/taskchain-task-manager-darwin-arm64" | awk '{print $1}')" = "c01ce7aad3638ddc87acda2c9bd52e6d72a52f2a40d932d7e238f246f91e939e"
+            test "$(wc -c < "$dir/taskchain-task-manager-darwin-arm64" | tr -d '[:space:]')" = "8451634"
+            rm -f "$dir/taskchain-task-manager-darwin-arm64" "$dir/SHA256SUMS" "$dir/provenance.json"
+            rmdir "$dir"
+          }
+          sources
+          assets no
+          cp "$BUNDLE" "$work/bundle.json"
+          gh release upload v0.1.0 "$work/bundle.json" --repo "$REPO"
+          sources
+          assets yes
+          dir=$(mktemp -d "$work/bundle.XXXXXX")
+          gh release download v0.1.0 --repo "$REPO" --dir "$dir" --pattern bundle.json
+          cmp -s "$work/bundle.json" "$dir/bundle.json"
+          rm -f "$dir/bundle.json"
+          rmdir "$dir"
+          gh api "repos/${REPO}/releases/${RELEASE_ID}" > "$work/release-now.json"
+          jq -e --slurpfile orig "$work/release.json" '.draft == true and .target_commitish == "dd3ec0a0848586bcbdecaf598bde2b6d38b979c4" and .name == $orig[0].name and .body == $orig[0].body' "$work/release-now.json" >/dev/null
+          gh api --method PATCH "repos/${REPO}/releases/${RELEASE_ID}" -F draft=false > "$work/published.json"
+          gh api "repos/${REPO}/releases/${RELEASE_ID}" > "$work/release-public.json"
+          jq -e --argjson id "$RELEASE_ID" --slurpfile orig "$work/release.json" '.draft == false and .id == $id and .tag_name == "v0.1.0" and .target_commitish == "dd3ec0a0848586bcbdecaf598bde2b6d38b979c4" and .name == $orig[0].name and .body == $orig[0].body' "$work/release-public.json" >/dev/null
+          dir=$(mktemp -d "$work/public.XXXXXX")
+          gh release download v0.1.0 --repo "$REPO" --dir "$dir" --pattern taskchain-task-manager-darwin-arm64 --pattern SHA256SUMS --pattern provenance.json --pattern bundle.json
+          cmp -s "$work/taskchain-task-manager-darwin-arm64" "$dir/taskchain-task-manager-darwin-arm64"
+          cmp -s "$work/SHA256SUMS" "$dir/SHA256SUMS"
+          cmp -s "$contract" "$dir/provenance.json"
+          cmp -s "$work/bundle.json" "$dir/bundle.json"
+          test "$(sha256sum "$dir/taskchain-task-manager-darwin-arm64" | awk '{print $1}')" = "c01ce7aad3638ddc87acda2c9bd52e6d72a52f2a40d932d7e238f246f91e939e"
+          test "$(wc -c < "$dir/taskchain-task-manager-darwin-arm64" | tr -d '[:space:]')" = "8451634"
+          verify_file "$dir/taskchain-task-manager-darwin-arm64" --bundle "$dir/bundle.json"
+          rm -f "$dir/taskchain-task-manager-darwin-arm64" "$dir/SHA256SUMS" "$dir/provenance.json" "$dir/bundle.json"
+          rmdir "$dir"
+          sources
