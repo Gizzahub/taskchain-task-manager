@@ -17,7 +17,11 @@ import (
 // taskUsage is the noun's one-line contract, shown when the noun itself is
 // mistyped. Per-subcommand misuse is reported by the subcommand, at the exit
 // code the pinned reference gives that subcommand's own refusals.
-const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate|lint|preflight|gate> ..."
+const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate|lint|preflight|gate|board|recommend|promote|issue-promote|plan-promote|backlog-promote|todo-run|doing-resume|review-run|blocked-recover|done-finalize> ..."
+
+// taskCommandList is the unknown-command diagnostic. It names every command
+// this noun dispatches, in the same order as taskUsage.
+const taskCommandList = "list, new, move, archive, validate, lint, preflight, gate, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize"
 
 // runTask dispatches the CE-parity `task` noun. The pinned reference splits
 // its refusals two ways, and the split is preserved here: what the caller
@@ -58,8 +62,33 @@ func runTask(args []string, out, errOut io.Writer) int {
 		err = taskPreflight(ctx, args[1:], out)
 	case "gate":
 		err = taskGate(ctx, args[1:], out)
+	case "board":
+		err = taskBoard(ctx, args[1:], out)
+	case "recommend":
+		err = taskRecommend(ctx, args[1:], out)
+	case "promote":
+		err = taskPromote(ctx, args[1:], out)
+	case "issue-promote":
+		err = taskIssuePromote(ctx, args[1:], out)
+	case "plan-promote":
+		err = taskStateCommand(ctx, "plan-promote", args[1:], out)
+	case "backlog-promote":
+		err = taskStateCommand(ctx, "backlog-promote", args[1:], out)
+	case "todo-run":
+		err = taskStateCommand(ctx, "todo-run", args[1:], out)
+	case "doing-resume":
+		err = taskStateCommand(ctx, "doing-resume", args[1:], out)
+	case "review-run":
+		err = taskStateCommand(ctx, "review-run", args[1:], out)
+	case "blocked-recover":
+		err = taskStateCommand(ctx, "blocked-recover", args[1:], out)
+	case "done-finalize":
+		err = taskStateCommand(ctx, "done-finalize", args[1:], out)
+	case "done-review":
+		// Removed. The replacement is review-run; this is not a dispatch alias.
+		err = fmt.Errorf("ce task done-review was removed; use ce task review-run")
 	default:
-		fmt.Fprintf(errOut, "Error: unknown task command %q (valid: list, new, move, archive, validate, lint, preflight, gate)\n", args[0])
+		fmt.Fprintf(errOut, "Error: unknown task command %q (valid: %s)\n", args[0], taskCommandList)
 		return 2
 	}
 	if err == nil {
@@ -465,44 +494,4 @@ func printTaskLinkUpdate(out io.Writer, prefix string, update taskflow.LinkUpdat
 			fmt.Fprintf(out, "%s  %s:%d\n", prefix, inbound.Path, line)
 		}
 	}
-}
-
-func taskValidate(ctx context.Context, args []string, out io.Writer) error {
-	all := false
-	for _, arg := range args {
-		switch arg {
-		case "--all":
-			all = true
-		case "--help", "-h":
-			fmt.Fprintln(out, taskUsage)
-			return nil
-		default:
-			return usagef("unknown argument: %s (valid: --all, --help, -h)", arg)
-		}
-	}
-	if !all {
-		// TODO(validation-gate bundle): the single-card `validate <path>` mode
-		// and the gate receipts belong to that bundle; until it lands the noun
-		// refuses rather than half-implementing the contract.
-		return usagef("task validate takes --all")
-	}
-	root, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("get working directory: %w", err)
-	}
-	tasksDir, err := taskflow.ResolveTasksDir()
-	if err != nil {
-		// The reference stamps its tool line before it reads TASKS_DIR, so a
-		// refused redirection is still announced by the tool that refused it.
-		fmt.Fprintln(out, taskflow.ReferenceStamp)
-		return err
-	}
-	invalid, err := taskflow.RenderValidateAllIn(ctx, out, root, tasksDir)
-	if err != nil {
-		return err
-	}
-	if invalid > 0 {
-		return fmt.Errorf("%d task(s) failed validation", invalid)
-	}
-	return nil
 }

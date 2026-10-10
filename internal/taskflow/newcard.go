@@ -45,7 +45,10 @@ type NewCardOptions struct {
 	// stays deterministic.
 	Created  string
 	Criteria []string
-	Root     string
+	// Sources are optional ## Sources bullets. Empty leaves the template bytes
+	// of `task new` unchanged.
+	Sources []string
+	Root    string
 }
 
 // NewCardResult is where the card landed and what it is.
@@ -363,6 +366,14 @@ func render(kind, id string, f cardFields, opts NewCardOptions) string {
 		}
 		for _, criterion := range opts.Criteria {
 			fmt.Fprintf(&b, "- [ ] %s\n", strings.TrimSpace(criterion))
+		}
+		// Sources is written only when the caller has one, so a card created
+		// from nothing does not grow a heading the author would have to delete.
+		if len(opts.Sources) > 0 {
+			b.WriteString("\n## Sources\n\n")
+			for _, source := range opts.Sources {
+				fmt.Fprintf(&b, "- %s\n", strings.TrimSpace(source))
+			}
 		}
 	}
 	return b.String()

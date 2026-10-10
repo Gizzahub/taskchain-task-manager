@@ -68,6 +68,20 @@ type Card struct {
 	Created  string
 	// Parent is the parent plan id, when the frontmatter names one.
 	Parent string
+	// DependsOn merges depends-on and dependencies. Children, Blocks,
+	// PromotedTo and BlockedBy are the sequence fields those commands read.
+	// A scalar is kept as a one-element list; a broken shape stays empty.
+	DependsOn             []string
+	Children              []string
+	Blocks                []string
+	PromotedTo            []string
+	BlockedBy             []string
+	ExecTier              string
+	Agent                 string
+	QualityReview         string
+	QualityReviewEvidence string
+	Resolution            string
+	Disposition           string
 	// Frontmatter keeps the raw scalar fields for validators.
 	Frontmatter map[string]string
 	// Body is everything after the closing frontmatter fence.
@@ -185,6 +199,13 @@ func ParseCard(tasksRel string, raw []byte) *Card {
 		card.FMStatus = strings.TrimSpace(card.Frontmatter["status"])
 		card.Parent = card.Frontmatter["parent"]
 		card.Created = fmDate(card.Frontmatter["created"])
+		card.ExecTier = strings.ToLower(strings.TrimSpace(card.Frontmatter["exec-tier"]))
+		card.Agent = card.Frontmatter["agent"]
+		card.QualityReview = strings.ToLower(strings.TrimSpace(card.Frontmatter["quality-review"]))
+		card.QualityReviewEvidence = card.Frontmatter["quality-review-evidence"]
+		card.Resolution = strings.TrimSpace(card.Frontmatter["resolution"])
+		card.Disposition = strings.TrimSpace(card.Frontmatter["disposition"])
+		applySequenceFields(card, doc)
 	}
 	parts := strings.Split(tasksRel, "/")
 	if len(parts) > 1 {
