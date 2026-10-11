@@ -20,11 +20,11 @@ import (
 // nothing; the verdict is evidence for whoever tidies. Everything here mirrors
 // the pinned reference (bb970b24) down to the render bytes the fixtures pin.
 //
-// The product has no card-dialect loader and no run ledger, so two CE inputs
-// are constants here: no zone is ever declared (cards in kind directories are
-// parked, nothing else is), and no task ever has an active run (the
-// doing-zone-exit pass therefore warns for every doing/ card with a canonical
-// id). Both are recorded divergences, not silent ones.
+// The product has no card-dialect loader, so no zone is ever declared (cards
+// in kind directories are parked, nothing else is). doing-zone-exit does not
+// read the run ledger, so no task is treated as having an active run and the
+// pass warns for every doing/ card with a canonical id. Both are recorded
+// divergences, not silent ones.
 
 // LintStrayKind classifies why a card is invisible to the board.
 type LintStrayKind string
@@ -402,9 +402,9 @@ func lintIDParityIssues(cards []*Card) []LintIDParityIssue {
 }
 
 // doingExitWarnings reports cards parked in doing/ whose task has no active
-// run, one warning per card. The product keeps no run ledger, so no card ever
-// has one: the directory claims work is happening, and only a run would make
-// that claim true.
+// run, one warning per card. This pass does not read the run ledger, so no
+// card is treated as having one: the directory claims work is happening, and
+// only a run would make that claim true.
 func doingExitWarnings(cards []*Card) []LintWarning {
 	var out []LintWarning
 	for _, card := range cards {

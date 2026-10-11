@@ -17,11 +17,11 @@ import (
 // taskUsage is the noun's one-line contract, shown when the noun itself is
 // mistyped. Per-subcommand misuse is reported by the subcommand, at the exit
 // code the pinned reference gives that subcommand's own refusals.
-const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate|lint|preflight|gate|board|recommend|promote|issue-promote|plan-promote|backlog-promote|todo-run|doing-resume|review-run|blocked-recover|done-finalize> ..."
+const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate|lint|preflight|gate|board|recommend|promote|issue-promote|plan-promote|backlog-promote|todo-run|doing-resume|review-run|blocked-recover|done-finalize|run-doctor|run-start|run-status|run-list> ..."
 
 // taskCommandList is the unknown-command diagnostic. It names every command
 // this noun dispatches, in the same order as taskUsage.
-const taskCommandList = "list, new, move, archive, validate, lint, preflight, gate, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize"
+const taskCommandList = "list, new, move, archive, validate, lint, preflight, gate, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list"
 
 // runTask dispatches the CE-parity `task` noun. The pinned reference splits
 // its refusals two ways, and the split is preserved here: what the caller
@@ -87,6 +87,14 @@ func runTask(args []string, out, errOut io.Writer) int {
 	case "done-review":
 		// Removed. The replacement is review-run; this is not a dispatch alias.
 		err = fmt.Errorf("ce task done-review was removed; use ce task review-run")
+	case "run-doctor":
+		err = taskRunDoctor(args[1:], out)
+	case "run-start":
+		err = taskRunStart(args[1:], out)
+	case "run-status":
+		err = taskRunStatus(args[1:], out)
+	case "run-list":
+		err = taskRunList(args[1:], out)
 	default:
 		fmt.Fprintf(errOut, "Error: unknown task command %q (valid: %s)\n", args[0], taskCommandList)
 		return 2

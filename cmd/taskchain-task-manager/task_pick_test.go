@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -178,13 +177,4 @@ func TestPromoteOutsideAndMissingExitTwo(t *testing.T) {
 			t.Fatalf("%s code=%d stderr=%s", test.arg, code, diag.String())
 		}
 	}
-}
-
-func mustRead(t *testing.T, rel string) string {
-	t.Helper()
-	body, err := os.ReadFile(filepath.Join(".", rel))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(body)
 }
