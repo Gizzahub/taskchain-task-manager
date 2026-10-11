@@ -34,9 +34,10 @@ type Finding struct {
 
 // ValidationResult is one card's verdict.
 type ValidationResult struct {
-	Path     string
-	Errors   []Finding
-	Warnings []Finding
+	Path      string
+	Errors    []Finding
+	Warnings  []Finding
+	Admission *Admission
 }
 
 // Valid reports whether the card passes: errors fail it, warnings do not. A
@@ -123,8 +124,8 @@ func validateCard(ctx context.Context, root, tasksDir string, card *Card, index 
 	warnPlaceholderFields(&result, fields)
 	validateDependencyFieldShapes(&result, fields)
 
-	// skipVacuousProbe is the named and staged option. validate --all leaves
-	// the zero value, so this call stays the whole-board probe.
+	// Explicit criterion-tree admission performs its own probe. Legacy
+	// callers without a selected tree keep the original whole-board probe.
 	if !check.skipVacuousProbe {
 		reportVacuousCriteria(ctx, root, card, &result)
 	}
@@ -459,6 +460,25 @@ func ValidateAll(ctx context.Context, root string) ([]ValidationResult, Citation
 // decisions index corpus rule appends its synthetic README verdict when the
 // catalog drifts.
 func ValidateAllIn(ctx context.Context, root, tasksDir string, checks ...cardCheck) ([]ValidationResult, Citations, error) {
+	return validateAllIn(ctx, root, tasksDir, nil, checks...)
+}
+
+// ValidateAllInWithTree validates the board and admits unchecked criteria
+// against the selected criterion tree. The tree is separate from the card
+// corpus so --base probes the snapshot while cards remain work-tree input.
+func ValidateAllInWithTree(ctx context.Context, root, tasksDir string, tree CriterionTree, checks ...cardCheck) ([]ValidationResult, Citations, error) {
+	// Admission is the sole probe against the selected tree. In particular,
+	// do not let the canonical validator probe the mutable work tree first.
+	treeChecks := append([]cardCheck(nil), checks...)
+	if len(treeChecks) == 0 {
+		treeChecks = []cardCheck{{skipVacuousProbe: true}}
+	} else {
+		treeChecks[0].skipVacuousProbe = true
+	}
+	return validateAllIn(ctx, root, tasksDir, &tree, treeChecks...)
+}
+
+func validateAllIn(ctx context.Context, root, tasksDir string, tree *CriterionTree, checks ...cardCheck) ([]ValidationResult, Citations, error) {
 	cards, err := FindCardsIn(root, tasksDir, true)
 	if err != nil {
 		return nil, Citations{}, err
@@ -467,11 +487,18 @@ func ValidateAllIn(ctx context.Context, root, tasksDir string, checks ...cardChe
 	citations := Citations{}
 	results := make([]ValidationResult, 0, len(cards))
 	for _, card := range cards {
+		var result ValidationResult
 		if isDecisionDoc(card.TasksRel) && !isNonCardFile(filepath.Base(card.TasksRel)) {
-			results = append(results, validateDecisionDocument(ctx, root, tasksDir, card))
-			continue
+			result = validateDecisionDocument(ctx, root, tasksDir, card)
+		} else {
+			result = validateCard(ctx, root, tasksDir, card, index, &citations, checks...)
 		}
-		results = append(results, validateCard(ctx, root, tasksDir, card, index, &citations, checks...))
+		if tree != nil {
+			admission := AdmitCriteria(ctx, tree.ProbeDir, card.Zone, tree.Description, tree.Selected, tree.Refusal, card.Criteria())
+			applyAdmission(&result, admission)
+			result.Admission = &admission
+		}
+		results = append(results, result)
 	}
 	// Corpus-level plan-metadata findings fold into the cards they belong to.
 	reportInvalidPlanMetadata(buildPlanMetadataCensus(cards), results)
@@ -508,13 +535,21 @@ func RenderValidateAll(ctx context.Context, w io.Writer, root string) (int, erro
 // RenderValidateAllIn writes the whole-board validate output for the board
 // rooted at tasksDir.
 func RenderValidateAllIn(ctx context.Context, w io.Writer, root, tasksDir string) (int, error) {
-	results, citations, err := ValidateAllIn(ctx, root, tasksDir)
+	tree := currentCriterionTree(ctx, root)
+	fmt.Fprintln(w, ReferenceStamp)
+	fmt.Fprintf(w, "Criterion tree: %s\n", tree.Description)
+	return RenderValidateAllInWithTree(ctx, w, root, tasksDir, tree)
+}
+
+// RenderValidateAllInWithTree renders whole-board validation with criterion
+// admission lines and a closing admission summary.
+func RenderValidateAllInWithTree(ctx context.Context, w io.Writer, root, tasksDir string, tree CriterionTree) (int, error) {
+	fmt.Fprintln(w, "📋 Validating all tasks...")
+	fmt.Fprintln(w)
+	results, citations, err := ValidateAllInWithTree(ctx, root, tasksDir, tree)
 	if err != nil {
 		return 0, err
 	}
-	fmt.Fprintln(w, ReferenceStamp)
-	fmt.Fprintln(w, "📋 Validating all tasks...")
-	fmt.Fprintln(w)
 	if len(results) == 0 {
 		// An empty board ends the report after the bare notice: there are no
 		// per-card verdicts to sum, so the ---, the summary, and the citation
@@ -524,8 +559,14 @@ func RenderValidateAllIn(ctx context.Context, w io.Writer, root, tasksDir string
 	}
 	valid := 0
 	invalid := 0
+	totalAdmission := Admission{Tree: tree.Description}
 	for _, result := range results {
 		fmt.Fprintf(w, "Validating: %s\n", result.Path)
+		if result.Admission != nil {
+			fmt.Fprintln(w, result.Admission.Format())
+			fmt.Fprintf(w, "  Criterion tree: %s\n", result.Admission.Tree)
+			totalAdmission = totalAdmission.merge(*result.Admission)
+		}
 		for _, e := range result.Errors {
 			fmt.Fprintf(w, "  ❌ %s\n", e.Message)
 		}
@@ -547,6 +588,8 @@ func RenderValidateAllIn(ctx context.Context, w io.Writer, root, tasksDir string
 	}
 	fmt.Fprintln(w, "---")
 	fmt.Fprintf(w, "Summary: %d valid, %d invalid (total: %d)\n", valid, invalid, len(results))
+	fmt.Fprintln(w, totalAdmission.Format())
+	fmt.Fprintf(w, "  Criterion tree: %s\n", totalAdmission.Tree)
 	fmt.Fprintf(w, "Path citations: %d binding(s) examined, %d skipped as unreadable without a shell\n",
 		citations.Examined, citations.Skipped)
 	return invalid, nil

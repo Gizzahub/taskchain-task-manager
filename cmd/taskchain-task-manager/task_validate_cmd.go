@@ -38,9 +38,6 @@ func taskValidate(ctx context.Context, args []string, out, errOut io.Writer) err
 		fmt.Fprintln(out, taskflow.ReferenceStamp)
 		return err
 	}
-	if opts.all {
-		return taskValidateAll(ctx, out, root, tasksDir, opts.requireCards)
-	}
 	fmt.Fprintln(out, taskflow.ReferenceStamp)
 	if err := taskflow.CheckConfigYAML(root); err != nil {
 		return usagef("%s", err.Error())
@@ -56,6 +53,9 @@ func taskValidate(ctx context.Context, args []string, out, errOut io.Writer) err
 	}
 	defer tree.Cleanup(errOut)
 	fmt.Fprintf(out, "Criterion tree: %s\n", tree.Description)
+	if opts.all {
+		return taskValidateAll(ctx, out, root, tasksDir, opts.requireCards, tree)
+	}
 	invalid, firstErrors, err := taskflow.ValidateNamed(ctx, out, root, tasksDir, opts.files, tree)
 	if err != nil {
 		return err
@@ -69,20 +69,19 @@ func taskValidate(ctx context.Context, args []string, out, errOut io.Writer) err
 	return fmt.Errorf("%d task(s) failed validation", invalid)
 }
 
-func taskValidateAll(ctx context.Context, out io.Writer, root, tasksDir string, requireCards bool) error {
+func taskValidateAll(ctx context.Context, out io.Writer, root, tasksDir string, requireCards bool, tree taskflow.CriterionTree) error {
 	if requireCards {
 		live, err := taskflow.FindCardsIn(root, tasksDir, true)
 		if err != nil {
 			return err
 		}
 		if len(live) == 0 && taskflow.CorpusEmpty(root, tasksDir) {
-			fmt.Fprintln(out, taskflow.ReferenceStamp)
 			fmt.Fprintln(out, "📋 Validating all tasks...")
 			fmt.Fprintln(out)
 			return fmt.Errorf("no task files found under %s/, but --require-cards was given; that tree is empty or unreachable", tasksDir)
 		}
 	}
-	invalid, err := taskflow.RenderValidateAllIn(ctx, out, root, tasksDir)
+	invalid, err := taskflow.RenderValidateAllInWithTree(ctx, out, root, tasksDir, tree)
 	if err != nil {
 		return err
 	}

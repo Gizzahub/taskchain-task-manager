@@ -260,6 +260,171 @@ func TestValidateNamedStagedAndRequireCards(t *testing.T) {
 	}
 }
 
+func TestValidateAllRefusesMalformedDialect(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	initGitRepo(t)
+	log := recordValidateAllProbes(t)
+	writeCardFile(t, "tasks/todo/001-probe.md", cardWithVerify("grep -q needle marker.txt"))
+	if err := os.WriteFile("ce-tasks.yaml", []byte("gate: [\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code, stdout, stderr := runTaskOut(t, "validate", "--all")
+	if code != 2 {
+		t.Errorf("dialect exit=%d, want 2; stderr=%q", code, stderr)
+	}
+	if !strings.Contains(stderr, "decode ce-tasks.yaml:") {
+		t.Errorf("missing dialect diagnostic: %q", stderr)
+	}
+	if !strings.HasPrefix(stdout, "Validation tool:") {
+		t.Errorf("dialect failure missing validation stamp: %q", stdout)
+	}
+	if strings.Contains(stdout, "Validating:") || strings.Contains(stdout, "Criterion admission:") {
+		t.Errorf("malformed dialect was not refused before card validation: %q", stdout)
+	}
+	if _, err := os.Stat(log); !os.IsNotExist(err) {
+		t.Errorf("malformed dialect executed a criterion probe: stat=%v", err)
+	}
+}
+
+func TestValidateAllAdmissionAndBaseContract(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	initGitRepo(t)
+	writeCardFile(t, "tasks/todo/001-probe.md", probeCard("P2"))
+	gitAddCommit(t, "board")
+
+	code, stdout, stderr := runTaskOut(t, "validate", "--all")
+	if code != 0 || stderr != "" {
+		t.Fatalf("all code=%d stderr=%q stdout=%q", code, stderr, stdout)
+	}
+	header := strings.Index(stdout, "Criterion tree:")
+	all := strings.Index(stdout, "📋 Validating all tasks...")
+	if header < 0 || header > all {
+		t.Errorf("criterion tree must precede all header: %q", stdout)
+	}
+	card := strings.Index(stdout, "Validating: tasks/todo/001-probe.md")
+	summary := strings.Index(stdout, "Summary: 1 valid, 0 invalid (total: 1)")
+	admission := "  Criterion admission: complete; 1 eligible, 1 examined, 0 already passing, 0 compound unexecuted, 0 unsupported, 0 unavailable"
+	if card < 0 || summary < card {
+		t.Errorf("missing card/summary: %q", stdout)
+	} else {
+		if !strings.Contains(stdout[card:summary], admission) {
+			t.Errorf("missing per-card admission: %q", stdout)
+		}
+		if !strings.Contains(stdout[card:summary], "  Criterion tree:") {
+			t.Errorf("missing per-card criterion tree: %q", stdout)
+		}
+		if !strings.Contains(stdout[summary:], admission) {
+			t.Errorf("missing closing admission: %q", stdout)
+		}
+		if !strings.Contains(stdout[summary:], "  Criterion tree:") {
+			t.Errorf("missing closing criterion tree: %q", stdout)
+		}
+	}
+
+	code, stdout, stderr = runTaskOut(t, "validate", "--all", "--base", "HEAD")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "tracked snapshot") || !strings.Contains(stdout, "Criterion admission:") {
+		t.Fatalf("base all code=%d stderr=%q stdout=%q", code, stderr, stdout)
+	}
+}
+
+func TestValidateAllRefusesUnavailableBase(t *testing.T) {
+	for _, base := range []string{"", "missing-revision"} {
+		t.Run(base, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			initGitRepo(t)
+			writeCardFile(t, "tasks/todo/001-probe.md", probeCard("P2"))
+			code, stdout, stderr := runTaskOut(t, "validate", "--all", "--base", base)
+			if code != 2 {
+				t.Errorf("base exit=%d, want 2; stderr=%q", code, stderr)
+			}
+			if !strings.HasPrefix(stdout, "Validation tool:") || strings.Contains(stdout, "Validating:") {
+				t.Errorf("base refusal must print stamp before card reads: %q", stdout)
+			}
+		})
+	}
+}
+
+func TestValidateAllDecisionAdmission(t *testing.T) {
+	t.Chdir(t.TempDir())
+	initGitRepo(t)
+	writeCardFile(t, "tasks/decision/DECISION-001.md", "# DECISION-001: example\n\n- Status: Proposed\n\n## Context\n\nExample.\n\n## Decision\n\nPending.\n\n## Rationale\n\nExample.\n\n## Consequences\n\nNone.\n")
+	writeCardFile(t, "tasks/decision/README.md", "| File | Status |\n|------|--------|\n| [DECISION-001](DECISION-001.md) | Proposed |\n\n현재 최대: ADR-0000, 로그 000. 다음은 ADR-0001, 로그 001.\n")
+	code, stdout, stderr := runTaskOut(t, "validate", "--all")
+	if code != 0 || stderr != "" {
+		t.Errorf("decision code=%d stderr=%q stdout=%q", code, stderr, stdout)
+	}
+	card := strings.Index(stdout, "Validating: tasks/decision/DECISION-001.md")
+	summary := strings.Index(stdout, "Summary:")
+	if card < 0 || summary < card || !strings.Contains(stdout[card:summary], "  Criterion admission: not-applicable;") {
+		t.Errorf("decision missing per-document admission: %q", stdout)
+	}
+}
+
+// An observable executable records each probe's directory without adding
+// instrumentation to the validator. The criterion remains an admitted grep.
+func recordValidateAllProbes(t *testing.T) string {
+	t.Helper()
+	bin := t.TempDir()
+	log := filepath.Join(t.TempDir(), "probes.log")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$PWD\" >> \"$VALIDATE_ALL_PROBE_LOG\"\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(bin, "grep"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("VALIDATE_ALL_PROBE_LOG", log)
+	return log
+}
+
+func TestValidateAllProbesSelectedTreeOnce(t *testing.T) {
+	t.Chdir(t.TempDir())
+	initGitRepo(t)
+	writeCardFile(t, "tasks/todo/001-probe.md", cardWithVerify("grep -q needle marker.txt"))
+	gitAddCommit(t, "board")
+	root, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := recordValidateAllProbes(t)
+	code, stdout, stderr := runTaskOut(t, "validate", "--all", "--base", "HEAD")
+	if code != 0 || stderr != "" {
+		t.Errorf("code=%d stderr=%q stdout=%q", code, stderr, stdout)
+	}
+	raw, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dirs := strings.Fields(string(raw))
+	if len(dirs) != 1 {
+		t.Errorf("probe directories=%q, want exactly one invocation", raw)
+	}
+	for _, dir := range dirs {
+		if dir == root {
+			t.Errorf("probe executed in mutable working tree: %s", dir)
+		}
+	}
+}
+
+func TestValidateAllBaseDoesNotProbeWorktree(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	initGitRepo(t)
+	card := probeCard("P2")
+	card = strings.Replace(card, "test -f missing-marker.txt", "test -f marker.txt", 1)
+	writeCardFile(t, "tasks/todo/001-probe.md", card)
+	gitAddCommit(t, "board")
+	if err := os.WriteFile("marker.txt", []byte("worktree only\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code, stdout, stderr := runTaskOut(t, "validate", "--all", "--base", "HEAD")
+	if code != 0 || stderr != "" || strings.Contains(stdout, "Criterion already passes") {
+		t.Fatalf("base probed mutable worktree: code=%d stderr=%q stdout=%q", code, stderr, stdout)
+	}
+}
+
 func TestReviewReceiptDigestProperties(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
