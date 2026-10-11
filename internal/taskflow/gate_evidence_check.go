@@ -144,7 +144,7 @@ func checkEvidenceBlock(block evidenceBlock) []Finding {
 	if value, ok := values["commit"]; ok && commitHashRe.MatchString(value) {
 		findings = append(findings, evidenceFinding(numbers["commit"], "commit", "is a commit hash (7-40 hex); a rebase deletes it, so this field carries the commit subject"))
 	}
-	if value, ok := values["change-id"]; ok && value != "" && !changeIDValue.MatchString(value) {
+	if value, ok := values["change-id"]; ok && value != "" && !changeIDPattern.MatchString(value) {
 		findings = append(findings, evidenceFinding(numbers["change-id"], "change-id", "is not a safe Change-Id"))
 	}
 	for _, field := range []string{"fail-lines", "ok-lines", "skip-lines"} {
@@ -287,14 +287,14 @@ func evidenceBytes(block evidenceBlock) []byte {
 }
 
 func changeIDIntegrated(ctx context.Context, root, changeID string) (string, bool, error) {
-	if !changeIDValue.MatchString(changeID) {
+	if !changeIDPattern.MatchString(changeID) {
 		return "", false, fmt.Errorf("change-id %q", changeID)
 	}
-	source, err := sourceBranchName(ctx, root)
+	source, err := sourceBranch(root)
 	if err != nil {
 		return "", false, err
 	}
-	peer, err := selectSourcePeer(ctx, root, source)
+	peer, err := sourceBranchRef(root, source)
 	if err != nil {
 		return source, false, err
 	}

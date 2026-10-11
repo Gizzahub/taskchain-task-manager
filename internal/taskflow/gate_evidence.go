@@ -303,7 +303,7 @@ func bindGateEvidence(ctx context.Context, root, gateName string, receipt *ciRec
 	if subject == "" {
 		return "", errors.New("HEAD commit subject is empty")
 	}
-	changeID, err := BranchChangeID(ctx, root)
+	changeID, err := BranchChangeID(root)
 	if err != nil {
 		return "", fmt.Errorf("branch Change-Id: %s", err.Error())
 	}
@@ -429,7 +429,7 @@ func gateReceiptName(block string) (string, error) {
 		fields[strings.TrimSpace(key)] = strings.TrimSpace(value)
 	}
 	changeID := fields["change-id"]
-	if !changeIDValue.MatchString(changeID) {
+	if !changeIDPattern.MatchString(changeID) {
 		return "", fmt.Errorf("change-id %q", changeID)
 	}
 	logFinished, err := time.Parse(time.RFC3339, fields["log-finished"])

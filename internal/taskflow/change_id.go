@@ -1,150 +1,127 @@
 package taskflow
 
 import (
-	"context"
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-// changeIDValue is the only Change-Id form this product reads or writes.
-var changeIDValue = regexp.MustCompile(`^taskchain-gate/[0-9a-f]{32}$`)
+// changeIDTrailerLine matches one trailer line. Placement is checked separately
+// by ChangeIDFromCommitMessage. The match is case-sensitive and line-anchored;
+// a prose mention of the key is not a trailer.
+var changeIDTrailerLine = regexp.MustCompile(`(?m)^Change-Id:[ \t]*(.*)$`)
 
-// ChangeIDFromCommitMessage checks one commit message that already contains a
-// Change-Id line. The checks run in contract order: Model is the last
-// nonempty line, Change-Id sits on the nonempty line before it, the message
-// carries exactly one Change-Id, and that value is a taskchain-gate id.
+// changeIDPattern is the product Change-Id. The ce-gate prefix is not accepted.
+var changeIDPattern = regexp.MustCompile(`^taskchain-gate/[0-9a-f]{32}$`)
+
+// ChangeIDFromCommitMessage reads the one Change-Id a single commit declares.
+//
+// The last nonempty line must be `Model: <nonempty>`. The previous nonempty
+// line must be exactly `Change-Id: <value>`. Blank lines between those two
+// are skipped. Every matching trailer line in the message is counted, and
+// any count other than one is refused before the value is accepted.
 func ChangeIDFromCommitMessage(message string) (string, error) {
-	lines := nonemptyLines(message)
-	if len(lines) == 0 || !modelTrailer(lines[len(lines)-1]) {
+	lines := strings.Split(strings.TrimRight(message, "\n"), "\n")
+	last := len(lines) - 1
+	for last >= 0 && strings.TrimSpace(lines[last]) == "" {
+		last--
+	}
+	if last < 1 || !strings.HasPrefix(lines[last], "Model: ") || strings.TrimSpace(strings.TrimPrefix(lines[last], "Model: ")) == "" {
 		return "", errors.New("last nonempty trailer must be Model")
 	}
-	if len(lines) < 2 || !strings.HasPrefix(strings.TrimSpace(lines[len(lines)-2]), "Change-Id:") {
+	previous := last - 1
+	for previous >= 0 && strings.TrimSpace(lines[previous]) == "" {
+		previous--
+	}
+	if previous < 0 {
 		return "", errors.New("Change-Id must immediately precede Model")
 	}
-	count := 0
-	value := ""
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "Change-Id:") {
-			continue
-		}
-		count++
-		value = strings.TrimSpace(strings.TrimPrefix(trimmed, "Change-Id:"))
+	matches := changeIDTrailerLine.FindAllStringSubmatch(message, -1)
+	if len(matches) != 1 {
+		return "", fmt.Errorf("need exactly one Change-Id trailer, found %d", len(matches))
 	}
-	if count != 1 {
-		return "", fmt.Errorf("need exactly one Change-Id trailer, found %d", count)
+	value := strings.TrimSpace(matches[0][1])
+	if lines[previous] != "Change-Id: "+value {
+		return "", errors.New("Change-Id must immediately precede Model")
 	}
-	if !changeIDValue.MatchString(value) {
+	if !changeIDPattern.MatchString(value) {
 		return "", fmt.Errorf("malformed Change-Id %q", value)
 	}
 	return value, nil
 }
 
-func nonemptyLines(message string) []string {
-	var lines []string
-	for _, line := range strings.Split(message, "\n") {
-		if strings.TrimSpace(line) == "" {
+// ChangeIDFromBranchRange returns the one Change-Id declared by messages in a
+// branch range. Messages with no Change-Id line are skipped. A repeated value
+// is still two declarations. Commit failures name the subject, or
+// "(empty subject)" when the first line is blank.
+func ChangeIDFromBranchRange(messages []string) (string, error) {
+	var found []string
+	for _, message := range messages {
+		if len(changeIDTrailerLine.FindAllStringIndex(message, 1)) == 0 {
 			continue
 		}
-		lines = append(lines, strings.TrimRight(line, "\r"))
-	}
-	return lines
-}
-
-func modelTrailer(line string) bool {
-	rest, ok := strings.CutPrefix(strings.TrimSpace(line), "Model:")
-	return ok && strings.TrimSpace(rest) != ""
-}
-
-func commitHasChangeID(message string) bool {
-	for _, line := range strings.Split(message, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), "Change-Id:") {
-			return true
+		value, err := ChangeIDFromCommitMessage(message)
+		if err != nil {
+			return "", fmt.Errorf("commit %q: %w", commitSubject(message), err)
 		}
+		found = append(found, value)
 	}
-	return false
+	switch len(found) {
+	case 1:
+		return found[0], nil
+	case 0:
+		return "", errors.New("no Change-Id trailer in the branch range: the branch has not declared a change to gate")
+	default:
+		return "", fmt.Errorf("branch range declares %d Change-Id trailers (%s): exactly one commit must declare the change",
+			len(found), strings.Join(found, ", "))
+	}
 }
 
 func commitSubject(message string) string {
-	subject, _, _ := strings.Cut(message, "\n")
-	subject = strings.TrimSpace(subject)
+	subject := strings.TrimSpace(strings.SplitN(message, "\n", 2)[0])
 	if subject == "" {
 		return "(empty subject)"
 	}
 	return subject
 }
 
-// ChangeIDFromBranchRange applies the commit rules to every commit in
-// peer..HEAD that carries a Change-Id line, then requires the range to
-// declare exactly one such trailer.
-func ChangeIDFromBranchRange(ctx context.Context, root, peer string) (string, error) {
-	base, err := gitOutput(ctx, root, "--no-replace-objects", "--no-lazy-fetch", "merge-base", peer, "HEAD")
+// BranchChangeID resolves the Change-Id added after the merge-base with the
+// source branch. The source is branch.integrationBranch in .gz-git.yaml, then
+// the last component of origin/HEAD. When both the origin and local refs of
+// that name exist, the ref whose merge-base is nearer to HEAD is used. The
+// range suffix on a declaration error names that ref, not the merge-base.
+func BranchChangeID(root string) (string, error) {
+	source, err := sourceBranch(root)
 	if err != nil {
 		return "", err
 	}
-	listed, err := gitOutput(ctx, root, "--no-replace-objects", "--no-lazy-fetch", "rev-list", "--reverse", strings.TrimSpace(base)+"..HEAD")
+	peer, err := sourceBranchRef(root, source)
 	if err != nil {
 		return "", err
 	}
-	label := peerRangeLabel(peer)
-	var ids []string
-	for _, sha := range strings.Fields(listed) {
-		message, err := gitOutput(ctx, root, "--no-replace-objects", "--no-lazy-fetch", "log", "-1", "--format=%B", sha)
-		if err != nil {
-			return "", err
-		}
-		if !commitHasChangeID(message) {
-			continue
-		}
-		id, err := ChangeIDFromCommitMessage(message)
-		if err != nil {
-			return "", fmt.Errorf("commit %q: %w", commitSubject(message), err)
-		}
-		ids = append(ids, id)
+	base, err := mergeBase(root, peer)
+	if err != nil {
+		return "", err
 	}
-	switch len(ids) {
-	case 0:
-		return "", fmt.Errorf("no Change-Id trailer in the branch range: %s..HEAD", label)
-	case 1:
-		return ids[0], nil
-	default:
-		return "", fmt.Errorf("branch range declares %d Change-Id trailers (%s)", len(ids), strings.Join(ids, ", "))
+	messages, err := rangeMessages(root, base)
+	if err != nil {
+		return "", err
 	}
+	changeID, err := ChangeIDFromBranchRange(messages)
+	if err != nil {
+		return "", fmt.Errorf("%w (range %s..HEAD)", err, peer)
+	}
+	return changeID, nil
 }
 
-// BranchChangeID resolves the source branch, chooses the peer tip, and reads
-// the single Change-Id in merge-base(peer, HEAD)..HEAD. Range failures keep
-// the peer span so a caller can see which history was judged.
-func BranchChangeID(ctx context.Context, root string) (string, error) {
-	branch, err := sourceBranchName(ctx, root)
-	if err != nil {
-		return "", err
-	}
-	peer, err := selectSourcePeer(ctx, root, branch)
-	if err != nil {
-		return "", err
-	}
-	id, err := ChangeIDFromBranchRange(ctx, root, peer)
-	if err != nil {
-		return "", fmt.Errorf("%s (range %s..HEAD)", err.Error(), peerRangeLabel(peer))
-	}
-	return id, nil
-}
-
-func peerRangeLabel(peer string) string {
-	peer = strings.TrimPrefix(peer, "refs/remotes/")
-	peer = strings.TrimPrefix(peer, "refs/heads/")
-	return peer
-}
-
-func sourceBranchName(ctx context.Context, root string) (string, error) {
+func sourceBranch(root string) (string, error) {
 	declared, err := declaredIntegrationBranch(root)
 	if err != nil {
 		return "", err
@@ -152,124 +129,186 @@ func sourceBranchName(ctx context.Context, root string) (string, error) {
 	if declared != "" {
 		return declared, nil
 	}
-	out, err := gitOutput(ctx, root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
-	if err != nil {
-		return "", errors.New("source branch is not declared and origin/HEAD is unresolved")
+	return originHeadBranch(root)
+}
+
+// changeIDBranchList accepts a scalar or a sequence. A mapping or an empty
+// scalar declares nothing. The first non-empty entry wins.
+type changeIDBranchList []string
+
+func (l *changeIDBranchList) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		var single string
+		if err := value.Decode(&single); err != nil {
+			return err
+		}
+		if single != "" {
+			*l = changeIDBranchList{single}
+		}
+		return nil
+	case yaml.SequenceNode:
+		var many []string
+		if err := value.Decode(&many); err != nil {
+			return err
+		}
+		*l = many
+		return nil
+	default:
+		return nil
 	}
-	parts := strings.Split(strings.TrimSpace(out), "/")
-	name := parts[len(parts)-1]
-	if name == "" {
-		return "", errors.New("source branch is not declared and origin/HEAD is unresolved")
+}
+
+func (l changeIDBranchList) first() string {
+	for _, entry := range l {
+		if entry != "" {
+			return entry
+		}
 	}
-	return name, nil
+	return ""
 }
 
 func declaredIntegrationBranch(root string) (string, error) {
 	path := filepath.Join(root, ".gz-git.yaml")
-	raw, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
+	b, readErr := os.ReadFile(path)
+	if os.IsNotExist(readErr) {
 		return "", nil
 	}
-	if err != nil {
-		return "", fmt.Errorf("%s exists but cannot be read: %w", path, err)
+	if readErr != nil {
+		return "", fmt.Errorf("%s exists but cannot be read: %w", path, readErr)
 	}
-	var doc map[string]any
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		return "", fmt.Errorf("parse .gz-git.yaml: %w", err)
+	var doc struct {
+		Branch struct {
+			IntegrationBranch changeIDBranchList `yaml:"integrationBranch"`
+		} `yaml:"branch"`
 	}
-	branch, _ := doc["branch"].(map[string]any)
-	if branch == nil {
-		return "", nil
+	if err := yaml.Unmarshal(b, &doc); err != nil {
+		return "", fmt.Errorf("%s cannot be parsed, and a declaration that cannot be read is not one that declares nothing: parse .gz-git.yaml: %w", path, err)
 	}
-	switch value := branch["integrationBranch"].(type) {
-	case string:
-		return strings.TrimSpace(value), nil
-	case []any:
-		for _, item := range value {
-			text := strings.TrimSpace(scalarString(item))
-			if text != "" {
-				return text, nil
-			}
-		}
-	}
-	return "", nil
+	return doc.Branch.IntegrationBranch.first(), nil
 }
 
-func selectSourcePeer(ctx context.Context, root, branch string) (string, error) {
-	originRef := "refs/remotes/origin/" + branch
-	localRef := "refs/heads/" + branch
-	originSHA, originOK := verifyCommit(ctx, root, originRef)
-	localSHA, localOK := verifyCommit(ctx, root, localRef)
+func originHeadBranch(root string) (string, error) {
+	out, err := gitText(root, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+	if err != nil || strings.TrimSpace(out) == "" {
+		return "", errors.New("source branch is not declared and origin/HEAD is unresolved")
+	}
+	parts := strings.Split(strings.TrimSpace(out), "/")
+	return parts[len(parts)-1], nil
+}
+
+func sourceBranchRef(root, source string) (string, error) {
+	origin := "refs/remotes/origin/" + source
+	local := "refs/heads/" + source
+	resolvedOrigin := refExists(root, origin)
+	resolvedLocal := refExists(root, local)
 	switch {
-	case !originOK && !localOK:
-		return "", fmt.Errorf("source branch %q resolves neither on origin nor locally; look for %s or %s", branch, originRef, localRef)
-	case originOK && !localOK:
-		return originRef, nil
-	case !originOK && localOK:
-		return localRef, nil
-	case originSHA == localSHA:
-		return originRef, nil
+	case !resolvedOrigin && !resolvedLocal:
+		return "", fmt.Errorf("source branch %q resolves neither on origin nor locally: cannot find the branch point", source)
+	case resolvedOrigin && !resolvedLocal:
+		return origin, nil
+	case !resolvedOrigin && resolvedLocal:
+		return local, nil
 	}
-	closer, ordered := closerPeer(ctx, root, originRef, localRef)
-	if !ordered {
-		return "", fmt.Errorf("source branch %q resolves on both origin and locally but the tips are not ordered", branch)
-	}
-	return closer, nil
+	return nearerRef(root, origin, local)
 }
 
-func verifyCommit(ctx context.Context, root, ref string) (string, bool) {
-	out, err := gitOutput(ctx, root, "--no-replace-objects", "--no-lazy-fetch", "rev-parse", "--verify", "--quiet", ref+"^{commit}")
-	out = strings.TrimSpace(out)
-	if err != nil || out == "" {
-		return "", false
-	}
-	return out, true
+func refExists(root, candidate string) bool {
+	out, _, err := gitRaw(root, "rev-parse", "--verify", "--quiet", candidate)
+	return err == nil && strings.TrimSpace(string(out)) != ""
 }
 
-// closerPeer picks the tip with fewer commits ahead of HEAD. Equal distance
-// falls back to the descendant, which is the tip HEAD has actually reached.
-// Unrelated tips are not ordered.
-func closerPeer(ctx context.Context, root, originRef, localRef string) (string, bool) {
-	if !tipsOrdered(ctx, root, originRef, localRef) {
-		return "", false
+// nearerRef picks the ref whose merge-base is closer to HEAD. A ref that
+// resolves but shares no history with HEAD is dropped. Equal bases use origin.
+// Incomparable bases, which a merge in HEAD can produce, are an error.
+func nearerRef(root, origin, local string) (string, error) {
+	baseOrigin, errOrigin := mergeBase(root, origin)
+	baseLocal, errLocal := mergeBase(root, local)
+	switch {
+	case errOrigin != nil && errLocal != nil:
+		return "", errors.Join(errOrigin, errLocal)
+	case errOrigin != nil:
+		return local, nil
+	case errLocal != nil:
+		return origin, nil
 	}
-	originDistance, originErr := commitsAhead(ctx, root, originRef)
-	localDistance, localErr := commitsAhead(ctx, root, localRef)
-	if originErr != nil || localErr != nil {
-		return "", false
+	if baseOrigin == baseLocal {
+		return origin, nil
 	}
-	if originDistance != localDistance {
-		if originDistance < localDistance {
-			return originRef, true
-		}
-		return localRef, true
+	if isAncestor(root, baseOrigin, baseLocal) {
+		return local, nil
 	}
-	if ancestorCommit(ctx, root, originRef, localRef) {
-		return localRef, true
+	if isAncestor(root, baseLocal, baseOrigin) {
+		return origin, nil
 	}
-	if ancestorCommit(ctx, root, localRef, originRef) {
-		return originRef, true
-	}
-	return "", false
+	return "", fmt.Errorf("HEAD reaches %q on origin and locally through separate lines of history, so their branch points are incomparable and neither is the nearer one", strings.TrimPrefix(local, "refs/heads/"))
 }
 
-func tipsOrdered(ctx context.Context, root, originRef, localRef string) bool {
-	return ancestorCommit(ctx, root, originRef, localRef) || ancestorCommit(ctx, root, localRef, originRef)
-}
-
-func ancestorCommit(ctx context.Context, root, ancestor, descendant string) bool {
-	_, err := gitOutput(ctx, root, "--no-replace-objects", "--no-lazy-fetch", "merge-base", "--is-ancestor", ancestor, descendant)
+func isAncestor(root, ancestor, descendant string) bool {
+	_, _, err := gitRaw(root, "merge-base", "--is-ancestor", ancestor, descendant)
 	return err == nil
 }
 
-func commitsAhead(ctx context.Context, root, tip string) (int, error) {
-	out, err := gitOutput(ctx, root, "--no-replace-objects", "--no-lazy-fetch", "rev-list", "--count", tip+"..HEAD")
+func mergeBase(root, peer string) (string, error) {
+	out, stderr, err := gitRaw(root, "merge-base", peer, "HEAD")
 	if err != nil {
-		return 0, err
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			return "", fmt.Errorf("merge-base %s HEAD: %w", peer, err)
+		}
+		if msg := strings.TrimSpace(stderr); msg != "" {
+			return "", fmt.Errorf("merge-base %s HEAD: %s", peer, msg)
+		}
+		return "", fmt.Errorf("merge-base %s HEAD found no common ancestor: the branch shares no history with its source", peer)
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(out))
+	base := strings.TrimSpace(string(out))
+	if base == "" {
+		return "", fmt.Errorf("merge-base %s HEAD exited zero but printed no commit", peer)
+	}
+	return base, nil
+}
+
+func rangeMessages(root, base string) ([]string, error) {
+	out, stderr, err := gitRaw(root, "log", "-z", "--format=%B", base+"..HEAD")
 	if err != nil {
-		return 0, err
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return nil, fmt.Errorf("read branch commit messages: %s", strings.TrimSpace(stderr))
+		}
+		return nil, fmt.Errorf("read branch commit messages: %w", err)
 	}
-	return n, nil
+	return splitGitLogMessages(string(out)), nil
+}
+
+// splitGitLogMessages splits a NUL-terminated `git log -z --format=%B` stream.
+// The trailing separator is an empty record, and a second empty record is
+// empty as well. Neither is a commit. Internal blank lines stay in the message.
+func splitGitLogMessages(raw string) []string {
+	var messages []string
+	for _, message := range strings.Split(raw, "\x00") {
+		if strings.TrimSpace(message) != "" {
+			messages = append(messages, message)
+		}
+	}
+	return messages
+}
+
+func gitRaw(root string, args ...string) ([]byte, string, error) {
+	cmd := exec.Command("git", append([]string{"--no-replace-objects", "--no-lazy-fetch"}, args...)...)
+	cmd.Dir = root
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	return out, stderr.String(), err
+}
+
+func gitText(root string, args ...string) (string, error) {
+	out, stderr, err := gitRaw(root, args...)
+	if err != nil {
+		if msg := strings.TrimSpace(stderr); msg != "" {
+			return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), msg)
+		}
+		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
