@@ -20,6 +20,12 @@ func TestRunCommandHelpAndRefusals(t *testing.T) {
 		{"run-start", runStartHelp},
 		{"run-status", runStatusHelp},
 		{"run-list", runListHelp},
+		{"run-finish", runFinishHelp},
+		{"run-recover", runRecoverHelp},
+		{"run-abort", runAbortHelp},
+		{"run-settle", runSettleHelp},
+		{"run-close", runCloseHelp},
+		{"run-discard", runDiscardHelp},
 	}
 	for _, help := range helps {
 		for _, flag := range []string{"--help", "-h"} {
@@ -46,7 +52,8 @@ func TestRunCommandHelpAndRefusals(t *testing.T) {
 		{"list positional", []string{"run-list", "sample-task"}, 1, "Error: unexpected argument sample-task\n"},
 		{"status extra", []string{"run-status", "one", "two"}, 1, "Error: unexpected argument two\n"},
 		{"status flag", []string{"run-status", "--bogus"}, 1, "Error: unknown flag --bogus (valid: --json, --help, -h)\n"},
-		{"unknown command", []string{"run-missing"}, 2, "Error: unknown task command \"run-missing\" (valid: list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list)\n"},
+		{"unknown command", []string{"run-missing"}, 2, "Error: unknown task command \"run-missing\" (valid: list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard)\n"},
+		{"dropped release", []string{"run-release"}, 2, "Error: unknown task command \"run-release\" (valid: list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard)\n"},
 	}
 	for _, refusal := range refusals {
 		t.Run(refusal.name, func(t *testing.T) {
@@ -102,6 +109,12 @@ func TestRunMalformedLedgerPreservesBytes(t *testing.T) {
 	}{
 		{name: "executions", file: "executions.json", body: "{", args: []string{"run-status"}, want: "decode task executions"},
 		{name: "executions start", file: "executions.json", body: "{", args: []string{"run-start", "sample-task", "--type", "feat"}, want: "decode task executions"},
+		{name: "executions abort", file: "executions.json", body: "{", args: []string{"run-abort", "sample-task"}, want: "decode task executions"},
+		{name: "executions finish", file: "executions.json", body: "{", args: []string{"run-finish", "sample-task"}, want: "decode task executions"},
+		{name: "executions recover", file: "executions.json", body: "{", args: []string{"run-recover", "sample-task"}, want: "decode task executions"},
+		{name: "executions settle", file: "executions.json", body: "{", args: []string{"run-settle", "sample-task"}, want: "decode task executions"},
+		{name: "executions close", file: "executions.json", body: "{", args: []string{"run-close", "sample-task", "--reason", "gone"}, want: "decode task executions"},
+		{name: "executions discard", file: "executions.json", body: "{", args: []string{"run-discard", "sample-task", "--reason", "gone"}, want: "decode task executions"},
 		{name: "empty receipt", file: "receipts.jsonl", body: "\n", args: []string{"run-doctor"}, want: "empty receipt record"},
 		{name: "text receipt", file: "receipts.jsonl", body: "not-json\n", args: []string{"run-list"}, want: "decode receipt line"},
 	}
@@ -147,10 +160,29 @@ func TestRunHeldLockIsNotDeleted(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	for _, args := range [][]string{{"run-doctor"}, {"run-start", "sample-task", "--type", "feat"}} {
+	locked := [][]string{
+		{"run-doctor"},
+		{"run-start", "sample-task", "--type", "feat"},
+		{"run-abort", "sample-task"},
+		{"run-finish", "sample-task"},
+		{"run-recover", "sample-task"},
+		{"run-discard", "sample-task", "--reason", "gone"},
+	}
+	// Settle and close identify the execution before they lock. This fixture
+	// has no execution, so they refuse that fact and still must leave the lock.
+	early := [][]string{
+		{"run-settle", "sample-task"},
+		{"run-close", "sample-task", "--reason", "gone"},
+	}
+	for _, args := range append(locked, early...) {
 		stdout, stderr, code := invoke(args...)
-		if code != 1 || !strings.Contains(stdout, "mutation lock") || !strings.Contains(stderr, "mutation lock") {
+		if code != 1 {
 			t.Fatalf("%v code=%d\nstderr=%q\nstdout=%q", args, code, stderr, stdout)
+		}
+		for _, group := range locked {
+			if len(group) == len(args) && group[0] == args[0] && (!strings.Contains(stdout, "mutation lock") || !strings.Contains(stderr, "mutation lock")) {
+				t.Fatalf("%v code=%d\nstderr=%q\nstdout=%q", args, code, stderr, stdout)
+			}
 		}
 		got, err := os.ReadFile(path)
 		if err != nil {

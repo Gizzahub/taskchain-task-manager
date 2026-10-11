@@ -158,6 +158,53 @@ func integrateCapabilities(help string) (map[string]bool, error) {
 	return capabilities, nil
 }
 
+// IntegrationProvider is the declared integration tool. Finish calls Check
+// and then Run. Tests substitute a fake. gzGitProvider speaks only the
+// documented gz-git command line and never reimplements integration.
+type IntegrationProvider interface {
+	Check(ctx context.Context, worktree, target string, noFetch bool) (CommandResult, error)
+	Run(ctx context.Context, worktree, target string, noFetch bool) (CommandResult, error)
+	DiagnoseNoFetch(ctx context.Context, dir string) (ProviderReport, []CommandDiagnostic, error)
+}
+
+func (s *Service) integrator() IntegrationProvider {
+	if s.provider != nil {
+		return s.provider
+	}
+	return gzGitProvider{runner: s.runner}
+}
+
+func (p gzGitProvider) Check(ctx context.Context, dir, target string, noFetch bool) (CommandResult, error) {
+	// check only reads, so a moving source tip may stop the whole tree.
+	// Run never sets ProcessGroup: an integrated branch must not be interrupted.
+	return p.runner.Run(ctx, CommandRequest{
+		Command: providerGZGit, Args: integrateArgs("check", target, noFetch), WorkDir: dir, ProcessGroup: true,
+	})
+}
+
+func (p gzGitProvider) Run(ctx context.Context, dir, target string, noFetch bool) (CommandResult, error) {
+	return p.runner.Run(ctx, CommandRequest{
+		Command: providerGZGit, Args: integrateArgs("run", target, noFetch), WorkDir: dir,
+	})
+}
+
+func integrateArgs(operation, target string, noFetch bool) []string {
+	args := []string{"integrate", operation, integrationTargetFlag, target}
+	if noFetch {
+		args = append(args, integrationNoFetchFlag)
+	}
+	return args
+}
+
+func (p gzGitProvider) DiagnoseNoFetch(ctx context.Context, dir string) (ProviderReport, []CommandDiagnostic, error) {
+	report, diagnostics, err := p.diagnoseRequired(ctx, dir)
+	if err != nil {
+		return report, diagnostics, err
+	}
+	diagnostics, err = p.probeNoFetch(ctx, dir, &report, diagnostics)
+	return report, diagnostics, err
+}
+
 func declaresFlag(help, operation, flag string) bool {
 	usageHeader, usage, inFlags := false, false, false
 	for _, line := range strings.Split(help, "\n") {

@@ -17,11 +17,11 @@ import (
 // taskUsage is the noun's one-line contract, shown when the noun itself is
 // mistyped. Per-subcommand misuse is reported by the subcommand, at the exit
 // code the pinned reference gives that subcommand's own refusals.
-const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate|lint|preflight|gate|review-receipt|doctor|board|recommend|promote|issue-promote|plan-promote|backlog-promote|todo-run|doing-resume|review-run|blocked-recover|done-finalize|run-doctor|run-start|run-status|run-list> ..."
+const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate|lint|preflight|gate|review-receipt|doctor|board|recommend|promote|issue-promote|plan-promote|backlog-promote|todo-run|doing-resume|review-run|blocked-recover|done-finalize|run-doctor|run-start|run-status|run-list|run-finish|run-recover|run-abort|run-close|run-settle|run-discard> ..."
 
 // taskCommandList is the unknown-command diagnostic. It names every command
 // this noun dispatches, in the same order as taskUsage.
-const taskCommandList = "list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list"
+const taskCommandList = "list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard"
 
 // runTask dispatches the CE-parity `task` noun. The pinned reference splits
 // its refusals two ways, and the split is preserved here: what the caller
@@ -102,6 +102,18 @@ func runTask(args []string, out, errOut io.Writer) int {
 		err = taskReviewReceipt(args[1:], out)
 	case "doctor":
 		err = taskDoctor(ctx, args[1:], out)
+	case "run-finish":
+		err = taskRunFinish(args[1:], out)
+	case "run-recover":
+		err = taskRunRecover(args[1:], out)
+	case "run-abort":
+		err = taskRunAbort(args[1:], out)
+	case "run-close":
+		err = taskRunClose(args[1:], out)
+	case "run-settle":
+		err = taskRunSettle(args[1:], out)
+	case "run-discard":
+		err = taskRunDiscard(args[1:], out)
 	default:
 		fmt.Fprintf(errOut, "Error: unknown task command %q (valid: %s)\n", args[0], taskCommandList)
 		return 2
@@ -113,6 +125,11 @@ func runTask(args []string, out, errOut io.Writer) int {
 	if errors.As(err, &usage) {
 		fmt.Fprintf(errOut, "Error: %v\n", usage.err)
 		return 2
+	}
+	var coded interface{ ExitCode() int }
+	if errors.As(err, &coded) {
+		fmt.Fprintf(errOut, "Error: %v\n", err)
+		return coded.ExitCode()
 	}
 	fmt.Fprintf(errOut, "Error: %v\n", err)
 	return 1

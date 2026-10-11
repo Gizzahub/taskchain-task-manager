@@ -12,8 +12,9 @@ import (
 )
 
 // CommandRequest is one external command. Args are passed as an array.
-// ProcessGroup is recorded for callers that must be able to stop a tree;
-// the four commands in this package do not set it.
+// ProcessGroup runs the command in its own process group so cancelling the
+// context stops its descendants too. run-finish sets it on the integration
+// check. The integration run does not: that command must not be stopped.
 type CommandRequest struct {
 	Command      string
 	Args         []string
@@ -72,7 +73,16 @@ func (e *Executor) Run(ctx context.Context, req CommandRequest) (CommandResult, 
 	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err = cmd.Run()
+	if req.ProcessGroup {
+		prepareProcessGroup(cmd)
+		if err = cmd.Start(); err == nil {
+			stop := forwardSignals(cmd.Process.Pid)
+			err = cmd.Wait()
+			stop()
+		}
+	} else {
+		err = cmd.Run()
+	}
 	result.Stdout, result.Stderr = stdout.String(), stderr.String()
 	if err == nil {
 		return result, nil

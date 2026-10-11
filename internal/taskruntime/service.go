@@ -15,6 +15,12 @@ type Service struct {
 	root   string
 	runner CommandRunner
 	now    func() time.Time
+	// provider, when set, replaces the gz-git command line. Production leaves
+	// it nil so Check and Run are the documented integrate invocations.
+	provider IntegrationProvider
+	// sourcePollInterval is how often run-finish re-reads the source tip
+	// during the integration check. Zero selects the default.
+	sourcePollInterval time.Duration
 }
 
 func NewService(root string, runner CommandRunner) *Service {
