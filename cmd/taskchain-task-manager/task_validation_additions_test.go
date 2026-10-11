@@ -64,7 +64,7 @@ func TestValidationCommandRefusals(t *testing.T) {
 		{"gate-evidence bare", []string{"gate-evidence"}, 1, "ce-tasks.yaml does not declare gate.name and gate.log", "", ""},
 		{"change-id bogus", []string{"change-id", "--bogus"}, 2, "unknown argument --bogus (valid: --help, -h)", "", ""},
 		{"change-id bare", []string{"change-id"}, 1, "source branch is not declared and origin/HEAD is unresolved", "", ""},
-		{"resolve usage", []string{"resolve"}, 1, "usage: ce task resolve <issue-file> fixed [--by TASK-N] | duplicate [--by ISSUE-N] | wontfix | invalid", "", ""},
+		{"resolve usage", []string{"resolve"}, 1, resolveUsage, "", ""},
 		{"staged not a repo", []string{"validate", "--staged"}, 2, "staged validation requires a Git repository:", "", ""},
 	}
 	for _, tc := range cases {
