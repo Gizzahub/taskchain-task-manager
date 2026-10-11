@@ -5,8 +5,9 @@ import (
 	"strings"
 )
 
-// receiptBindsExecution names the execution being closed. A zero CreatedAt
-// still binds; a dated receipt cannot predate the execution it closes.
+// receiptBindsExecution names the execution being closed. A receipt cannot
+// predate the execution it closes, so a zero CreatedAt binds only an
+// execution whose StartedAt is also zero.
 func receiptBindsExecution(execution Execution, receipt Receipt) bool {
 	return receipt.Task == execution.Task && receipt.Owner == execution.Owner &&
 		receipt.Branch == execution.Branch && receipt.Worktree == execution.Worktree &&
