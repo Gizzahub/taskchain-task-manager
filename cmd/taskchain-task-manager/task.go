@@ -242,7 +242,7 @@ func parseTaskNewArgs(args []string, out io.Writer) (taskflow.NewCardOptions, bo
 				continue
 			}
 			if strings.HasPrefix(arg, "-") {
-				return opts, false, usagef("unknown argument %s (valid: --id, --title, --slug, --type, --priority, --effort, --exec-tier, --agent, --criterion, --json, --help, -h)", arg)
+				return opts, false, usagef("unknown argument %s (valid: --id, --title, --slug, --type, --priority, --effort, --exec-tier, --agent, --discovered-in, --criterion, --json, --help, -h)", arg)
 			}
 			if opts.Kind != "" {
 				return opts, false, usagef("one kind only; got %q and %q", opts.Kind, arg)
@@ -261,14 +261,15 @@ func parseTaskNewArgs(args []string, out io.Writer) (taskflow.NewCardOptions, bo
 // caller's index responsibility: the flag sits at i, its value at i+1.
 func setTaskNewFlag(opts *taskflow.NewCardOptions, arg string, args []string, i int) (bool, error) {
 	valued := map[string]*string{
-		"--id":        &opts.ID,
-		"--title":     &opts.Title,
-		"--slug":      &opts.Slug,
-		"--type":      &opts.Type,
-		"--priority":  &opts.Priority,
-		"--effort":    &opts.Effort,
-		"--exec-tier": &opts.ExecTier,
-		"--agent":     &opts.Agent,
+		"--id":            &opts.ID,
+		"--title":         &opts.Title,
+		"--slug":          &opts.Slug,
+		"--type":          &opts.Type,
+		"--priority":      &opts.Priority,
+		"--effort":        &opts.Effort,
+		"--exec-tier":     &opts.ExecTier,
+		"--agent":         &opts.Agent,
+		"--discovered-in": &opts.DiscoveredIn,
 	}
 	target, ok := valued[arg]
 	if !ok {
@@ -279,6 +280,9 @@ func setTaskNewFlag(opts *taskflow.NewCardOptions, arg string, args []string, i 
 		return true, err
 	}
 	*target = v
+	if arg == "--discovered-in" {
+		opts.DiscoveredInSet = true
+	}
 	return true, nil
 }
 

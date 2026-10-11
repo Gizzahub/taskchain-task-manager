@@ -41,6 +41,12 @@ type NewCardOptions struct {
 	Effort   string
 	ExecTier string
 	Agent    string
+	// DiscoveredIn is the issue reference passed with --discovered-in.
+	// Empty stays an empty placeholder. The title is never copied into it.
+	DiscoveredIn string
+	// DiscoveredInSet distinguishes an explicitly supplied empty value from an
+	// omitted flag at the CLI boundary.
+	DiscoveredInSet bool
 	// Created is the YYYY-MM-DD stamp; the caller supplies it so the creator
 	// stays deterministic.
 	Created  string
@@ -70,6 +76,12 @@ func Create(ctx context.Context, opts NewCardOptions) (*NewCardResult, error) {
 	kind, err := resolveKind(opts.Kind)
 	if err != nil {
 		return nil, err
+	}
+	if (opts.DiscoveredInSet || strings.TrimSpace(opts.DiscoveredIn) != "") && kind != "issue" {
+		return nil, fmt.Errorf("%w: --discovered-in is only valid for an issue", ErrNewCardInput)
+	}
+	if strings.ContainsAny(opts.DiscoveredIn, "\r\n\x00") {
+		return nil, fmt.Errorf("%w: --discovered-in must be a single-line reference", ErrNewCardInput)
 	}
 	zone := zoneForKind(kind)
 	prefix, err := PrefixForKind(kind)
@@ -337,7 +349,7 @@ func render(kind, id string, f cardFields, opts NewCardOptions) string {
 		if opts.Created == "" {
 			opts.Created = time.Now().Format("2006-01-02")
 		}
-		fmt.Fprintf(&b, "severity: medium\ndiscovered-in: %s\ndiscovered-at: %s\n", yamlQuote(strings.TrimSpace(opts.Title)), opts.Created)
+		fmt.Fprintf(&b, "severity: medium\ndiscovered-in: %s\ndiscovered-at: %s\n", yamlQuote(strings.TrimSpace(opts.DiscoveredIn)), opts.Created)
 	}
 	if opts.Created != "" {
 		fmt.Fprintf(&b, "created: %s\n", opts.Created)

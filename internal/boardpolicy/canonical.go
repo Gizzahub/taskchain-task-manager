@@ -9,8 +9,13 @@ import (
 )
 
 type canonicalRoot struct {
-	SchemaVersion int            `json:"schema-version"`
-	BoardPolicy   canonicalBlock `json:"board-policy"`
+	SchemaVersion int                 `json:"schema-version"`
+	BoardPolicy   canonicalBlock      `json:"board-policy"`
+	TaskBoard     *canonicalTaskBoard `json:"task-board,omitempty"`
+}
+
+type canonicalTaskBoard struct {
+	ZoneSkills *map[string]string `json:"zone-skills,omitempty"`
 }
 type canonicalTransition struct {
 	From string   `json:"from"`
@@ -89,7 +94,19 @@ func (p Policy) Canonical() ([]byte, error) {
 		sort.Strings(modules)
 		block.Modules = &modules
 	}
-	raw, err := json.Marshal(canonicalRoot{SchemaVersion: version, BoardPolicy: block})
+	root := canonicalRoot{SchemaVersion: version, BoardPolicy: block}
+	if p.taskBoardDeclared {
+		taskBoard := &canonicalTaskBoard{}
+		if p.zoneSkills != nil {
+			skills := make(map[string]string, len(p.zoneSkills))
+			for zone, skill := range p.zoneSkills {
+				skills[zone] = skill
+			}
+			taskBoard.ZoneSkills = &skills
+		}
+		root.TaskBoard = taskBoard
+	}
+	raw, err := json.Marshal(root)
 	if err != nil {
 		return nil, err
 	}

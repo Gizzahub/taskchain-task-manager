@@ -48,8 +48,9 @@ type StateCandidate struct {
 	BlockedBy             []string `json:"blockedBy"`
 }
 
-// StateResult is the handoff envelope. Skill is empty until a board policy
-// declares a zone-skill mapping; callers omit the key when it is empty.
+// StateResult is the handoff envelope. Skill comes from task-board.zone-skills
+// when that map names the action zone. An absent map leaves Skill empty so
+// callers omit the key.
 type StateResult struct {
 	Action     string           `json:"action"`
 	Zone       string           `json:"zone"`
@@ -65,6 +66,10 @@ func SelectState(root, action string, selected []string) (*StateResult, error) {
 	zone, ok := stateZone[action]
 	if !ok {
 		return nil, fmt.Errorf("unknown state action %q", action)
+	}
+	skills, err := loadHandoffSkills(root)
+	if err != nil {
+		return nil, err
 	}
 	if err := readableTasksDir(root); err != nil {
 		return nil, err
@@ -89,6 +94,7 @@ func SelectState(root, action string, selected []string) (*StateResult, error) {
 	result := &StateResult{
 		Action:     action,
 		Zone:       zone,
+		Skill:      skills[zone],
 		Status:     "selection-required",
 		Candidates: []StateCandidate{},
 		NextAction: "Choose only an eligible card in the stated zone; do not infer authority from a score.",

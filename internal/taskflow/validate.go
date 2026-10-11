@@ -115,10 +115,12 @@ func validateCard(ctx context.Context, root, tasksDir string, card *Card, index 
 		validateCanonicalWorkTask(&result, fields, body)
 	case canonicalPlan:
 		validateCanonicalPlan(&result, fields, body)
-	case canonicalIssue, canonicalBacklog:
-		// The issue and backlog schemas are not exercised by any pinned
-		// fixture and are deliberate divergences of this port; a card whose
-		// id or zone names those kinds still gets every shared check.
+	case canonicalIssue:
+		// Issue cards keep the shared checks. discovered-in is the only
+		// extra diagnosis; criterion checks stay on work cards.
+		validateIssueDiscoveredIn(&result, fields)
+	case canonicalBacklog:
+		// Backlog cards keep the shared checks and the current criterion path.
 	}
 
 	warnPlaceholderFields(&result, fields)
@@ -383,6 +385,16 @@ func warnMalformedVerifyBindings(result *ValidationResult, section string) {
 }
 
 const truncationHint = "a | verify: command looks truncated by an unclosed code fence"
+
+// validateIssueDiscoveredIn diagnoses an absent or empty discovered-in.
+// A non-empty reference is accepted as the caller wrote it. Criterion
+// findings are not produced here.
+func validateIssueDiscoveredIn(result *ValidationResult, fields map[string]yaml.Node) {
+	value, ok := scalarField(fields, "discovered-in")
+	if !ok || value == "" {
+		result.Warnings = append(result.Warnings, Finding{"discovered-in", "discovered-in is an empty placeholder"})
+	}
+}
 
 // warnPlaceholderFields warns on scalar frontmatter values still carrying the
 // scaffold's `<...>` placeholder shape.
