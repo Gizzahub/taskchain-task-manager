@@ -57,9 +57,12 @@ type PreflightCardReadiness struct {
 	Zone     string
 	Title    string
 	Priority string
-	Runnable bool
-	Blocking []string
-	Advisory []string
+	// RawPriority is the frontmatter token as written. Text rendering uses it;
+	// JSON keeps the display label in Priority.
+	RawPriority string
+	Runnable    bool
+	Blocking    []string
+	Advisory    []string
 	// Criteria and Bound are the counts the blocking verdict derives from,
 	// reported so a caller can see the ratio rather than trust the label.
 	Criteria int
@@ -309,11 +312,12 @@ func preflightCountCriteriaBindings(body string, criteria []Criterion) (n, bound
 // advisory, but criteria bindings and exec tier belong to work cards only.
 func preflightCheckCard(card *Card, zone string, maxCardBytes int) PreflightCardReadiness {
 	readiness := PreflightCardReadiness{
-		Path:     card.RepoRel(),
-		Zone:     zone,
-		Title:    card.Title,
-		Priority: card.Priority,
-		Bytes:    len(card.Raw),
+		Path:        card.RepoRel(),
+		Zone:        zone,
+		Title:       card.Title,
+		Priority:    card.Priority,
+		RawPriority: strings.TrimSpace(card.Frontmatter["priority"]),
+		Bytes:       len(card.Raw),
 	}
 	if card.Zone != "" {
 		readiness.Zone = card.Zone

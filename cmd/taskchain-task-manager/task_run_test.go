@@ -46,7 +46,7 @@ func TestRunCommandHelpAndRefusals(t *testing.T) {
 		{"list positional", []string{"run-list", "sample-task"}, 1, "Error: unexpected argument sample-task\n"},
 		{"status extra", []string{"run-status", "one", "two"}, 1, "Error: unexpected argument two\n"},
 		{"status flag", []string{"run-status", "--bogus"}, 1, "Error: unknown flag --bogus (valid: --json, --help, -h)\n"},
-		{"unknown command", []string{"run-missing"}, 2, "Error: unknown task command \"run-missing\" (valid: list, new, move, archive, validate, lint, preflight, gate, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list)\n"},
+		{"unknown command", []string{"run-missing"}, 2, "Error: unknown task command \"run-missing\" (valid: list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list)\n"},
 	}
 	for _, refusal := range refusals {
 		t.Run(refusal.name, func(t *testing.T) {

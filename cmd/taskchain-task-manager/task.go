@@ -17,11 +17,11 @@ import (
 // taskUsage is the noun's one-line contract, shown when the noun itself is
 // mistyped. Per-subcommand misuse is reported by the subcommand, at the exit
 // code the pinned reference gives that subcommand's own refusals.
-const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate|lint|preflight|gate|board|recommend|promote|issue-promote|plan-promote|backlog-promote|todo-run|doing-resume|review-run|blocked-recover|done-finalize|run-doctor|run-start|run-status|run-list> ..."
+const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate|lint|preflight|gate|review-receipt|doctor|board|recommend|promote|issue-promote|plan-promote|backlog-promote|todo-run|doing-resume|review-run|blocked-recover|done-finalize|run-doctor|run-start|run-status|run-list> ..."
 
 // taskCommandList is the unknown-command diagnostic. It names every command
 // this noun dispatches, in the same order as taskUsage.
-const taskCommandList = "list, new, move, archive, validate, lint, preflight, gate, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list"
+const taskCommandList = "list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list"
 
 // runTask dispatches the CE-parity `task` noun. The pinned reference splits
 // its refusals two ways, and the split is preserved here: what the caller
@@ -39,23 +39,26 @@ func runTask(args []string, out, errOut io.Writer) int {
 	}
 	// TASKS_DIR redirects the whole noun at another corpus; an absolute value
 	// is refused once here so no subcommand can silently read an empty board.
-	if _, err := taskflow.ResolveTasksDir(); err != nil {
-		fmt.Fprintln(errOut, "Error: "+err.Error())
-		return 2
+	// validate --staged reads the Git index and ignores TASKS_DIR.
+	if !validateStagedIgnoresTasksDir(args) {
+		if _, err := taskflow.ResolveTasksDir(); err != nil {
+			fmt.Fprintln(errOut, "Error: "+err.Error())
+			return 2
+		}
 	}
 	ctx := context.Background()
 	var err error
 	switch args[0] {
 	case "list":
-		err = taskList(ctx, args[1:], out)
+		err = taskList(args[1:], out)
 	case "new":
 		err = taskNew(ctx, args[1:], out)
 	case "move":
 		err = taskMove(ctx, args[1:], out)
 	case "archive":
-		err = taskArchive(ctx, args[1:], out)
+		err = taskArchive(args[1:], out)
 	case "validate":
-		err = taskValidate(ctx, args[1:], out)
+		err = taskValidate(ctx, args[1:], out, errOut)
 	case "lint":
 		err = taskLint(ctx, args[1:], out)
 	case "preflight":
@@ -95,6 +98,10 @@ func runTask(args []string, out, errOut io.Writer) int {
 		err = taskRunStatus(args[1:], out)
 	case "run-list":
 		err = taskRunList(args[1:], out)
+	case "review-receipt":
+		err = taskReviewReceipt(args[1:], out)
+	case "doctor":
+		err = taskDoctor(ctx, args[1:], out)
 	default:
 		fmt.Fprintf(errOut, "Error: unknown task command %q (valid: %s)\n", args[0], taskCommandList)
 		return 2
@@ -121,30 +128,18 @@ func usagef(format string, args ...any) *taskUsageError {
 	return &taskUsageError{err: fmt.Errorf(format, args...)}
 }
 
-func taskList(ctx context.Context, args []string, out io.Writer) error {
-	asJSON := false
-	for _, arg := range args {
-		switch arg {
-		case "--json":
-			asJSON = true
-		case "--help", "-h":
-			fmt.Fprintln(out, taskUsage)
-			return nil
-		default:
-			// The reference list also takes --status/--priority/--category/
-			// --kind/--state/--summary; those filters are outside this bundle's
-			// contract and are refused rather than half-implemented.
-			return fmt.Errorf("unknown argument: %s (this port takes only --json)", arg)
+// validateStagedIgnoresTasksDir reports whether this invocation is
+// `task validate --staged`, the one mode that does not read TASKS_DIR.
+func validateStagedIgnoresTasksDir(args []string) bool {
+	if len(args) == 0 || args[0] != "validate" {
+		return false
+	}
+	for _, arg := range args[1:] {
+		if arg == "--staged" {
+			return true
 		}
 	}
-	root, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("get working directory: %w", err)
-	}
-	if asJSON {
-		return taskflow.ListJSON(out, root)
-	}
-	return taskflow.ListText(out, root)
+	return false
 }
 
 func taskNew(ctx context.Context, args []string, out io.Writer) error {
@@ -373,100 +368,6 @@ func taskMove(ctx context.Context, args []string, out io.Writer) error {
 	}
 	printTaskLinkUpdate(out, "   ", links)
 	return nil
-}
-
-func taskArchive(ctx context.Context, args []string, out io.Writer) error {
-	force := false
-	var positional []string
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch arg {
-		case "--help", "-h":
-			fmt.Fprintln(out, taskUsage)
-			return nil
-		case "--force":
-			force = true
-		case "--":
-			positional = append(positional, args[i+1:]...)
-			i = len(args)
-		default:
-			if strings.HasPrefix(arg, "-") {
-				return fmt.Errorf("unknown flag: %s (valid: --force, --help, -h)", arg)
-			}
-			positional = append(positional, arg)
-		}
-	}
-	if len(positional) == 0 {
-		return errors.New("task archive takes one path")
-	}
-	if len(positional) > 1 {
-		return fmt.Errorf("unexpected argument: %s (task archive takes one path)", positional[1])
-	}
-	taskFile := positional[0]
-	root, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("get working directory: %w", err)
-	}
-
-	fmt.Fprintln(out, "📦 Archiving task...")
-
-	// Gates before any write, mirroring the pinned archiver: a skip names why
-	// nothing happened, and --force is the only way past one.
-	card, err := taskflow.ReadCard(root, cardTasksRel(root, taskFile))
-	if err != nil {
-		return fmt.Errorf("archive failed: %s", archiveReadNote(root, taskFile, err))
-	}
-	// TODO(validation-gate bundle): the plan and issue branches gate on
-	// completion facts those card kinds own (remaining children, resolution);
-	// card-core pins only the work-card gates below.
-	if card.Status != taskflow.StatusDone && !force {
-		return errors.New("Task is not marked as done\nUse --force to archive anyway")
-	}
-	if !force {
-		if note := qualityReviewNote(card); note != "" {
-			return fmt.Errorf("%s\nUse --force to archive anyway", note)
-		}
-	}
-
-	newRel, links, err := taskflow.ArchiveCard(root, taskFile)
-	if err != nil {
-		return fmt.Errorf("archive failed: %s", err)
-	}
-	fmt.Fprintf(out, "✅ Archived: %s → %s\n", taskFile, filepath.Join(taskflow.TasksDirName(), newRel))
-	printTaskLinkUpdate(out, "   ", links)
-	return nil
-}
-
-// archiveReadNote separates "the file is not there" from "the file is
-// unreadable": the first is the caller's typo, the second is a board problem.
-func archiveReadNote(root, taskFile string, err error) string {
-	if _, statErr := os.Stat(filepath.Join(root, taskFile)); statErr != nil {
-		return "file not found: " + filepath.Join(root, taskFile)
-	}
-	return err.Error()
-}
-
-// qualityReviewNote applies the archive's completion gate: an accepted verdict
-// is pass, conditional, or waived, and every accepted verdict carries evidence.
-// It returns "" when the card may proceed.
-func qualityReviewNote(card *taskflow.Card) string {
-	verdict := strings.TrimSpace(card.Frontmatter["quality-review"])
-	evidence := strings.TrimSpace(card.Frontmatter["quality-review-evidence"])
-	approved := verdict == "pass" || verdict == "conditional"
-	waived := verdict == "waived"
-	if (approved || waived) && evidence != "" {
-		return ""
-	}
-	switch {
-	case verdict == "":
-		return "quality-review missing (need pass|conditional|waived before archive)"
-	case waived:
-		return "quality-review=waived without quality-review-evidence (evidence is what makes waived a verdict, not a bypass)"
-	case approved:
-		return fmt.Sprintf("quality-review=%s without quality-review-evidence", verdict)
-	default:
-		return fmt.Sprintf("quality-review=%q (need pass|conditional|waived before archive)", verdict)
-	}
 }
 
 // cardTasksRel normalizes the caller's path to its tasks-relative form so the

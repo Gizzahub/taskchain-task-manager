@@ -154,7 +154,7 @@ func renderPreflightRunnable(w io.Writer, report *PreflightReport) {
 			fmt.Fprintf(w, "  ... and %d more runnable card(s) not listed\n", report.Runnable-shown)
 			break
 		}
-		priority := card.Priority
+		priority := card.RawPriority
 		if priority == "" {
 			priority = "--"
 		}
