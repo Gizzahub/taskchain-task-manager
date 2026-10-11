@@ -3,6 +3,8 @@ package taskflow
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -17,7 +19,15 @@ type Admission struct {
 	Unsupported        int
 	Unavailable        int
 	Passing            []string
+	Errors             []Finding
+	Warnings           []Finding
 }
+
+const (
+	admissionShellWarning       = "Criterion was not executed because its verify binding requires shell syntax: "
+	admissionUnsupportedWarning = "Criterion was not executed because its verify command is unsupported: "
+	admissionOperandWarning     = "Criterion was not executed because its operands are not contained by the selected tree: "
+)
 
 // Status is the compact completeness word.
 func (r Admission) Status() string {
@@ -56,8 +66,10 @@ func (r Admission) merge(one Admission) Admission {
 }
 
 // AdmitCriteria classifies unchecked verify commands against probeDir.
-// Cards outside the todo zone have nothing to admit.
-func AdmitCriteria(ctx context.Context, probeDir, zone, tree string, criteria []Criterion) Admission {
+// Cards outside the todo zone have nothing to admit. selected is a --base
+// snapshot: operands that leave that tree are unavailable, and a criterion
+// that already passes names the snapshot.
+func AdmitCriteria(ctx context.Context, probeDir, zone, tree string, selected bool, criteria []Criterion) Admission {
 	report := Admission{Tree: tree}
 	if zone != StatusPending.Dir() {
 		return report
@@ -67,25 +79,53 @@ func AdmitCriteria(ctx context.Context, probeDir, zone, tree string, criteria []
 			continue
 		}
 		report.Eligible++
-		command := criterion.Command
-		if strings.ContainsAny(command, ";|") {
+		text := strings.TrimSpace(criterion.Text)
+		if compoundProbe(criterion.Command) {
 			report.UnexecutedCompound++
+			report.Warnings = append(report.Warnings, Finding{"criterion_admission", admissionShellWarning + text})
 			continue
 		}
-		if err := classifyProbe(command); err != nil {
+		argv, negated, err := parseAdmittedProbe(criterion.Command)
+		if err != nil {
 			report.Unsupported++
+			report.Warnings = append(report.Warnings, Finding{"criterion_admission", admissionUnsupportedWarning + text})
 			continue
 		}
-		passed, executable, err := execProbe(ctx, probeDir, command)
-		if err != nil || !executable {
+		if !selected {
+			if _, err := os.Lstat(filepath.Join(probeDir, ".git")); err != nil {
+				report.Unavailable++
+				continue
+			}
+		} else if !snapshotProbeAllowed(probeDir, argv) {
+			report.Unavailable++
+			report.Warnings = append(report.Warnings, Finding{"criterion_admission", admissionOperandWarning + text})
+			continue
+		}
+		if selected && len(argv) > 0 && argv[0] == "rg" {
+			argv = append([]string{"rg", "--no-config"}, argv[1:]...)
+		}
+		exitZero, err := runAdmittedProbe(ctx, probeDir, argv, selected)
+		if err != nil {
 			report.Unavailable++
 			continue
 		}
 		report.Examined++
-		if passed {
-			report.AlreadyPassing++
-			report.Passing = append(report.Passing, criterion.Text)
+		if negated {
+			exitZero = !exitZero
 		}
+		if !exitZero {
+			continue
+		}
+		report.AlreadyPassing++
+		report.Passing = append(report.Passing, criterion.Text)
+		report.Errors = append(report.Errors, Finding{"vacuous_criterion", vacuousMessage(selected, tree, text)})
 	}
 	return report
+}
+
+func vacuousMessage(selected bool, tree, text string) string {
+	if selected {
+		return fmt.Sprintf("Criterion already passes on the selected tree (%s), so completing this card would prove nothing: %s", tree, text)
+	}
+	return fmt.Sprintf("Criterion already passes on the current tree, so completing this card would prove nothing: %s", text)
 }

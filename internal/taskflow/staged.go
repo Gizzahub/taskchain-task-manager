@@ -115,8 +115,9 @@ func ValidateStaged(ctx context.Context, snapshot string) (findings, warnings []
 	return findings, warnings, nil
 }
 
-// RenderStaged writes the text or JSON staged report. jsonOut replaces the
-// tool stamp with one object.
+// RenderStaged writes the text or JSON staged report. The text tool stamp is
+// printed by the caller before validation, so a dialect error still shows it.
+// jsonOut is one object and has no stamp line.
 func RenderStaged(w io.Writer, findings, warnings []StagedItem, jsonOut bool) error {
 	if findings == nil {
 		findings = []StagedItem{}
@@ -140,7 +141,6 @@ func RenderStaged(w io.Writer, findings, warnings []StagedItem, jsonOut bool) er
 		fmt.Fprintln(w, string(data))
 		return nil
 	}
-	fmt.Fprintln(w, ReferenceStamp)
 	if len(findings) == 0 {
 		fmt.Fprintln(w, "Staged task snapshot: valid")
 	}

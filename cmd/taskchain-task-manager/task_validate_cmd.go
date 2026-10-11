@@ -41,6 +41,7 @@ func taskValidate(ctx context.Context, args []string, out, errOut io.Writer) err
 	if opts.all {
 		return taskValidateAll(ctx, out, root, tasksDir, opts.requireCards)
 	}
+	fmt.Fprintln(out, taskflow.ReferenceStamp)
 	if err := taskflow.CheckConfigYAML(root); err != nil {
 		return usagef("%s", err.Error())
 	}
@@ -49,7 +50,6 @@ func taskValidate(ctx context.Context, args []string, out, errOut io.Writer) err
 		return usagef("%s", err.Error())
 	}
 	defer tree.Cleanup(errOut)
-	fmt.Fprintln(out, taskflow.ReferenceStamp)
 	fmt.Fprintf(out, "Criterion tree: %s\n", tree.Description)
 	invalid, firstErrors, err := taskflow.ValidateNamed(ctx, out, root, tasksDir, opts.files, tree)
 	if err != nil {
@@ -101,6 +101,9 @@ func taskValidateStaged(ctx context.Context, jsonOut bool, out, errOut io.Writer
 			fmt.Fprintf(errOut, "warning: remove staged task snapshot: %v\n", removeErr)
 		}
 	}()
+	if !jsonOut {
+		fmt.Fprintln(out, taskflow.ReferenceStamp)
+	}
 	findings, warnings, err := taskflow.ValidateStaged(ctx, snapshot)
 	if err != nil {
 		return usagef("%s", err.Error())

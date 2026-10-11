@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -33,9 +31,11 @@ func CheckConfigYAML(root string) error {
 }
 
 // CriterionTree is the probe root named validation admits criteria against.
+// Selected is true for a --base snapshot. The work tree leaves it false.
 type CriterionTree struct {
 	Description string
 	ProbeDir    string
+	Selected    bool
 	cleanup     string
 }
 
@@ -47,62 +47,6 @@ func (t CriterionTree) Cleanup(errOut io.Writer) {
 	if err := os.RemoveAll(t.cleanup); err != nil && errOut != nil {
 		fmt.Fprintf(errOut, "warning: remove criterion snapshot: %v\n", err)
 	}
-}
-
-// SelectCriterionTree resolves --base to a tracked snapshot, or describes the
-// mutable work tree. base empty selects the work tree. The snapshot is only
-// for criterion probes; cards are still read from root.
-func SelectCriterionTree(ctx context.Context, root, base string) (CriterionTree, error) {
-	abs, err := filepath.Abs(root)
-	if err != nil {
-		abs = root
-	}
-	if strings.TrimSpace(base) == "" {
-		desc := fmt.Sprintf("current tree %s (HEAD unavailable; mutable working tree)", abs)
-		probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		head, err := gitOutput(probeCtx, abs, "--no-replace-objects", "--no-lazy-fetch", "rev-parse", "--verify", "HEAD^{commit}")
-		if err == nil && head != "" {
-			desc = fmt.Sprintf("current tree %s (HEAD %s; mutable working tree)", abs, strings.TrimSpace(head))
-		}
-		return CriterionTree{Description: desc, ProbeDir: abs}, nil
-	}
-	probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	sha, err := gitOutput(probeCtx, abs, "rev-parse", "--verify", strings.TrimSpace(base)+"^{commit}")
-	if err != nil {
-		return CriterionTree{}, fmt.Errorf("criterion base unavailable: %w", err)
-	}
-	sha = strings.TrimSpace(sha)
-	dir := filepath.Join(abs, "build", "tmp", "criterion-snapshots", sha)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return CriterionTree{}, fmt.Errorf("criterion base unavailable: %w", err)
-	}
-	archive := exec.CommandContext(probeCtx, "git", "-C", abs, "archive", "--format=tar", sha)
-	tar := exec.CommandContext(probeCtx, "tar", "-x", "-C", dir)
-	tar.Stdin, err = archive.StdoutPipe()
-	if err != nil {
-		_ = os.RemoveAll(dir)
-		return CriterionTree{}, fmt.Errorf("criterion base unavailable: %w", err)
-	}
-	if err := tar.Start(); err != nil {
-		_ = os.RemoveAll(dir)
-		return CriterionTree{}, fmt.Errorf("criterion base unavailable: %w", err)
-	}
-	if err := archive.Run(); err != nil {
-		_ = tar.Wait()
-		_ = os.RemoveAll(dir)
-		return CriterionTree{}, fmt.Errorf("criterion base unavailable: %w", err)
-	}
-	if err := tar.Wait(); err != nil {
-		_ = os.RemoveAll(dir)
-		return CriterionTree{}, fmt.Errorf("criterion base unavailable: %w", err)
-	}
-	return CriterionTree{
-		Description: fmt.Sprintf("commit %s (tracked snapshot; repository %s)", sha, abs),
-		ProbeDir:    dir,
-		cleanup:     dir,
-	}, nil
 }
 
 // ValidateNamed validates each named card, prints admission, and returns how
@@ -124,8 +68,8 @@ func ValidateNamed(ctx context.Context, w io.Writer, root, tasksDir string, file
 		} else {
 			result = validateCard(ctx, root, tasksDir, card, index, &citations)
 		}
-		admission := AdmitCriteria(ctx, tree.ProbeDir, card.Zone, tree.Description, card.Criteria())
-		replaceVacuous(&result, admission.Passing)
+		admission := AdmitCriteria(ctx, tree.ProbeDir, card.Zone, tree.Description, tree.Selected, card.Criteria())
+		applyAdmission(&result, admission)
 		writeNamedResult(w, result, admission)
 		fmt.Fprintln(w)
 		if i == 0 {
@@ -164,18 +108,19 @@ func readNamedCard(root, tasksDir, file string) (*Card, error) {
 	return ParseCard(tasksRel, raw), nil
 }
 
-func replaceVacuous(result *ValidationResult, passing []string) {
-	kept := make([]Finding, 0, len(result.Errors))
+// applyAdmission drops the work-tree vacuous findings validateCard already
+// recorded and installs the admission probe's own errors and warnings. The
+// probe tree may be a --base snapshot, whose message must name that snapshot.
+func applyAdmission(result *ValidationResult, admission Admission) {
+	kept := make([]Finding, 0, len(result.Errors)+len(admission.Errors))
 	for _, finding := range result.Errors {
 		if finding.Field == "verify" && strings.Contains(finding.Message, "Criterion already passes") {
 			continue
 		}
 		kept = append(kept, finding)
 	}
-	for _, text := range passing {
-		kept = append(kept, Finding{"verify", fmt.Sprintf("Criterion already passes on the current tree, so completing this card would prove nothing: %s", text)})
-	}
-	result.Errors = kept
+	result.Errors = append(kept, admission.Errors...)
+	result.Warnings = append(result.Warnings, admission.Warnings...)
 }
 
 func writeNamedResult(w io.Writer, result ValidationResult, admission Admission) {
