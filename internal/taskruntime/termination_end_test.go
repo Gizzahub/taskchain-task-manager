@@ -98,6 +98,69 @@ func TestRecoverRefusesTheWrongCallerAndOutcome(t *testing.T) {
 	}
 }
 
+func TestRecoverRefusesTaskHeadOutsideCurrentSource(t *testing.T) {
+	w := newEndWorld(t)
+	if err := newStateStore(w.common).appendReceipt(partialReceipt(w.execution, w.execution.StartedAt)); err != nil {
+		t.Fatal(err)
+	}
+	executions, receipts := w.executions(), w.receipts()
+	// containedExit is the fake git result for merge-base --is-ancestor <ancestor> <descendant>.
+	w.containedExit = 1
+
+	const want = "partial cleanup recovery is not proven: recorded task head is not contained in the current source"
+	refused, code := w.service().Recover(context.Background(), "sample-task")
+	if code != 1 || refused.Status != StatusBlocked || refused.Reason != want {
+		t.Fatalf("code=%d status=%s reason=%q", code, refused.Status, refused.Reason)
+	}
+	if w.executions() != executions || w.receipts() != receipts {
+		t.Fatal("refused recover changed executions.json or receipts.jsonl")
+	}
+	again, againCode := w.service().Recover(context.Background(), "sample-task")
+	if againCode != 1 || again.Status != StatusBlocked || again.Reason != want || strings.Contains(again.Reason, "already DONE") {
+		t.Fatalf("later recover code=%d status=%s reason=%q", againCode, again.Status, again.Reason)
+	}
+	if w.executions() != executions || w.receipts() != receipts {
+		t.Fatal("second refusal changed executions.json or receipts.jsonl")
+	}
+
+	w.containedExit = 0
+	recovered, recoverCode := w.service().Recover(context.Background(), "sample-task")
+	if recoverCode != 0 || recovered.Status != StatusDone || recovered.Receipt == nil || recovered.Receipt.Operation != "recover" {
+		t.Fatalf("contained code=%d status=%s reason=%q", recoverCode, recovered.Status, recovered.Reason)
+	}
+	if strings.Contains(recovered.Reason, "already DONE") || !strings.HasPrefix(recovered.Reason, "integration confirmed after partial provider cleanup; residual ") {
+		t.Fatalf("contained reason=%q", recovered.Reason)
+	}
+	if recovered.Receipt.TaskHead != oidTask || recovered.Receipt.SourceHead != w.sourceTip || !recovered.Receipt.SourcePushed {
+		t.Fatalf("receipt=%+v", recovered.Receipt)
+	}
+	wantArgs := [][]string{
+		{"rev-parse", "--verify", sourceTrackingRef("master")},
+		{"merge-base", "--is-ancestor", oidTask, w.sourceTip},
+		{"show-ref", "--verify", "--quiet", "refs/heads/master"},
+	}
+	var gitArgs []CommandDiagnostic
+	for _, item := range recovered.Receipt.Diagnostics {
+		if item.Command == "git" {
+			gitArgs = append(gitArgs, item)
+		}
+	}
+	if len(gitArgs) < len(wantArgs) {
+		t.Fatalf("git probes = %+v", gitArgs)
+	}
+	for i, want := range wantArgs {
+		if !sameArgs(gitArgs[i].Args, want...) || (i == 1 && gitArgs[i].ExitCode != 0) {
+			t.Fatalf("probe %d = %+v", i, gitArgs[i])
+		}
+	}
+	if w.executions() != executions {
+		t.Fatal("successful recover rewrote executions.json")
+	}
+	if w.receipts() == receipts {
+		t.Fatal("contained recover appended no receipt")
+	}
+}
+
 func TestCloseAdministratorRules(t *testing.T) {
 	w := newEndWorld(t)
 	_ = os.RemoveAll(w.worktree)

@@ -85,6 +85,10 @@ func (s *Service) recoveryReceipt(ctx context.Context, execution Execution, prev
 		return recorded, fmt.Errorf("resolve current source head")
 	}
 	recorded.SourceHead = strings.TrimSpace(source.Stdout)
+	contained, err := probe("merge-base", "--is-ancestor", previous.TaskHead, recorded.SourceHead)
+	if err != nil || contained.ExitCode != 0 {
+		return recorded, fmt.Errorf("recorded task head is not contained in the current source")
+	}
 	pushed, err := sourceIsPushed(func(_ string, args ...string) (CommandResult, error) { return probe(args...) }, s.root, execution.Source)
 	if err != nil || !pushed {
 		return recorded, fmt.Errorf("current source branch is not pushed")
