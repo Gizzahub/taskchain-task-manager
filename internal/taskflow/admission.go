@@ -27,6 +27,10 @@ const (
 	admissionShellWarning       = "Criterion was not executed because its verify binding requires shell syntax: "
 	admissionUnsupportedWarning = "Criterion was not executed because its verify command is unsupported: "
 	admissionOperandWarning     = "Criterion was not executed because its operands are not contained by the selected tree: "
+	// admissionSnapshotWarning is the criterion_admission warning for a
+	// resolved --base whose content the spec calls unavailable: a submodule,
+	// or an absolute, empty, cyclic, or escaping symlink.
+	admissionSnapshotWarning = "Criterion was not executed because the selected tree is unavailable: "
 )
 
 // Status is the compact completeness word.
@@ -68,8 +72,9 @@ func (r Admission) merge(one Admission) Admission {
 // AdmitCriteria classifies unchecked verify commands against probeDir.
 // Cards outside the todo zone have nothing to admit. selected is a --base
 // snapshot: operands that leave that tree are unavailable, and a criterion
-// that already passes names the snapshot.
-func AdmitCriteria(ctx context.Context, probeDir, zone, tree string, selected bool, criteria []Criterion) Admission {
+// that already passes names the snapshot. refusal is a snapshot the spec
+// calls unavailable; no verify command runs in that case.
+func AdmitCriteria(ctx context.Context, probeDir, zone, tree string, selected bool, refusal string, criteria []Criterion) Admission {
 	report := Admission{Tree: tree}
 	if zone != StatusPending.Dir() {
 		return report
@@ -80,6 +85,11 @@ func AdmitCriteria(ctx context.Context, probeDir, zone, tree string, selected bo
 		}
 		report.Eligible++
 		text := strings.TrimSpace(criterion.Text)
+		if refusal != "" {
+			report.Unavailable++
+			report.Warnings = append(report.Warnings, Finding{"criterion_admission", admissionSnapshotWarning + refusal + ": " + text})
+			continue
+		}
 		if compoundProbe(criterion.Command) {
 			report.UnexecutedCompound++
 			report.Warnings = append(report.Warnings, Finding{"criterion_admission", admissionShellWarning + text})

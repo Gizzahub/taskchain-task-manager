@@ -28,7 +28,7 @@ func validateCriterionLinks(entries []snapshotEntry) error {
 
 func resolveCriterionLink(link string, links map[string]string, seen map[string]bool) (string, error) {
 	if seen[link] {
-		return "", fmt.Errorf("symlink cycle")
+		return "", refuseSymlink("symlink cycle")
 	}
 	if len(seen) >= criterionSymlinkDepthLimit {
 		return "", fmt.Errorf("symlink chain exceeds %d links", criterionSymlinkDepthLimit)
@@ -37,10 +37,10 @@ func resolveCriterionLink(link string, links map[string]string, seen map[string]
 	defer delete(seen, link)
 	target, ok := links[link]
 	if !ok {
-		return "", fmt.Errorf("symlink cycle")
+		return "", refuseSymlink("symlink cycle")
 	}
 	if target == "" || path.IsAbs(target) || filepath.IsAbs(target) || strings.Contains(target, "\\") {
-		return "", fmt.Errorf("absolute or empty target")
+		return "", refuseSymlink("absolute or empty target")
 	}
 	segments := criterionPathSegments(path.Dir(link))
 	for _, segment := range strings.Split(target, "/") {
@@ -49,7 +49,7 @@ func resolveCriterionLink(link string, links map[string]string, seen map[string]
 			continue
 		case "..":
 			if len(segments) == 0 {
-				return "", fmt.Errorf("target %q escapes snapshot", target)
+				return "", refuseSymlink(fmt.Sprintf("target %q escapes snapshot", target))
 			}
 			segments = segments[:len(segments)-1]
 		default:
@@ -106,7 +106,7 @@ func verifySnapshotLinks(dir string, entries []snapshotEntry) error {
 			continue
 		}
 		if !snapshotPathAllowed(dir, entry.path) {
-			return fmt.Errorf("criterion symlink %q: target %q escapes snapshot", entry.path, entry.link)
+			return refuseSymlink(fmt.Sprintf("criterion symlink %q: target %q escapes snapshot", entry.path, entry.link))
 		}
 	}
 	return nil

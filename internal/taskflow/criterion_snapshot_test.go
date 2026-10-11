@@ -166,9 +166,13 @@ func TestSnapshotRefusesEscapingSymlink(t *testing.T) {
 	gitAt(t, root, "config", "core.symlinks", "true")
 	gitAt(t, root, "add", "-A")
 	gitAt(t, root, "commit", "-qm", "link")
-	_, err := SelectCriterionTree(context.Background(), root, "HEAD")
-	if err == nil || !strings.Contains(err.Error(), "criterion base unavailable") || !strings.Contains(err.Error(), "escapes") {
+	tree, err := SelectCriterionTree(context.Background(), root, "HEAD")
+	if err != nil {
 		t.Fatal(err)
+	}
+	t.Cleanup(func() { tree.Cleanup(io.Discard) })
+	if !tree.Selected || tree.ProbeDir != "" || tree.Refusal != snapshotSymlinkRefusal || !strings.Contains(tree.Description, "tracked snapshot") {
+		t.Fatalf("%#v", tree)
 	}
 	left, globErr := filepath.Glob(filepath.Join(root, "build", "tmp", "criterion-snapshots", "criterion-*"))
 	if globErr != nil {
@@ -176,6 +180,44 @@ func TestSnapshotRefusesEscapingSymlink(t *testing.T) {
 	}
 	if len(left) != 0 {
 		t.Fatalf("snapshot left behind: %v", left)
+	}
+	side := filepath.Join(root, "probe-side-effect.txt")
+	report := AdmitCriteria(context.Background(), root, "todo", tree.Description, tree.Selected, tree.Refusal, []Criterion{{
+		Text: "side effect", Command: "find . -fls probe-side-effect.txt",
+	}})
+	if report.Status() != "unavailable" || report.Unavailable != 1 || report.Examined != 0 || report.AlreadyPassing != 0 {
+		t.Fatalf("%#v", report)
+	}
+	if len(report.Warnings) != 1 || report.Warnings[0].Field != "criterion_admission" || !strings.Contains(report.Warnings[0].Message, snapshotSymlinkRefusal) {
+		t.Fatalf("warnings %#v", report.Warnings)
+	}
+	if _, statErr := os.Stat(side); !os.IsNotExist(statErr) {
+		t.Fatalf("refused snapshot still probed: %v", statErr)
+	}
+}
+
+func TestSnapshotSubmoduleIsAdmissionUnavailable(t *testing.T) {
+	root := t.TempDir()
+	gitInitForTest(t, root)
+	sha := strings.TrimSpace(gitAt(t, root, "rev-parse", "HEAD"))
+	gitAt(t, root, "update-index", "--add", "--cacheinfo", "160000,"+sha+",modules/child")
+	gitAt(t, root, "commit", "-qm", "gitlink")
+	tree, err := SelectCriterionTree(context.Background(), root, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tree.Selected || tree.ProbeDir != "" || tree.Refusal != snapshotSubmoduleRefusal {
+		t.Fatalf("%#v", tree)
+	}
+	side := filepath.Join(root, "probe-side-effect.txt")
+	report := AdmitCriteria(context.Background(), root, "todo", tree.Description, tree.Selected, tree.Refusal, []Criterion{{
+		Text: "side effect", Command: "find . -fprint probe-side-effect.txt",
+	}})
+	if report.Status() != "unavailable" || report.Examined != 0 || len(report.Warnings) != 1 || !strings.Contains(report.Warnings[0].Message, "submodule") {
+		t.Fatalf("%#v warnings %#v", report, report.Warnings)
+	}
+	if _, statErr := os.Stat(side); !os.IsNotExist(statErr) {
+		t.Fatalf("gitlink snapshot still probed: %v", statErr)
 	}
 }
 

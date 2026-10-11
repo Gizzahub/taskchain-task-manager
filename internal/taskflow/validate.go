@@ -64,7 +64,11 @@ var cardFilenameShapeRe = regexp.MustCompile(`^([0-9]{2,3}|P[0-9])-[a-z0-9]+(-[a
 // order. The order is load-bearing: findings render errors-then-warnings per
 // card, and the fixture contract pins the sequence within each list.
 
-func validateCard(ctx context.Context, root, tasksDir string, card *Card, index *corpusIndex, citations *Citations) ValidationResult {
+func validateCard(ctx context.Context, root, tasksDir string, card *Card, index *corpusIndex, citations *Citations, checks ...cardCheck) ValidationResult {
+	var check cardCheck
+	if len(checks) > 0 {
+		check = checks[0]
+	}
 	result := ValidationResult{Path: pathJoin(tasksDir, card.TasksRel)}
 	fields, body, detected, err := parseCanonicalDocument(string(card.Raw))
 	if !detected {
@@ -119,7 +123,11 @@ func validateCard(ctx context.Context, root, tasksDir string, card *Card, index 
 	warnPlaceholderFields(&result, fields)
 	validateDependencyFieldShapes(&result, fields)
 
-	reportVacuousCriteria(ctx, root, card, &result)
+	// skipVacuousProbe is the named and staged option. validate --all leaves
+	// the zero value, so this call stays the whole-board probe.
+	if !check.skipVacuousProbe {
+		reportVacuousCriteria(ctx, root, card, &result)
+	}
 
 	examined, skipped := countPathBindings(criterionLines(body))
 	citations.Examined += examined
@@ -450,7 +458,7 @@ func ValidateAll(ctx context.Context, root string) ([]ValidationResult, Citation
 // are validated by the decision schema, not the card schema, and the
 // decisions index corpus rule appends its synthetic README verdict when the
 // catalog drifts.
-func ValidateAllIn(ctx context.Context, root, tasksDir string) ([]ValidationResult, Citations, error) {
+func ValidateAllIn(ctx context.Context, root, tasksDir string, checks ...cardCheck) ([]ValidationResult, Citations, error) {
 	cards, err := FindCardsIn(root, tasksDir, true)
 	if err != nil {
 		return nil, Citations{}, err
@@ -463,7 +471,7 @@ func ValidateAllIn(ctx context.Context, root, tasksDir string) ([]ValidationResu
 			results = append(results, validateDecisionDocument(ctx, root, tasksDir, card))
 			continue
 		}
-		results = append(results, validateCard(ctx, root, tasksDir, card, index, &citations))
+		results = append(results, validateCard(ctx, root, tasksDir, card, index, &citations, checks...))
 	}
 	// Corpus-level plan-metadata findings fold into the cards they belong to.
 	reportInvalidPlanMetadata(buildPlanMetadataCensus(cards), results)

@@ -145,5 +145,5 @@ func admitRepo(t *testing.T) string {
 }
 
 func admitOne(dir string, selected bool, tree, command string) Admission {
-	return AdmitCriteria(context.Background(), dir, "todo", tree, selected, []Criterion{{Text: "criterion text", Command: command}})
+	return AdmitCriteria(context.Background(), dir, "todo", tree, selected, "", []Criterion{{Text: "criterion text", Command: command}})
 }

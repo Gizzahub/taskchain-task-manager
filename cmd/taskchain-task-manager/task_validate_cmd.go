@@ -45,6 +45,11 @@ func taskValidate(ctx context.Context, args []string, out, errOut io.Writer) err
 	if err := taskflow.CheckConfigYAML(root); err != nil {
 		return usagef("%s", err.Error())
 	}
+	// Flag present and blank is not "flag absent". An empty --base must not
+	// fall back to the work tree, and it must fail before any probe.
+	if opts.baseSet && strings.TrimSpace(opts.base) == "" {
+		return usagef("criterion base unavailable: --base is empty")
+	}
 	tree, err := taskflow.SelectCriterionTree(ctx, root, opts.base)
 	if err != nil {
 		return usagef("%s", err.Error())

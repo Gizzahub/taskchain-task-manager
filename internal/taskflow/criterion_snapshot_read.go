@@ -86,7 +86,7 @@ func parseSnapshotEntry(record []byte) (snapshotEntry, error) {
 	}
 	mode, kind, oid := string(fields[0]), string(fields[1]), string(fields[2])
 	if kind == "commit" || mode == "160000" {
-		return snapshotEntry{}, fmt.Errorf("criterion snapshot does not support submodule %q", string(name))
+		return snapshotEntry{}, refuseSubmodule(fmt.Sprintf("criterion snapshot does not support submodule %q", string(name)))
 	}
 	if kind != "blob" || (mode != "100644" && mode != "100755" && mode != "120000") {
 		return snapshotEntry{}, fmt.Errorf("criterion snapshot does not support tree entry %q (mode %s, type %s)", string(name), mode, kind)

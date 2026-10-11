@@ -96,7 +96,7 @@ func ValidateStaged(ctx context.Context, snapshot string) (findings, warnings []
 	if err := CheckConfigYAML(snapshot); err != nil {
 		return nil, nil, err
 	}
-	results, _, err := ValidateAllIn(ctx, snapshot, "tasks")
+	results, _, err := ValidateAllIn(ctx, snapshot, "tasks", cardCheck{skipVacuousProbe: true})
 	if err != nil {
 		return nil, nil, err
 	}

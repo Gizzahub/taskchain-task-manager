@@ -37,11 +37,11 @@ func TestAdmissionStatusAndCompound(t *testing.T) {
 		{Text: "compound", Command: "test -f a; test -f b"},
 		{Text: "unsupported", Command: "rm -rf x"},
 	}
-	report := AdmitCriteria(context.Background(), t.TempDir(), "todo", "tree", false, criteria)
+	report := AdmitCriteria(context.Background(), t.TempDir(), "todo", "tree", false, "", criteria)
 	if report.Status() != "incomplete" || report.Eligible != 2 || report.UnexecutedCompound != 1 || report.Unsupported != 1 {
 		t.Fatalf("%#v", report)
 	}
-	outside := AdmitCriteria(context.Background(), t.TempDir(), "doing", "tree", false, criteria)
+	outside := AdmitCriteria(context.Background(), t.TempDir(), "doing", "tree", false, "", criteria)
 	if outside.Status() != "not-applicable" || outside.Eligible != 0 {
 		t.Fatalf("%#v", outside)
 	}

@@ -3,6 +3,7 @@ package taskflow
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,46 @@ import (
 	"strings"
 	"time"
 )
+
+// Snapshot content the spec reports as admission unavailable, not as an
+// unmaterializable base. Other snapshot failures stay exit 2.
+const (
+	snapshotSubmoduleRefusal = "submodule"
+	snapshotSymlinkRefusal   = "absolute, empty, cyclic, or escaping symlink"
+)
+
+// snapshotContentError is a tree the snapshot refuses. detail keeps the
+// parser wording tests already pin; warning is the admission phrase.
+type snapshotContentError struct {
+	detail  string
+	warning string
+}
+
+func (e snapshotContentError) Error() string { return e.detail }
+
+func refuseSubmodule(detail string) error {
+	return snapshotContentError{detail: detail, warning: snapshotSubmoduleRefusal}
+}
+
+func refuseSymlink(detail string) error {
+	return snapshotContentError{detail: detail, warning: snapshotSymlinkRefusal}
+}
+
+func snapshotRefusalReason(err error) (string, bool) {
+	var content snapshotContentError
+	if err == nil || !errors.As(err, &content) || content.warning == "" {
+		return "", false
+	}
+	return content.warning, true
+}
+
+func refusedCriterionTree(sha, root, reason string) CriterionTree {
+	return CriterionTree{
+		Description: fmt.Sprintf("commit %s (tracked snapshot; repository %s)", sha, root),
+		Selected:    true,
+		Refusal:     reason,
+	}
+}
 
 const (
 	criterionSnapshotEntryLimit = 50_000
@@ -83,6 +124,9 @@ func materializeBaseSnapshot(ctx context.Context, root, base string) (tree Crite
 	}
 	entries, err := listSnapshotEntries(ctx, root, sha)
 	if err != nil {
+		if reason, ok := snapshotRefusalReason(err); ok {
+			return refusedCriterionTree(sha, root, reason), nil
+		}
 		return CriterionTree{}, err
 	}
 	baseDir, err := criterionSnapshotBase(root)
@@ -102,12 +146,20 @@ func materializeBaseSnapshot(ctx context.Context, root, base string) (tree Crite
 		return CriterionTree{}, err
 	}
 	if err = validateCriterionLinks(entries); err != nil {
+		if reason, ok := snapshotRefusalReason(err); ok {
+			_ = os.RemoveAll(dir)
+			return refusedCriterionTree(sha, root, reason), nil
+		}
 		return CriterionTree{}, err
 	}
 	if err = writeCriterionLinks(dir, entries); err != nil {
 		return CriterionTree{}, err
 	}
 	if err = verifySnapshotLinks(dir, entries); err != nil {
+		if reason, ok := snapshotRefusalReason(err); ok {
+			_ = os.RemoveAll(dir)
+			return refusedCriterionTree(sha, root, reason), nil
+		}
 		return CriterionTree{}, err
 	}
 	return CriterionTree{

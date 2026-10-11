@@ -30,12 +30,25 @@ func CheckConfigYAML(root string) error {
 	return nil
 }
 
+// cardCheck is an optional deviation from the whole-board card checks.
+// The zero value is what validate --all uses.
+type cardCheck struct {
+	// skipVacuousProbe keeps reportVacuousCriteria from running verify
+	// commands. Named and staged validation execute a verify command only
+	// through AdmitCriteria, and only against the selected probe directory.
+	skipVacuousProbe bool
+}
+
 // CriterionTree is the probe root named validation admits criteria against.
 // Selected is true for a --base snapshot. The work tree leaves it false.
+// Refusal is set when the commit resolved but its content is one the spec
+// calls unavailable (a submodule, or a symlink the snapshot refuses). Probes
+// do not run, and the command does not fail before admission.
 type CriterionTree struct {
 	Description string
 	ProbeDir    string
 	Selected    bool
+	Refusal     string
 	cleanup     string
 }
 
@@ -66,9 +79,9 @@ func ValidateNamed(ctx context.Context, w io.Writer, root, tasksDir string, file
 		if isDecisionDoc(card.TasksRel) && !isNonCardFile(filepath.Base(card.TasksRel)) {
 			result = validateDecisionDocument(ctx, root, tasksDir, card)
 		} else {
-			result = validateCard(ctx, root, tasksDir, card, index, &citations)
+			result = validateCard(ctx, root, tasksDir, card, index, &citations, cardCheck{skipVacuousProbe: true})
 		}
-		admission := AdmitCriteria(ctx, tree.ProbeDir, card.Zone, tree.Description, tree.Selected, card.Criteria())
+		admission := AdmitCriteria(ctx, tree.ProbeDir, card.Zone, tree.Description, tree.Selected, tree.Refusal, card.Criteria())
 		applyAdmission(&result, admission)
 		writeNamedResult(w, result, admission)
 		fmt.Fprintln(w)
@@ -108,9 +121,10 @@ func readNamedCard(root, tasksDir, file string) (*Card, error) {
 	return ParseCard(tasksRel, raw), nil
 }
 
-// applyAdmission drops the work-tree vacuous findings validateCard already
-// recorded and installs the admission probe's own errors and warnings. The
-// probe tree may be a --base snapshot, whose message must name that snapshot.
+// applyAdmission installs the admission probe's errors and warnings. A
+// vacuous finding recorded against the work tree, if one is still present,
+// is dropped: named validation does not probe before admission, and a
+// --base message must name the snapshot.
 func applyAdmission(result *ValidationResult, admission Admission) {
 	kept := make([]Finding, 0, len(result.Errors)+len(admission.Errors))
 	for _, finding := range result.Errors {
