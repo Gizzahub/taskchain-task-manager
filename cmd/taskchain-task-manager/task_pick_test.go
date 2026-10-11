@@ -30,7 +30,7 @@ func TestPickCommandRefusals(t *testing.T) {
 		{name: "promote flag", args: []string{"promote", "--apply"}, code: 1, stderr: "unknown flag: --apply (valid: --dry-run, --json, --help, -h)"},
 		{name: "promote help", args: []string{"promote", "--help"}, code: 0, stdoutHas: "--dry-run"},
 		{name: "issue two", args: []string{"issue-promote", "ISSUE-1", "ISSUE-2"}, code: 1, stderr: "ce task issue-promote accepts exactly one issue; use ce task issue-promote-all for all open issues"},
-		{name: "dropped sweep", args: []string{"issue-promote-all"}, code: 2, stderr: "unknown task command"},
+		{name: "dropped sweep", args: []string{"issue-promote-all"}, code: 1, stderr: unknownTaskCommandText("issue-promote-all")},
 		{name: "done review", args: []string{"done-review"}, code: 1, stderr: "ce task done-review was removed; use ce task review-run"},
 		{name: "state flag", args: []string{"todo-run", "--apply"}, code: 1, stderr: "unknown flag: --apply (valid: --dry-run, --json, --help, -h)"},
 		{name: "state help", args: []string{"blocked-recover", "--help"}, code: 0, stdoutHas: "Only blocked/ cards are eligible"},

@@ -140,7 +140,7 @@ func Maintain(ctx context.Context, root string, req MaintenanceRequest) (Mainten
 				if headErr != nil || again != plan.Repository.Base {
 					return fmt.Errorf("git HEAD drifted before exchange")
 				}
-				return nil
+				return verifyLiveBefore(root, plan.Before)
 			},
 		})
 		result.Stage = exchanged.Stage

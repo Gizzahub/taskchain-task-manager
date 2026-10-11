@@ -81,6 +81,9 @@ func exchangeBoard(req exchangeRequest) (exchangeResult, error) {
 	if err := os.WriteFile(filepath.Join(stage, receiptName), req.Receipt, 0o600); err != nil {
 		return result, fmt.Errorf("stage board retained after failure: write staged receipt: %w", err)
 	}
+	if TestingBeforeExchange != nil {
+		TestingBeforeExchange()
+	}
 	if err := req.Precondition(); err != nil {
 		return result, fmt.Errorf("caller precondition: %w", err)
 	}

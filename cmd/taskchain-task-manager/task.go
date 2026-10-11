@@ -123,8 +123,8 @@ func runTask(args []string, out, errOut io.Writer) int {
 	case "run-discard":
 		err = taskRunDiscard(args[1:], out)
 	default:
-		fmt.Fprintf(errOut, "Error: unknown task command %q (valid: %s)\n", args[0], taskCommandList)
-		return 2
+		fmt.Fprintf(errOut, "Unknown task command: %s\nAvailable: %s\n", args[0], taskCommandList)
+		return 1
 	}
 	if err == nil {
 		return 0

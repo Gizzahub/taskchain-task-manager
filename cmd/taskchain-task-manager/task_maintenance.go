@@ -67,29 +67,43 @@ func taskMaintenance(ctx context.Context, args []string, out io.Writer) error {
 	if err != nil && !committed {
 		return err
 	}
+	// Past this point the board exchange happened (or was only previewed).
+	// An applied exchange must never look retryable, so every later failure
+	// of an applied run exits 3.
+	applied := committed || result.Committed
+	writeErr := writeMaintenanceResult(out, result, asJSON)
+	switch {
+	case applied && err != nil && writeErr != nil:
+		return &runExitError{code: 3, reason: fmt.Sprintf("applied, do not rerun: %v; write result: %v", err, writeErr)}
+	case applied && err != nil:
+		return &runExitError{code: 3, reason: fmt.Sprintf("applied, do not rerun: %v", err)}
+	case applied && writeErr != nil:
+		return &runExitError{code: 3, reason: fmt.Sprintf("applied, do not rerun: write result: %v", writeErr)}
+	}
+	return writeErr
+}
+
+func writeMaintenanceResult(out io.Writer, result boardruntime.MaintenanceResult, asJSON bool) error {
 	if asJSON {
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")
-		if encodeErr := enc.Encode(result); encodeErr != nil {
-			return encodeErr
-		}
-	} else {
-		mode := "Preview"
-		if result.Committed {
-			mode = "Applied"
-		}
-		fmt.Fprintf(out, "Board maintenance [%s]:\n", mode)
-		fmt.Fprintf(out, "  Plan Digest: %s\n", result.PlanDigest)
-		fmt.Fprintf(out, "  Cards:       %d\n", result.Cards)
-		fmt.Fprintf(out, "  Mappings:   %d\n", result.Mappings)
-		if result.Committed {
-			fmt.Fprintf(out, "  Receipt:     %s\n", result.ReceiptPath)
-		}
+		return enc.Encode(result)
 	}
-	if committed {
-		return &runExitError{code: 3, reason: fmt.Sprintf("applied, do not rerun: %v", err)}
+	mode := "Preview"
+	if result.Committed {
+		mode = "Applied"
 	}
-	return nil
+	lines := []string{
+		fmt.Sprintf("Board maintenance [%s]:", mode),
+		fmt.Sprintf("  Plan Digest: %s", result.PlanDigest),
+		fmt.Sprintf("  Cards:       %d", result.Cards),
+		fmt.Sprintf("  Mappings:   %d", result.Mappings),
+	}
+	if result.Committed {
+		lines = append(lines, fmt.Sprintf("  Receipt:     %s", result.ReceiptPath))
+	}
+	_, err := fmt.Fprintln(out, strings.Join(lines, "\n"))
+	return err
 }
 
 const maintenanceHelp = `Usage: taskchain-task-manager task maintenance [plan|apply] <plan-file> [--apply] [--files DIR] [--json]
