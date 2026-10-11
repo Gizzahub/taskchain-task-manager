@@ -17,11 +17,11 @@ import (
 // taskUsage is the noun's one-line contract, shown when the noun itself is
 // mistyped. Per-subcommand misuse is reported by the subcommand, at the exit
 // code the pinned reference gives that subcommand's own refusals.
-const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate|lint|preflight|gate|review-receipt|doctor|board|recommend|promote|issue-promote|plan-promote|backlog-promote|todo-run|doing-resume|review-run|blocked-recover|done-finalize|run-doctor|run-start|run-status|run-list|run-finish|run-recover|run-abort|run-close|run-settle|run-discard> ..."
+const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate|lint|preflight|gate|review-receipt|doctor|board|recommend|promote|issue-promote|plan-promote|backlog-promote|todo-run|doing-resume|review-run|blocked-recover|done-finalize|done-finalize-all|cleanup|maintenance|reconcile|run-doctor|run-start|run-status|run-list|run-finish|run-recover|run-abort|run-close|run-settle|run-discard> ..."
 
 // taskCommandList is the unknown-command diagnostic. It names every command
 // this noun dispatches, in the same order as taskUsage.
-const taskCommandList = "list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard"
+const taskCommandList = "list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, done-finalize-all, cleanup, maintenance, reconcile, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard"
 
 // runTask dispatches the CE-parity `task` noun. The pinned reference splits
 // its refusals two ways, and the split is preserved here: what the caller
@@ -87,6 +87,14 @@ func runTask(args []string, out, errOut io.Writer) int {
 		err = taskStateCommand(ctx, "blocked-recover", args[1:], out)
 	case "done-finalize":
 		err = taskStateCommand(ctx, "done-finalize", args[1:], out)
+	case "done-finalize-all":
+		err = taskDoneFinalizeAll(ctx, args[1:], out)
+	case "cleanup":
+		err = taskCleanup(ctx, args[1:], out)
+	case "maintenance":
+		err = taskMaintenance(ctx, args[1:], out)
+	case "reconcile":
+		err = taskReconcile(ctx, args[1:], out)
 	case "done-review":
 		// Removed. The replacement is review-run; this is not a dispatch alias.
 		err = fmt.Errorf("ce task done-review was removed; use ce task review-run")

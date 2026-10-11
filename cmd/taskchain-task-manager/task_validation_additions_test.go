@@ -27,7 +27,7 @@ func TestValidationCommandRefusals(t *testing.T) {
 		stdout     string
 		stdoutMiss string
 	}{
-		{"unknown command", []string{"nope"}, 2, `unknown task command "nope" (valid: list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard)`, "", ""},
+		{"unknown command", []string{"nope"}, 2, `unknown task command "nope" (valid: list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, done-finalize-all, cleanup, maintenance, reconcile, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard)`, "", ""},
 		{"list help", []string{"list", "--help"}, 0, "", "usage: taskchain-task-manager task list ", ""},
 		{"list unknown flag", []string{"list", "--priority=P2"}, 1, "unknown flag: --priority=P2 (valid: --status, --priority, --category, --kind, --state, --summary, --json, --help, -h)", "", ""},
 		{"list priority vocab", []string{"list", "--priority", "high"}, 1, "unknown --priority value: high (valid: P0, P1, P2, P3)", "", ""},
@@ -57,8 +57,8 @@ func TestValidationCommandRefusals(t *testing.T) {
 		{"doctor capability missing", []string{"doctor", "--capability"}, 2, "flag --capability requires a value", "", ""},
 		{"doctor help", []string{"doctor", "--help"}, 0, "", "usage: taskchain-task-manager task doctor ", ""},
 		{"doctor not a repo", []string{"doctor"}, 2, "not a git repository", "", ""},
-		{"gate-evidence unknown", []string{"gate-evidence"}, 2, `unknown task command "gate-evidence" (valid: list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard)`, "", ""},
-		{"change-id unknown", []string{"change-id"}, 2, `unknown task command "change-id" (valid: list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard)`, "", ""},
+		{"gate-evidence unknown", []string{"gate-evidence"}, 2, `unknown task command "gate-evidence" (valid: list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, done-finalize-all, cleanup, maintenance, reconcile, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard)`, "", ""},
+		{"change-id unknown", []string{"change-id"}, 2, `unknown task command "change-id" (valid: list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, done-finalize-all, cleanup, maintenance, reconcile, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard)`, "", ""},
 		{"staged not a repo", []string{"validate", "--staged"}, 2, "staged validation requires a Git repository:", "", ""},
 	}
 	for _, tc := range cases {

@@ -17,7 +17,7 @@ var errPrintedHelp = errors.New("help printed")
 
 func taskStateCommand(ctx context.Context, action string, args []string, out io.Writer) error {
 	_ = ctx
-	asJSON, _, targets, err := parseStateArgs(action, args, out)
+	asJSON, dryRun, targets, err := parseStateArgs(action, args, out)
 	if errors.Is(err, errPrintedHelp) {
 		return nil
 	}
@@ -32,11 +32,26 @@ func taskStateCommand(ctx context.Context, action string, args []string, out io.
 	if err != nil {
 		return err
 	}
-	// cleanup is not in this build. A named card would delete; refuse instead.
+	// A named done-finalize card is a cleanup of that card. No cards means
+	// selection context only, which does not write.
 	if action == "done-finalize" && len(targets) > 0 {
-		return fmt.Errorf("done-finalize refuses to write: cleanup is not available, so a named card is not deleted")
+		return delegateDoneFinalize(result, dryRun, asJSON, out)
 	}
 	return writeState(out, result, asJSON)
+}
+
+func delegateDoneFinalize(result *taskflow.StateResult, dryRun, asJSON bool, out io.Writer) error {
+	var args []string
+	if !dryRun {
+		args = append(args, "--apply")
+	}
+	for _, candidate := range result.Candidates {
+		args = append(args, candidate.Path)
+	}
+	if asJSON {
+		args = append(args, "--json")
+	}
+	return taskCleanup(context.Background(), args, out)
 }
 
 func parseStateArgs(action string, args []string, out io.Writer) (bool, bool, []string, error) {

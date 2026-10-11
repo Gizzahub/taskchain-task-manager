@@ -105,10 +105,13 @@ func TestPickCommandOutputs(t *testing.T) {
 	finished := mustRead(t, "tasks/done/003-finished.md")
 	out.Reset()
 	diag.Reset()
-	if code := runTask([]string{"done-finalize", "--dry-run", "TASK-3"}, &out, &diag); code != 1 {
+	if code := runTask([]string{"done-finalize", "--dry-run", "TASK-3"}, &out, &diag); code != 1 || out.Len() != 0 {
 		t.Fatalf("finalize write code=%d %s %s", code, diag.String(), out.String())
 	}
-	if !strings.Contains(diag.String(), "done-finalize refuses to write: cleanup is not available, so a named card is not deleted") {
+	if strings.Contains(diag.String(), "cleanup is not available") {
+		t.Fatalf("interim refusal remains: %s", diag.String())
+	}
+	if !strings.Contains(diag.String(), "cleanup source branch is not declared and origin/HEAD is unresolved") {
 		t.Fatalf("stderr=%s", diag.String())
 	}
 	if mustRead(t, "tasks/done/003-finished.md") != finished {
