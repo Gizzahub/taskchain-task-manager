@@ -236,11 +236,14 @@ func parseTaskNewArgs(args []string, out io.Writer) (taskflow.NewCardOptions, bo
 			if err != nil {
 				return opts, false, usagef("%s", err)
 			}
-			if strings.TrimSpace(value) == "" || strings.HasPrefix(value, "--") {
+			// A following flag is not a reference. An explicit empty string is
+			// recorded so the kind check can reject it before any card write.
+			if strings.HasPrefix(value, "--") {
 				return opts, false, usagef("--discovered-in needs a nonempty value")
 			}
 			i++
 			opts.DiscoveredIn = value
+			opts.DiscoveredInSet = true
 		case arg == "--criterion":
 			value, err := flagValue(args, i)
 			if err != nil {
@@ -268,6 +271,15 @@ func parseTaskNewArgs(args []string, out io.Writer) (taskflow.NewCardOptions, bo
 	}
 	if opts.Kind == "" {
 		return opts, false, usagef("kind is required: task new <task|issue|plan|backlog> --title \"...\"")
+	}
+	// Issue-only is diagnosed before the empty-value usage error so an
+	// explicit empty --discovered-in on a task, plan, or backlog does not
+	// look like a missing reference, and neither path reaches Create.
+	if opts.DiscoveredInSet && opts.Kind != "issue" {
+		return opts, false, usagef("--discovered-in is only valid for an issue")
+	}
+	if opts.DiscoveredInSet && strings.TrimSpace(opts.DiscoveredIn) == "" {
+		return opts, false, usagef("--discovered-in needs a nonempty value")
 	}
 	return opts, asJSON, nil
 }

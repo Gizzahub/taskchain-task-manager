@@ -4,101 +4,217 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
-	"strings"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/outputvocab"
 	"gopkg.in/yaml.v3"
 )
 
-// ParseZoneSkills reads the optional task-board.zone-skills declaration from
-// ce-tasks.yaml. The declaration is intentionally independent of Policy: a
-// board-policy document remains byte-for-byte canonical when it has no
-// zone-skill declaration.
-func ParseZoneSkills(raw []byte) (map[string]string, error) {
-	var doc yaml.Node
-	decoder := yaml.NewDecoder(bytes.NewReader(raw))
-	if err := decoder.Decode(&doc); err != nil {
-		// An empty file has no zone-skills map. Callers keep their previous output.
-		if errors.Is(err, io.EOF) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("parse ce-tasks.yaml: %w", err)
-	}
-	var extra yaml.Node
-	if err := decoder.Decode(&extra); err != io.EOF {
-		if err == nil {
-			return nil, errors.New("ce-tasks.yaml must contain one document")
-		}
-		return nil, fmt.Errorf("parse ce-tasks.yaml: %w", err)
-	}
-	if doc.Kind == yaml.DocumentNode && len(doc.Content) == 1 && doc.Content[0].Tag == "!!null" {
+// copyZoneSkills validates a declared task-board.zone-skills map. A nil
+// result means the map was absent. An empty non-nil map was present and
+// names no zone.
+func copyZoneSkills(d Declaration) (map[string]string, error) {
+	if !d.ZoneSkillsDeclared {
 		return nil, nil
 	}
-	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
-		return nil, errors.New("ce-tasks.yaml root must be a mapping")
-	}
-	root := doc.Content[0]
-	if err := uniqueMapping(root, "ce-tasks.yaml"); err != nil {
-		return nil, err
-	}
-	var board *yaml.Node
-	for i := 0; i < len(root.Content); i += 2 {
-		if root.Content[i].Value == "task-board" {
-			board = root.Content[i+1]
-			break
+	skills := make(map[string]string, len(d.ZoneSkills))
+	for zone, skill := range d.ZoneSkills {
+		if !zoneDeclared(zone, d.Zones) {
+			return nil, fmt.Errorf("unknown zone %q", zone)
 		}
-	}
-	if board == nil {
-		return nil, nil
-	}
-	if board.Kind != yaml.MappingNode {
-		return nil, errors.New("task-board must be a mapping")
-	}
-	if err := uniqueMapping(board, "task-board"); err != nil {
-		return nil, err
-	}
-	var skills *yaml.Node
-	for i := 0; i < len(board.Content); i += 2 {
-		switch board.Content[i].Value {
-		case "zone-skills":
-			skills = board.Content[i+1]
+		if !validZoneSkill(skill) {
+			return nil, fmt.Errorf("invalid skill for zone %q", zone)
 		}
+		skills[zone] = skill
 	}
-	if skills == nil {
-		return nil, nil
-	}
-	declared, err := dialectZones(root)
-	if err != nil {
-		return nil, err
-	}
-	if skills.Kind != yaml.MappingNode {
-		return nil, errors.New("task-board.zone-skills must be a mapping")
-	}
-	if err := uniqueMapping(skills, "task-board.zone-skills"); err != nil {
-		return nil, err
-	}
-	result := make(map[string]string, len(skills.Content)/2)
-	for i := 0; i < len(skills.Content); i += 2 {
-		zone, skill := skills.Content[i], skills.Content[i+1]
-		if zone.Kind != yaml.ScalarNode || zone.Tag != "!!str" || strings.TrimSpace(zone.Value) == "" {
-			return nil, errors.New("task-board.zone-skills keys must be nonempty strings")
-		}
-		if !declared[zone.Value] {
-			return nil, fmt.Errorf("task-board.zone-skills names undeclared zone %q", zone.Value)
-		}
-		if skill.Kind != yaml.ScalarNode || skill.Tag != "!!str" || strings.TrimSpace(skill.Value) == "" {
-			return nil, errors.New("task-board.zone-skills values must be nonempty strings")
-		}
-		result[zone.Value] = skill.Value
-	}
-	return result, nil
+	return skills, nil
 }
 
-// dialectZones returns only names listed in card-dialect.zones.
-// Workflow and kind directory names are not members unless that list includes them.
-func dialectZones(root *yaml.Node) (map[string]bool, error) {
-	zones := map[string]bool{}
-	for i := 0; i < len(root.Content); i += 2 {
+func zoneDeclared(zone string, declared []string) bool {
+	for _, known := range outputvocab.AllZones() {
+		if string(known) == zone {
+			return true
+		}
+	}
+	if !validParkedName(zone) {
+		return false
+	}
+	for _, name := range declared {
+		if name == zone {
+			return true
+		}
+	}
+	return false
+}
+
+func validZoneSkill(skill string) bool {
+	return skill != ""
+}
+
+// parseTaskBoardBlock reads one task-board mapping. The bool reports whether
+// zone-skills itself was present. Other task-board fields are refused.
+func parseTaskBoardBlock(block *yaml.Node, declared []string) (map[string]string, bool, error) {
+	if block == nil || block.Kind != yaml.MappingNode || block.Tag != "!!map" {
+		return nil, false, errors.New("task-board must be a mapping")
+	}
+	if err := uniqueMapping(block, "task-board"); err != nil {
+		return nil, false, err
+	}
+	var skillsNode *yaml.Node
+	for i := 0; i+1 < len(block.Content); i += 2 {
+		switch block.Content[i].Value {
+		case "zone-skills":
+			skillsNode = block.Content[i+1]
+		default:
+			return nil, false, fmt.Errorf("unknown task-board field %q", block.Content[i].Value)
+		}
+	}
+	if skillsNode == nil {
+		return nil, false, nil
+	}
+	skills, err := parseZoneSkillMap(skillsNode, declared)
+	if err != nil {
+		return nil, false, err
+	}
+	return skills, true, nil
+}
+
+func parseZoneSkillMap(node *yaml.Node, declared []string) (map[string]string, error) {
+	if node.Kind != yaml.MappingNode || node.Tag != "!!map" {
+		return nil, errors.New("task-board.zone-skills must be a mapping")
+	}
+	if err := uniqueMapping(node, "task-board.zone-skills"); err != nil {
+		return nil, err
+	}
+	skills := map[string]string{}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		zone := node.Content[i].Value
+		value := node.Content[i+1]
+		if !zoneDeclared(zone, declared) {
+			return nil, fmt.Errorf("unknown zone %q", zone)
+		}
+		if value.Kind != yaml.ScalarNode || value.Tag != "!!str" || !validZoneSkill(value.Value) {
+			return nil, fmt.Errorf("invalid skill for zone %q", zone)
+		}
+		skills[zone] = value.Value
+	}
+	return skills, nil
+}
+
+// ParseTaskBoardConfig reads task-board.zone-skills from a config document.
+// Keys other than task-board are ignored. A missing file body, a missing
+// task-board section, or a missing zone-skills map returns (nil, false, nil).
+// A zone-skills key is accepted only when that zone is listed in
+// card-dialect.zones in the same document. Each skill must be a nonempty YAML
+// string, preserved exactly. Malformed task-board values are refused.
+func ParseTaskBoardConfig(raw []byte) (map[string]string, bool, error) {
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return nil, false, nil
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return nil, false, fmt.Errorf("decode config: %w", err)
+	}
+	root := &doc
+	if doc.Kind == yaml.DocumentNode {
+		if len(doc.Content) != 1 {
+			return nil, false, errors.New("config must contain one document")
+		}
+		root = doc.Content[0]
+	}
+	if root.Kind != yaml.MappingNode {
+		return nil, false, nil
+	}
+	var block *yaml.Node
+	seen := 0
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		key := root.Content[i]
+		if key.Kind == yaml.ScalarNode && key.Value == "task-board" {
+			seen++
+			block = root.Content[i+1]
+		}
+	}
+	if seen > 1 {
+		return nil, false, errors.New("task-board has duplicate field")
+	}
+	if block == nil {
+		return nil, false, nil
+	}
+	if err := rejectTaskBoardAnchors(block); err != nil {
+		return nil, false, err
+	}
+	skillsNode, present, err := configZoneSkillsNode(block)
+	if err != nil || !present {
+		return nil, false, err
+	}
+	declared, err := parseConfigDeclaredZones(root)
+	if err != nil {
+		return nil, false, err
+	}
+	skills, err := parseConfigZoneSkillMap(skillsNode, declared)
+	if err != nil {
+		return nil, false, err
+	}
+	return skills, true, nil
+}
+
+// configZoneSkillsNode reads zone-skills from a task-board mapping. The bool
+// reports whether the key was present. Other task-board fields are refused.
+// Zone membership is not decided here.
+func configZoneSkillsNode(block *yaml.Node) (*yaml.Node, bool, error) {
+	if block == nil || block.Kind != yaml.MappingNode || block.Tag != "!!map" {
+		return nil, false, errors.New("task-board must be a mapping")
+	}
+	if err := uniqueMapping(block, "task-board"); err != nil {
+		return nil, false, err
+	}
+	var skillsNode *yaml.Node
+	for i := 0; i+1 < len(block.Content); i += 2 {
+		switch block.Content[i].Value {
+		case "zone-skills":
+			skillsNode = block.Content[i+1]
+		default:
+			return nil, false, fmt.Errorf("unknown task-board field %q", block.Content[i].Value)
+		}
+	}
+	if skillsNode == nil {
+		return nil, false, nil
+	}
+	return skillsNode, true, nil
+}
+
+func parseConfigZoneSkillMap(node *yaml.Node, declared []string) (map[string]string, error) {
+	if node.Kind != yaml.MappingNode || node.Tag != "!!map" {
+		return nil, errors.New("task-board.zone-skills must be a mapping")
+	}
+	if err := uniqueMapping(node, "task-board.zone-skills"); err != nil {
+		return nil, err
+	}
+	skills := map[string]string{}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		zone := node.Content[i].Value
+		value := node.Content[i+1]
+		if !zoneListed(zone, declared) {
+			return nil, fmt.Errorf("undeclared zone %q", zone)
+		}
+		if value.Kind != yaml.ScalarNode || value.Tag != "!!str" || value.Value == "" {
+			return nil, fmt.Errorf("invalid skill for zone %q", zone)
+		}
+		skills[zone] = value.Value
+	}
+	return skills, nil
+}
+
+func zoneListed(zone string, declared []string) bool {
+	for _, name := range declared {
+		if name == zone {
+			return true
+		}
+	}
+	return false
+}
+
+func parseConfigDeclaredZones(root *yaml.Node) ([]string, error) {
+	for i := 0; i+1 < len(root.Content); i += 2 {
 		if root.Content[i].Value != "card-dialect" {
 			continue
 		}
@@ -106,24 +222,35 @@ func dialectZones(root *yaml.Node) (map[string]bool, error) {
 		if dialect.Kind != yaml.MappingNode {
 			return nil, errors.New("card-dialect must be a mapping")
 		}
-		if err := uniqueMapping(dialect, "card-dialect"); err != nil {
-			return nil, err
-		}
-		for j := 0; j < len(dialect.Content); j += 2 {
+		for j := 0; j+1 < len(dialect.Content); j += 2 {
 			if dialect.Content[j].Value != "zones" {
 				continue
 			}
-			value := dialect.Content[j+1]
-			if value.Kind != yaml.SequenceNode {
+			zones := dialect.Content[j+1]
+			if zones.Kind != yaml.SequenceNode {
 				return nil, errors.New("card-dialect.zones must be a sequence")
 			}
-			for _, item := range value.Content {
-				if item.Kind != yaml.ScalarNode || item.Tag != "!!str" || item.Value == "" {
+			declared := make([]string, 0, len(zones.Content))
+			for _, zone := range zones.Content {
+				if zone.Kind != yaml.ScalarNode || zone.Tag != "!!str" || zone.Value == "" {
 					return nil, errors.New("card-dialect.zones entries must be nonempty strings")
 				}
-				zones[item.Value] = true
+				declared = append(declared, zone.Value)
 			}
+			return declared, nil
 		}
 	}
-	return zones, nil
+	return nil, nil
+}
+
+func rejectTaskBoardAnchors(n *yaml.Node) error {
+	if n.Anchor != "" || n.Kind == yaml.AliasNode {
+		return errors.New("task-board anchors and aliases are not allowed")
+	}
+	for _, child := range n.Content {
+		if err := rejectTaskBoardAnchors(child); err != nil {
+			return err
+		}
+	}
+	return nil
 }

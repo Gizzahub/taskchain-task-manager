@@ -30,7 +30,7 @@ func CheckConfigYAML(root string) error {
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
 		return fmt.Errorf("decode ce-tasks.yaml: %w", err)
 	}
-	if _, err := boardpolicy.ParseZoneSkills(raw); err != nil {
+	if _, _, err := boardpolicy.ParseTaskBoardConfig(raw); err != nil {
 		return fmt.Errorf("decode ce-tasks.yaml: %w", err)
 	}
 	return nil

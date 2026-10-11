@@ -39,13 +39,15 @@ func Parse(raw []byte) (Policy, error) {
 	if err := uniqueMapping(root, "root"); err != nil {
 		return Policy{}, err
 	}
-	var schema, block *yaml.Node
+	var schema, block, taskBoard *yaml.Node
 	for i := 0; i < len(root.Content); i += 2 {
 		switch root.Content[i].Value {
 		case "schema-version":
 			schema = root.Content[i+1]
 		case "board-policy":
 			block = root.Content[i+1]
+		case "task-board":
+			taskBoard = root.Content[i+1]
 		default:
 			return Policy{}, fmt.Errorf("unknown root field %q", root.Content[i].Value)
 		}
@@ -180,6 +182,15 @@ func Parse(raw []byte) (Policy, error) {
 	}
 	if version == 3 && !modulesSeen {
 		return Policy{}, errors.New("schema-version 3 requires board-policy.modules")
+	}
+	if taskBoard != nil {
+		decl.TaskBoardDeclared = true
+		skills, declared, err := parseTaskBoardBlock(taskBoard, decl.Zones)
+		if err != nil {
+			return Policy{}, err
+		}
+		decl.ZoneSkillsDeclared = declared
+		decl.ZoneSkills = skills
 	}
 	policy, err := New(decl)
 	if err != nil {

@@ -2,400 +2,286 @@ package taskflow
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
-// ResolveRequest closes one issue card in place. BySet distinguishes an
-// omitted --by from a present flag with an empty value. Now pins resolved-at.
-type ResolveRequest struct {
-	Path       string
-	Resolution string
-	By         string
-	BySet      bool
-	Now        time.Time
-}
+// resolveNow is the clock ResolveIssue stamps into resolved-at. Tests freeze
+// it so a same-second rewrite is the only identical-bytes no-op.
+var resolveNow = time.Now
 
-// ResolveResult is the text the command prints. Summary is unquoted; the
-// file stores that same sentence as a YAML double-quoted scalar.
+// ResolveResult describes one issue resolution.
 type ResolveResult struct {
 	Path       string
 	Resolution string
+	By         string
 	ResolvedAt string
 	Summary    string
+	Changed    bool
 }
 
-// Resolve records resolution, resolved-at, and resolution-summary on an issue
-// card. It does not move the card or rewrite disposition or the title.
-// fixed and duplicate accept an optional --by card; wontfix and invalid reject
-// --by before any write. A declared task-projection snapshots the tasks tree
-// and the git index and restores both when the write fails.
-func Resolve(ctx context.Context, root string, req ResolveRequest) (result ResolveResult, retErr error) {
-	resolution := strings.TrimSpace(req.Resolution)
-	switch resolution {
-	case "fixed", "wontfix", "duplicate", "invalid":
-	default:
-		return ResolveResult{}, fmt.Errorf("invalid resolution %q (allowed: fixed, wontfix, duplicate, invalid)", req.Resolution)
+// ResolveIssue stamps resolution, resolved-at, and resolution-summary in place.
+// by is optional; a blank value means the flag was absent.
+func ResolveIssue(ctx context.Context, root, cardPath, resolution, by string) (*ResolveResult, error) {
+	return resolveIssue(ctx, root, cardPath, resolution, by, strings.TrimSpace(by) != "")
+}
+
+// ResolveIssueWithByFlag records whether --by was present, including an
+// explicit empty value. wontfix and invalid reject that presence; fixed and
+// duplicate reject an empty value as input.
+func ResolveIssueWithByFlag(ctx context.Context, root, cardPath, resolution, by string, byProvided bool) (*ResolveResult, error) {
+	return resolveIssue(ctx, root, cardPath, resolution, by, byProvided)
+}
+
+func resolveIssue(ctx context.Context, root, cardPath, resolution, by string, byProvided bool) (*ResolveResult, error) {
+	_ = ctx
+	by = strings.TrimSpace(by)
+	if resolution != "fixed" && resolution != "wontfix" && resolution != "duplicate" && resolution != "invalid" {
+		return nil, fmt.Errorf("invalid resolution %q (allowed: fixed, wontfix, duplicate, invalid)", resolution)
 	}
-	if _, err := os.Stat(req.Path); err != nil {
-		if os.IsNotExist(err) {
-			return ResolveResult{}, fmt.Errorf("file not found: %s", req.Path)
-		}
-		return ResolveResult{}, err
+	if _, err := ResolveTasksDir(); err != nil {
+		return nil, err
 	}
-	if filepath.Base(filepath.Dir(req.Path)) != "issue" {
-		return ResolveResult{}, fmt.Errorf("%s is not under issue/; ce task resolve only closes issue cards", req.Path)
+	statPath := cardPath
+	if !filepath.IsAbs(cardPath) {
+		statPath = filepath.Join(root, cardPath)
 	}
-	lookup, err := resolveBy(root, resolution, req)
+	info, err := os.Lstat(statPath)
 	if err != nil {
-		return ResolveResult{}, err
+		return nil, fmt.Errorf("file not found: %s", cardPath)
 	}
-	recordable, err := frontmatterRecordable(req.Path)
-	if err != nil {
-		return ResolveResult{}, err
-	}
-	if !recordable {
-		return ResolveResult{}, errors.New("issue card has no frontmatter to record a resolution")
-	}
-	declared, owned, err := taskProjection(root)
-	if err != nil {
-		return ResolveResult{}, err
-	}
-	if declared {
-		if projectionOwns(root, req.Path, owned) {
-			return ResolveResult{}, fmt.Errorf("refusing lifecycle mutation of marker-owned projection: %s", req.Path)
+	if info.Mode()&os.ModeSymlink != 0 {
+		// The card writer follows a symlink with WriteFile. Refuse one whose
+		// target leaves the corpus so a link cannot relocate the stamp.
+		resolved, err := filepath.EvalSymlinks(statPath)
+		if err != nil {
+			return nil, fmt.Errorf("file not found: %s", cardPath)
 		}
-		snap, snapErr := snapshotProjection(ctx, root)
-		if snapErr != nil {
-			return ResolveResult{}, snapErr
+		corpus, err := filepath.EvalSymlinks(filepath.Join(root, tasksDirName()))
+		if err != nil {
+			return nil, fmt.Errorf("%s is not under issue/; ce task resolve only closes issue cards", cardPath)
 		}
-		defer func() {
-			if retErr == nil {
-				return
-			}
-			if rerr := snap.restore(); rerr != nil {
-				retErr = fmt.Errorf("%w; restore projection: %v", retErr, rerr)
-			}
-		}()
+		rel, err := filepath.Rel(corpus, resolved)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return nil, fmt.Errorf("%s is not under issue/; ce task resolve only closes issue cards", cardPath)
+		}
 	}
-	summary := "Resolved as " + resolution + "."
-	if lookup != "" {
-		summary = "Resolved as " + resolution + " by " + lookup + "."
+	rel, ok := relUnderTasks(cardPath)
+	if !ok || kindDir(rel) != "issue" {
+		return nil, fmt.Errorf("%s is not under issue/; ce task resolve only closes issue cards", cardPath)
 	}
-	now := req.Now
-	if now.IsZero() {
-		now = time.Now()
+	full := filepath.Join(root, tasksDirName(), filepath.FromSlash(rel))
+	if byProvided && (resolution == "wontfix" || resolution == "invalid") {
+		return nil, fmt.Errorf("--by is not accepted with %s; it records no card", resolution)
 	}
-	resolvedAt := now.UTC().Format(time.RFC3339)
-	if _, err := stampFrontmatterFields(req.Path, [][2]string{
+	if byProvided && by == "" {
+		if resolution == "duplicate" {
+			return nil, fmt.Errorf("--by needs an ISSUE id")
+		}
+		return nil, fmt.Errorf("--by needs a TASK id")
+	}
+	if byProvided {
+		cards, findErr := FindCards(root, false)
+		if findErr != nil {
+			return nil, fmt.Errorf("cannot verify --by target: %w", findErr)
+		}
+		wantKind := "task"
+		if resolution == "duplicate" {
+			wantKind = "issue"
+		}
+		if err := verifyResolveBy(cards, by, wantKind); err != nil {
+			return nil, err
+		}
+	}
+	raw, err := os.ReadFile(full)
+	if err != nil {
+		return nil, fmt.Errorf("file not found: %s", cardPath)
+	}
+	if frontmatterMalformed(raw) {
+		return nil, fmt.Errorf("malformed frontmatter: %s", cardPath)
+	}
+	at := resolveNow().UTC().Format(time.RFC3339)
+	summary := fmt.Sprintf("Resolved as %s.", resolution)
+	if by != "" {
+		summary = fmt.Sprintf("Resolved as %s by %s.", resolution, by)
+	}
+	stamped, changed := stampResolutionFields(raw, [][2]string{
 		{"resolution", resolution},
-		{"resolved-at", resolvedAt},
-		{"resolution-summary", strconv.Quote(summary)},
-	}); err != nil {
-		return ResolveResult{}, err
-	}
-	return ResolveResult{
-		Path:       req.Path,
-		Resolution: resolution,
-		ResolvedAt: resolvedAt,
-		Summary:    summary,
-	}, nil
-}
-
-func resolveBy(root, resolution string, req ResolveRequest) (string, error) {
-	if !req.BySet {
-		return "", nil
-	}
-	token := strings.TrimSpace(req.By)
-	if strings.HasPrefix(token, "file:") {
-		token = strings.TrimSpace(strings.TrimPrefix(token, "file:"))
-	}
-	switch resolution {
-	case "wontfix":
-		return "", errors.New("--by is not accepted with wontfix; it records no card")
-	case "invalid":
-		return "", errors.New("--by is not accepted with invalid; it records no card")
-	}
-	if token == "" {
-		if resolution == "fixed" {
-			return "", errors.New("--by needs a TASK id")
-		}
-		return "", errors.New("--by needs an ISSUE id")
-	}
-	cards, err := FindCards(root, false)
-	if err != nil {
-		return "", fmt.Errorf("cannot verify --by target: %s", err.Error())
-	}
-	var matches []*Card
-	for _, card := range cards {
-		if cardMatchesToken(root, card, token) {
-			matches = append(matches, card)
-		}
-	}
-	want := "TASK"
-	if resolution == "duplicate" {
-		want = "ISSUE"
-	}
-	if len(matches) == 1 && referenceKind(matches[0]) == want {
-		return token, nil
-	}
-	if len(matches) > 1 {
-		return "", fmt.Errorf("cannot verify --by target: %s matches %d cards", token, len(matches))
-	}
-	if want == "TASK" {
-		return "", fmt.Errorf("--by names %q, which is not a TASK card in this corpus; fixed is resolved by a TASK card", token)
-	}
-	return "", fmt.Errorf("--by names %q, which is not an ISSUE card in this corpus; duplicate points at the original ISSUE card", token)
-}
-
-func referenceKind(card *Card) string {
-	id := strings.TrimSpace(card.ID)
-	if strings.HasPrefix(id, "TASK-") {
-		return "TASK"
-	}
-	if strings.HasPrefix(id, "ISSUE-") {
-		return "ISSUE"
-	}
-	switch kindDir(card.TasksRel) {
-	case "issue":
-		return "ISSUE"
-	case "plan":
-		return "PLAN"
-	case "backlog":
-		return "BACKLOG"
-	default:
-		return "TASK"
-	}
-}
-
-func cardMatchesToken(root string, card *Card, token string) bool {
-	slash := filepath.ToSlash(token)
-	if strings.Contains(slash, "/") || filepath.IsAbs(token) {
-		return cardPathMatch(root, card, token)
-	}
-	if id := normalizeCardID(token); id != "" && id == normalizeCardID(card.ID) {
-		return true
-	}
-	if card.ID != "" && card.ID == token {
-		return true
-	}
-	stem := strings.TrimSuffix(filepath.Base(card.TasksRel), ".md")
-	return token == stem
-}
-
-func cardPathMatch(root string, card *Card, token string) bool {
-	slash := filepath.ToSlash(filepath.Clean(token))
-	rels := []string{
-		filepath.ToSlash(card.TasksRel),
-		filepath.ToSlash(card.RepoRel()),
-	}
-	for _, rel := range rels {
-		if slash == rel {
-			return true
-		}
-	}
-	cleaned := filepath.Clean(token)
-	candidates := []string{
-		filepath.Join(root, filepath.FromSlash(card.RepoRel())),
-		filepath.Join(root, tasksDirName(), filepath.FromSlash(card.TasksRel)),
-	}
-	for _, abs := range candidates {
-		if cleaned == filepath.Clean(abs) {
-			return true
-		}
-	}
-	return false
-}
-
-func frontmatterRecordable(path string) (bool, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return false, err
-	}
-	text := string(content)
-	if !strings.HasPrefix(text, "---\n") && !strings.HasPrefix(text, "---\r\n") {
-		return false, nil
-	}
-	rest := text
-	if strings.HasPrefix(rest, "---\r\n") {
-		rest = rest[len("---\r\n"):]
-	} else {
-		rest = rest[len("---\n"):]
-	}
-	for _, line := range strings.Split(rest, "\n") {
-		if strings.TrimRight(line, "\r") == "---" {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func taskProjection(root string) (bool, []string, error) {
-	raw, err := os.ReadFile(filepath.Join(root, "ce-tasks.yaml"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil, nil
-		}
-		return false, nil, fmt.Errorf("read ce-tasks.yaml: %w", err)
-	}
-	var top map[string]yaml.Node
-	if err := yaml.Unmarshal(raw, &top); err != nil {
-		return false, nil, fmt.Errorf("ce-tasks.yaml task-projection: %w", err)
-	}
-	node, ok := top["task-projection"]
-	if !ok {
-		return false, nil, nil
-	}
-	return true, collectProjectionPaths(&node), nil
-}
-
-func collectProjectionPaths(node *yaml.Node) []string {
-	if node == nil {
-		return nil
-	}
-	var out []string
-	var walk func(*yaml.Node)
-	walk = func(n *yaml.Node) {
-		if n == nil {
-			return
-		}
-		switch n.Kind {
-		case yaml.DocumentNode, yaml.SequenceNode:
-			for _, child := range n.Content {
-				walk(child)
-			}
-		case yaml.MappingNode:
-			for i := 0; i+1 < len(n.Content); i += 2 {
-				walk(n.Content[i+1])
-			}
-		case yaml.ScalarNode:
-			text := strings.TrimSpace(n.Value)
-			if text == "" {
-				return
-			}
-			if strings.ContainsAny(text, `/\\`) || strings.HasSuffix(text, ".md") {
-				out = append(out, text)
-			}
-		}
-	}
-	walk(node)
-	return out
-}
-
-func projectionOwns(root, target string, paths []string) bool {
-	absTarget := target
-	if !filepath.IsAbs(absTarget) {
-		absTarget = filepath.Join(root, target)
-	}
-	absTarget = filepath.Clean(absTarget)
-	slashTarget := filepath.ToSlash(filepath.Clean(target))
-	for _, path := range paths {
-		if filepath.ToSlash(filepath.Clean(path)) == slashTarget {
-			return true
-		}
-		abs := path
-		if !filepath.IsAbs(abs) {
-			abs = filepath.Join(root, path)
-		}
-		if filepath.Clean(abs) == absTarget {
-			return true
-		}
-	}
-	return false
-}
-
-type snapFile struct {
-	path string
-	data []byte
-	mode os.FileMode
-}
-
-type projectionSnapshot struct {
-	files     []snapFile
-	indexPath string
-	index     []byte
-	indexMode os.FileMode
-	hadIndex  bool
-}
-
-func snapshotProjection(ctx context.Context, root string) (projectionSnapshot, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	var snap projectionSnapshot
-	tasksPath := filepath.Join(root, tasksDirName())
-	err := filepath.WalkDir(tasksPath, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		snap.files = append(snap.files, snapFile{path: path, data: data, mode: info.Mode().Perm()})
-		return nil
+		{"resolved-at", at},
+		{"resolution-summary", quoteResolutionSummary(summary)},
 	})
-	if err != nil && !os.IsNotExist(err) {
-		return projectionSnapshot{}, fmt.Errorf("snapshot tasks tree: %w", err)
+	if !changed {
+		return &ResolveResult{Path: cardPath, Resolution: resolution, By: by, ResolvedAt: at, Summary: summary, Changed: false}, nil
 	}
-	rel, err := gitOutput(ctx, root, "rev-parse", "--git-path", "index")
-	if err != nil {
-		return projectionSnapshot{}, fmt.Errorf("cannot snapshot git index: %w", err)
+	if err := writePreservingMode(full, stamped); err != nil {
+		return nil, err
 	}
-	indexPath := strings.TrimSpace(rel)
-	if indexPath == "" {
-		return projectionSnapshot{}, errors.New("cannot snapshot git index: git returned an empty index path")
-	}
-	if !filepath.IsAbs(indexPath) {
-		indexPath = filepath.Join(root, indexPath)
-	}
-	info, err := os.Stat(indexPath)
-	if err != nil {
-		return projectionSnapshot{}, fmt.Errorf("cannot snapshot git index: %w", err)
-	}
-	data, err := os.ReadFile(indexPath)
-	if err != nil {
-		return projectionSnapshot{}, fmt.Errorf("cannot snapshot git index: %w", err)
-	}
-	snap.indexPath = indexPath
-	snap.index = append([]byte(nil), data...)
-	snap.indexMode = info.Mode().Perm()
-	snap.hadIndex = true
-	return snap, nil
+	return &ResolveResult{Path: cardPath, Resolution: resolution, By: by, ResolvedAt: at, Summary: summary, Changed: true}, nil
 }
 
-func (s projectionSnapshot) restore() error {
-	var errs []error
-	for _, file := range s.files {
-		if err := os.WriteFile(file.path, file.data, file.mode); err != nil {
-			errs = append(errs, err)
+func frontmatterMalformed(raw []byte) bool {
+	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
+	_, _, detected, err := parseCanonicalDocument(text)
+	return !detected || err != nil
+}
+
+func verifyResolveBy(cards []*Card, by, wantKind string) error {
+	claims := map[string]int{}
+	for _, card := range cards {
+		if card == nil {
 			continue
 		}
-		if err := os.Chmod(file.path, file.mode); err != nil {
-			errs = append(errs, err)
+		name := filepath.Base(card.RepoRel())
+		if safeFileName.MatchString(name) {
+			claims[name]++
 		}
 	}
-	if s.hadIndex {
-		if err := os.WriteFile(s.indexPath, s.index, s.indexMode); err != nil {
-			errs = append(errs, err)
-		} else if err := os.Chmod(s.indexPath, s.indexMode); err != nil {
-			errs = append(errs, err)
+	var known cardIdentifiers
+	exactIDs := 0
+	exactStems := 0
+	token := strings.TrimSpace(by)
+	stemToken := strings.TrimSuffix(token, ".md")
+	normToken := normalizeCardID(token)
+	for _, card := range cards {
+		if card == nil || cardKindForResolve(card) != wantKind {
+			continue
+		}
+		id := strings.TrimSpace(card.ID)
+		if id != "" && (id == token || (normToken != "" && normalizeCardID(id) == normToken)) {
+			exactIDs++
+		}
+		stem := strings.TrimSuffix(filepath.Base(card.RepoRel()), ".md")
+		if !strings.HasPrefix(token, "file:") && stem == stemToken {
+			exactStems++
+		}
+		known.add(stem)
+		known.add(id)
+		name := filepath.Base(card.RepoRel())
+		if id == "" && claims[name] == 1 && closedFrontmatter(card.Raw) {
+			known.addFileIdentifier(name)
 		}
 	}
-	return errors.Join(errs...)
+	if exactIDs > 1 || exactStems > 1 {
+		return fmt.Errorf("--by names %q, which is ambiguous in this corpus", by)
+	}
+	if known.matches(token) {
+		return nil
+	}
+	if wantKind == "issue" {
+		return fmt.Errorf("--by names %q, which is not an ISSUE card; duplicate points at the original ISSUE card", by)
+	}
+	return fmt.Errorf("--by names %q, which is not a TASK card; fixed is resolved by a TASK card", by)
+}
+
+func cardKindForResolve(card *Card) string {
+	if card == nil {
+		return ""
+	}
+	if kind, ok := canonicalKindFromID(strings.TrimSpace(card.ID)); ok {
+		return string(kind)
+	}
+	if kind, ok := canonicalKindFromPath(card.TasksRel); ok {
+		return string(kind)
+	}
+	return ""
+}
+
+// quoteResolutionSummary matches the reference resolver: resolution-summary is
+// free text and reaches the line stamp already quoted.
+func quoteResolutionSummary(value string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(value) + `"`
+}
+
+type resolutionLine struct {
+	text string
+	end  string
+}
+
+func splitResolutionLines(content []byte) []resolutionLine {
+	rest := string(content)
+	var lines []resolutionLine
+	for len(rest) > 0 {
+		i := strings.IndexByte(rest, '\n')
+		if i < 0 {
+			lines = append(lines, resolutionLine{text: rest})
+			break
+		}
+		text := rest[:i]
+		end := "\n"
+		if strings.HasSuffix(text, "\r") {
+			text = strings.TrimSuffix(text, "\r")
+			end = "\r\n"
+		}
+		lines = append(lines, resolutionLine{text: text, end: end})
+		rest = rest[i+1:]
+	}
+	return lines
+}
+
+func joinResolutionLines(lines []resolutionLine) []byte {
+	var b strings.Builder
+	for _, line := range lines {
+		b.WriteString(line.text)
+		b.WriteString(line.end)
+	}
+	return []byte(b.String())
+}
+
+// stampResolutionFields replaces existing keys in place and inserts missing
+// keys before the closing fence. The shared stamp helper always writes LF, so
+// a CRLF card would lose its line ending on every stamped line; this copy
+// keeps each line's ending and uses the fence's ending for insertions.
+// Unclosed or missing fences return the original bytes and changed=false
+// without inventing a write. Callers refuse that shape before stamping.
+func stampResolutionFields(content []byte, pairs [][2]string) ([]byte, bool) {
+	lines := splitResolutionLines(content)
+	if len(lines) == 0 || lines[0].text != "---" {
+		return content, false
+	}
+	closing := -1
+	for i := 1; i < len(lines); i++ {
+		if lines[i].text == "---" {
+			closing = i
+			break
+		}
+	}
+	if closing < 0 {
+		return content, false
+	}
+	nl := lines[closing].end
+	if nl == "" {
+		nl = "\n"
+	}
+	for _, pair := range pairs {
+		key, value := pair[0], pair[1]
+		prefix := key + ":"
+		replaced := false
+		for i := 1; i < closing; i++ {
+			if strings.HasPrefix(lines[i].text, prefix) {
+				lines[i].text = key + ": " + value
+				if lines[i].end == "" {
+					lines[i].end = nl
+				}
+				replaced = true
+				break
+			}
+		}
+		if replaced {
+			continue
+		}
+		entry := resolutionLine{text: key + ": " + value, end: nl}
+		updated := append([]resolutionLine{}, lines[:closing]...)
+		updated = append(updated, entry)
+		updated = append(updated, lines[closing:]...)
+		lines = updated
+		closing++
+	}
+	rewritten := joinResolutionLines(lines)
+	if string(rewritten) == string(content) {
+		return content, false
+	}
+	return rewritten, true
 }

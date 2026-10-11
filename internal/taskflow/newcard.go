@@ -46,8 +46,9 @@ type NewCardOptions struct {
 	Created string
 	// DiscoveredIn is the issue frontmatter discovered-in value. Empty renders
 	// a visible placeholder; it is never taken from the title.
-	DiscoveredIn string
-	Criteria     []string
+	DiscoveredIn    string
+	DiscoveredInSet bool
+	Criteria        []string
 	// Sources are optional ## Sources bullets. Empty leaves the template bytes
 	// of `task new` unchanged.
 	Sources []string
@@ -127,11 +128,11 @@ func Create(ctx context.Context, opts NewCardOptions) (*NewCardResult, error) {
 			return nil, fmt.Errorf("%w: criterion %q needs a backtick command or `human — …` after | verify", ErrNewCardInput, criterion)
 		}
 	}
-	if kind != "issue" && strings.TrimSpace(opts.DiscoveredIn) != "" {
-		return nil, fmt.Errorf("%w: --discovered-in applies to issue cards; a %s card has no discovered-in field", ErrNewCardInput, kind)
+	if kind != "issue" && (opts.DiscoveredInSet || opts.DiscoveredIn != "") {
+		return nil, fmt.Errorf("%w: --discovered-in is only valid for an issue", ErrNewCardInput)
 	}
 	if strings.ContainsAny(opts.DiscoveredIn, "\r\n") {
-		return nil, fmt.Errorf("%w: discovered-in contains a line break", ErrNewCardInput)
+		return nil, fmt.Errorf("%w: --discovered-in must be a single-line reference", ErrNewCardInput)
 	}
 
 	// The id is taken LAST because taking it is a WRITE: the reservation

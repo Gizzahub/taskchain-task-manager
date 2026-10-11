@@ -10,12 +10,15 @@ import (
 )
 
 type Declaration struct {
-	Zones       []string
-	ZoneStatus  map[string]string
-	Transitions []Transition
-	Relocations []Transition
-	KindStatus  map[string]string
-	Modules     []string
+	Zones              []string
+	ZoneStatus         map[string]string
+	Transitions        []Transition
+	Relocations        []Transition
+	KindStatus         map[string]string
+	Modules            []string
+	TaskBoardDeclared  bool
+	ZoneSkillsDeclared bool
+	ZoneSkills         map[string]string
 }
 
 type Transition struct {
@@ -24,14 +27,16 @@ type Transition struct {
 }
 
 type Policy struct {
-	schemaVersion int
-	workflow      map[string]string
-	parked        map[string]string
-	edges         map[string]map[string]bool
-	relocations   map[string]map[string]bool
-	kindStatus    map[string]string
-	modules       []string
-	known         []string
+	schemaVersion     int
+	workflow          map[string]string
+	parked            map[string]string
+	edges             map[string]map[string]bool
+	relocations       map[string]map[string]bool
+	kindStatus        map[string]string
+	modules           []string
+	known             []string
+	taskBoardDeclared bool
+	zoneSkills        map[string]string
 }
 
 func Default() Policy {
@@ -168,7 +173,15 @@ func New(d Declaration) (Policy, error) {
 	if d.Modules != nil {
 		version = 3
 	}
-	return Policy{schemaVersion: version, workflow: workflow, parked: parked, edges: edges, relocations: relocations, kindStatus: kindStatus, modules: modules, known: known}, nil
+	zoneSkills, err := copyZoneSkills(d)
+	if err != nil {
+		return Policy{}, err
+	}
+	return Policy{
+		schemaVersion: version, workflow: workflow, parked: parked, edges: edges,
+		relocations: relocations, kindStatus: kindStatus, modules: modules, known: known,
+		taskBoardDeclared: d.TaskBoardDeclared || d.ZoneSkillsDeclared, zoneSkills: zoneSkills,
+	}, nil
 }
 
 func relocationSource(zone string, workflow map[string]string, parked map[string]string) bool {
@@ -284,3 +297,28 @@ func (p Policy) KnownDirs() []string     { return append([]string(nil), p.known.
 func (p Policy) ReadyZone() string       { return "todo" }
 func (p Policy) DoneZone() string        { return "done" }
 func (p Policy) InitialZone() string     { return "todo" }
+
+// ZoneSkill returns the skill declared for zone. An absent map, or a map
+// that does not name zone, returns an empty skill so callers omit it.
+func (p Policy) ZoneSkill(zone string) string {
+	if p.zoneSkills == nil {
+		return ""
+	}
+	return p.zoneSkills[zone]
+}
+
+// HasZoneSkills reports whether task-board.zone-skills was present.
+func (p Policy) HasZoneSkills() bool { return p.zoneSkills != nil }
+
+// ZoneSkills returns a copy of the declared map. The result is nil when the
+// map was absent.
+func (p Policy) ZoneSkills() map[string]string {
+	if p.zoneSkills == nil {
+		return nil
+	}
+	out := make(map[string]string, len(p.zoneSkills))
+	for zone, skill := range p.zoneSkills {
+		out[zone] = skill
+	}
+	return out
+}

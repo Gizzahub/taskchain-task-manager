@@ -46,27 +46,32 @@ func TestIssueCreationRejectsBeforeFileOrReservation(t *testing.T) {
 		{
 			name:    "discovered-in injection",
 			opts:    NewCardOptions{Kind: "issue", Title: "titled", DiscoveredIn: "file.go\nseverity: critical"},
-			wantErr: "new card: invalid input: discovered-in contains a line break",
+			wantErr: "new card: invalid input: --discovered-in must be a single-line reference",
 		},
 		{
 			name:    "discovered-in carriage return",
 			opts:    NewCardOptions{Kind: "issue", Title: "titled", DiscoveredIn: "file.go\rseverity: critical"},
-			wantErr: "new card: invalid input: discovered-in contains a line break",
+			wantErr: "new card: invalid input: --discovered-in must be a single-line reference",
 		},
 		{
 			name:    "task discovered-in",
 			opts:    NewCardOptions{Kind: "task", Title: "titled", DiscoveredIn: "file.go:1"},
-			wantErr: "new card: invalid input: --discovered-in applies to issue cards; a task card has no discovered-in field",
+			wantErr: "new card: invalid input: --discovered-in is only valid for an issue",
 		},
 		{
 			name:    "plan discovered-in",
 			opts:    NewCardOptions{Kind: "plan", Title: "titled", DiscoveredIn: "file.go:1"},
-			wantErr: "new card: invalid input: --discovered-in applies to issue cards; a plan card has no discovered-in field",
+			wantErr: "new card: invalid input: --discovered-in is only valid for an issue",
 		},
 		{
 			name:    "backlog discovered-in",
 			opts:    NewCardOptions{Kind: "backlog", Title: "titled", DiscoveredIn: "file.go:1"},
-			wantErr: "new card: invalid input: --discovered-in applies to issue cards; a backlog card has no discovered-in field",
+			wantErr: "new card: invalid input: --discovered-in is only valid for an issue",
+		},
+		{
+			name:    "task explicit empty discovered-in",
+			opts:    NewCardOptions{Kind: "task", Title: "titled", DiscoveredInSet: true},
+			wantErr: "new card: invalid input: --discovered-in is only valid for an issue",
 		},
 	}
 	for _, tt := range cases {
