@@ -58,7 +58,7 @@ func TestValidationCommandRefusals(t *testing.T) {
 		{"doctor help", []string{"doctor", "--help"}, 0, "", "usage: taskchain-task-manager task doctor ", ""},
 		{"doctor not a repo", []string{"doctor"}, 2, "not a git repository", "", ""},
 		{"gate-evidence unknown", []string{"gate-evidence"}, 1, unknownTaskCommandText("gate-evidence"), "", ""},
-		{"change-id unknown", []string{"change-id"}, 1, unknownTaskCommandText("change-id"), "", ""},
+		{"change-id unresolved source", []string{"change-id"}, 1, "source branch is not declared and origin/HEAD is unresolved", "", ""},
 		{"staged not a repo", []string{"validate", "--staged"}, 2, "staged validation requires a Git repository:", "", ""},
 	}
 	for _, tc := range cases {
