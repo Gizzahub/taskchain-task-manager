@@ -35,6 +35,7 @@ func TestPickCommandRefusals(t *testing.T) {
 		{name: "done review", args: []string{"done-review"}, code: 1, stderr: "ce task done-review was removed; use ce task review-run"},
 		{name: "state flag", args: []string{"todo-run", "--apply"}, code: 1, stderr: "unknown flag: --apply (valid: --dry-run, --json, --help, -h)"},
 		{name: "state help", args: []string{"blocked-recover", "--help"}, code: 0, stdoutHas: "Only blocked/ cards are eligible"},
+		{name: "state empty json", args: []string{"review-run", "--json"}, code: 0, stdoutHas: "\"candidates\":[]"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

@@ -77,6 +77,32 @@ func TestRecommendDependencyFaultsAndEffort(t *testing.T) {
 	}
 }
 
+func TestRecommendJSONCarriesExecTierAndDependsOn(t *testing.T) {
+	root := t.TempDir()
+	writeCards(t, root,
+		"tasks/done/003-old.md", cardDoc("TASK-3", "Old", "P2", "S", ""),
+		"tasks/todo/015-ready.md", cardDoc("TASK-15", "Ready", "P2", "S", "exec-tier: strong\ndepends-on:\n  - TASK-3\n"),
+		"tasks/todo/016-plain.md", cardDoc("TASK-16", "Plain", "P3", "S", ""),
+	)
+	report, err := Recommend(root, RecommendOptions{Limit: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := RenderRecommendJSON(&out, report); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	compact := strings.Join(strings.Fields(got), "")
+	want := `"created":"2026-10-11","exec_tier":"strong","depends_on":["TASK-3"],"acceptance_criteria"`
+	if !strings.Contains(compact, want) {
+		t.Fatalf("ready card lacks exec_tier/depends_on in list order:\n%s", got)
+	}
+	if strings.Count(got, "\"exec_tier\"") != 1 || strings.Count(got, "\"depends_on\"") != 1 {
+		t.Fatalf("a card without the fields must omit them:\n%s", got)
+	}
+}
+
 func TestRecommendEmptyReasons(t *testing.T) {
 	missing := t.TempDir()
 	report, err := Recommend(missing, RecommendOptions{})

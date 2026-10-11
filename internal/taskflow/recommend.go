@@ -299,10 +299,7 @@ func RenderRecommendJSON(w io.Writer, report *RecommendReport) error {
 		})
 	}
 	for _, rec := range report.Recommendations {
-		payload.Recommendations = append(payload.Recommendations, recommendItemJSON{
-			taskJSON: toTaskJSON(rec.Card),
-			Score:    rec.Score,
-		})
+		payload.Recommendations = append(payload.Recommendations, toRecommendItemJSON(rec))
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
@@ -312,9 +309,38 @@ func RenderRecommendJSON(w io.Writer, report *RecommendReport) error {
 	return nil
 }
 
+// recommendItemJSON is the list task fields plus score. Unlike list it
+// carries exec_tier and depends_on when the card sets them, as the
+// recommend contract names them; list output is left unchanged.
 type recommendItemJSON struct {
-	taskJSON
-	Score int `json:"score"`
+	Path               string   `json:"path"`
+	Title              string   `json:"title"`
+	Status             string   `json:"status"`
+	Priority           string   `json:"priority"`
+	Effort             string   `json:"effort"`
+	Category           string   `json:"category"`
+	Created            string   `json:"created"`
+	ExecTier           string   `json:"exec_tier,omitempty"`
+	DependsOn          []string `json:"depends_on,omitempty"`
+	AcceptanceCriteria []string `json:"acceptance_criteria"`
+	Score              int      `json:"score"`
+}
+
+func toRecommendItemJSON(rec Recommendation) recommendItemJSON {
+	base := toTaskJSON(rec.Card)
+	return recommendItemJSON{
+		Path:               base.Path,
+		Title:              base.Title,
+		Status:             base.Status,
+		Priority:           base.Priority,
+		Effort:             base.Effort,
+		Category:           base.Category,
+		Created:            base.Created,
+		ExecTier:           rec.Card.ExecTier,
+		DependsOn:          rec.Card.DependsOn,
+		AcceptanceCriteria: base.AcceptanceCriteria,
+		Score:              rec.Score,
+	}
 }
 
 type faultJSON struct {
