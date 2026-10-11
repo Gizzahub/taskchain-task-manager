@@ -57,8 +57,14 @@ func TestValidationCommandRefusals(t *testing.T) {
 		{"doctor capability missing", []string{"doctor", "--capability"}, 2, "flag --capability requires a value", "", ""},
 		{"doctor help", []string{"doctor", "--help"}, 0, "", "usage: taskchain-task-manager task doctor ", ""},
 		{"doctor not a repo", []string{"doctor"}, 2, "not a git repository", "", ""},
-		{"gate-evidence unknown", []string{"gate-evidence"}, 1, unknownTaskCommandText("gate-evidence"), "", ""},
-		{"change-id unknown", []string{"change-id"}, 1, unknownTaskCommandText("change-id"), "", ""},
+		{"gate-evidence help", []string{"gate-evidence", "--help"}, 0, "", "task gate-evidence", ""},
+		{"gate-evidence bogus", []string{"gate-evidence", "--bogus"}, 2, "unknown argument --bogus (valid: --log PATH, --help, -h)", "", ""},
+		{"gate-evidence log empty", []string{"gate-evidence", "--log"}, 2, "--log needs a path", "", ""},
+		{"gate-evidence log equals empty", []string{"gate-evidence", "--log="}, 2, "--log needs a path", "", ""},
+		{"gate-evidence bare", []string{"gate-evidence"}, 1, "ce-tasks.yaml does not declare gate.name and gate.log", "", ""},
+		{"change-id bogus", []string{"change-id", "--bogus"}, 2, "unknown argument --bogus (valid: --help, -h)", "", ""},
+		{"change-id bare", []string{"change-id"}, 1, "source branch is not declared and origin/HEAD is unresolved", "", ""},
+		{"resolve usage", []string{"resolve"}, 1, "usage: ce task resolve <issue-file> fixed [--by TASK-N] | duplicate [--by ISSUE-N] | wontfix | invalid", "", ""},
 		{"staged not a repo", []string{"validate", "--staged"}, 2, "staged validation requires a Git repository:", "", ""},
 	}
 	for _, tc := range cases {

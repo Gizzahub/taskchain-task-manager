@@ -3,9 +3,12 @@ package taskflow
 import (
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 )
 
 // stateZone is the directory each state action selects from.
@@ -66,6 +69,10 @@ func SelectState(root, action string, selected []string) (*StateResult, error) {
 	if !ok {
 		return nil, fmt.Errorf("unknown state action %q", action)
 	}
+	zoneSkills, err := loadZoneSkills(root)
+	if err != nil {
+		return nil, err
+	}
 	if err := readableTasksDir(root); err != nil {
 		return nil, err
 	}
@@ -93,6 +100,7 @@ func SelectState(root, action string, selected []string) (*StateResult, error) {
 		Candidates: []StateCandidate{},
 		NextAction: "Choose only an eligible card in the stated zone; do not infer authority from a score.",
 	}
+	result.Skill = zoneSkills[zone]
 	if len(selected) > 0 {
 		result.Status = "agent-handoff"
 		result.NextAction = "Invoke the referenced Skill with repository authority and verification contract; recheck the card zone before changes."
@@ -104,6 +112,21 @@ func SelectState(root, action string, selected []string) (*StateResult, error) {
 		result.Candidates = append(result.Candidates, toStateCandidate(card))
 	}
 	return result, nil
+}
+
+func loadZoneSkills(root string) (map[string]string, error) {
+	raw, err := os.ReadFile(filepath.Join(root, "ce-tasks.yaml"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read ce-tasks.yaml: %w", err)
+	}
+	skills, err := boardpolicy.ParseZoneSkills(raw)
+	if err != nil {
+		return nil, fmt.Errorf("decode task-board zone-skills: %w", err)
+	}
+	return skills, nil
 }
 
 func stateCandidates(root string, cards []*Card, zone string, selected []string) ([]*Card, error) {

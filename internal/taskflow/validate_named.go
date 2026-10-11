@@ -8,12 +8,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"gopkg.in/yaml.v3"
 )
 
-// CheckConfigYAML fails closed when ce-tasks.yaml exists and is not YAML.
-// A missing file is the default dialect and is not an error. The product has
-// no card-dialect schema, so this is the malformed-file check only.
+// CheckConfigYAML fails closed when ce-tasks.yaml exists and is not YAML, or
+// when task-board.zone-skills is present but is not a strict map of nonempty
+// strings onto zones named by card-dialect.zones. A missing file is not an
+// error. Other top-level blocks, such as task-gate and task-maintenance, stay
+// accepted.
 func CheckConfigYAML(root string) error {
 	path := filepath.Join(root, "ce-tasks.yaml")
 	raw, err := os.ReadFile(path)
@@ -25,6 +28,9 @@ func CheckConfigYAML(root string) error {
 	}
 	var doc any
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return fmt.Errorf("decode ce-tasks.yaml: %w", err)
+	}
+	if _, err := boardpolicy.ParseZoneSkills(raw); err != nil {
 		return fmt.Errorf("decode ce-tasks.yaml: %w", err)
 	}
 	return nil

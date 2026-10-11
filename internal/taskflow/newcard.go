@@ -43,8 +43,11 @@ type NewCardOptions struct {
 	Agent    string
 	// Created is the YYYY-MM-DD stamp; the caller supplies it so the creator
 	// stays deterministic.
-	Created  string
-	Criteria []string
+	Created string
+	// DiscoveredIn is the issue frontmatter discovered-in value. Empty renders
+	// a visible placeholder; it is never taken from the title.
+	DiscoveredIn string
+	Criteria     []string
 	// Sources are optional ## Sources bullets. Empty leaves the template bytes
 	// of `task new` unchanged.
 	Sources []string
@@ -109,10 +112,26 @@ func Create(ctx context.Context, opts NewCardOptions) (*NewCardResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Kind and line-break refusals stay above binding checks and above the
+	// reservation write: a rejected request must not take an id.
+	if (kind == "plan" || kind == "backlog") && len(opts.Criteria) > 0 {
+		return nil, fmt.Errorf("%w: --criterion applies to task and issue cards; a %s card has no Completion Criteria section", ErrNewCardInput, kind)
+	}
+	for _, criterion := range opts.Criteria {
+		if strings.ContainsAny(criterion, "\r\n") {
+			return nil, fmt.Errorf("%w: criterion %q spans several lines; pass each criterion as its own --criterion", ErrNewCardInput, criterion)
+		}
+	}
 	for _, criterion := range opts.Criteria {
 		if !verifyBindingValid(criterion) {
 			return nil, fmt.Errorf("%w: criterion %q needs a backtick command or `human — …` after | verify", ErrNewCardInput, criterion)
 		}
+	}
+	if kind != "issue" && strings.TrimSpace(opts.DiscoveredIn) != "" {
+		return nil, fmt.Errorf("%w: --discovered-in applies to issue cards; a %s card has no discovered-in field", ErrNewCardInput, kind)
+	}
+	if strings.ContainsAny(opts.DiscoveredIn, "\r\n") {
+		return nil, fmt.Errorf("%w: discovered-in contains a line break", ErrNewCardInput)
 	}
 
 	// The id is taken LAST because taking it is a WRITE: the reservation
@@ -308,6 +327,17 @@ func yamlQuote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
 }
 
+// discoveredInEmpty is the stable frontmatter literal when DiscoveredIn is omitted.
+const discoveredInEmpty = `""`
+
+func discoveredInValue(raw string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return discoveredInEmpty
+	}
+	return yamlQuote(value)
+}
+
 // render writes the canonical card template. Every field it emits is one the
 // validator checks, so a freshly created card is a valid one.
 func render(kind, id string, f cardFields, opts NewCardOptions) string {
@@ -337,7 +367,7 @@ func render(kind, id string, f cardFields, opts NewCardOptions) string {
 		if opts.Created == "" {
 			opts.Created = time.Now().Format("2006-01-02")
 		}
-		fmt.Fprintf(&b, "severity: medium\ndiscovered-in: %s\ndiscovered-at: %s\n", yamlQuote(strings.TrimSpace(opts.Title)), opts.Created)
+		fmt.Fprintf(&b, "severity: medium\ndiscovered-in: %s\ndiscovered-at: %s\n", discoveredInValue(opts.DiscoveredIn), opts.Created)
 	}
 	if opts.Created != "" {
 		fmt.Fprintf(&b, "created: %s\n", opts.Created)
@@ -354,6 +384,12 @@ func render(kind, id string, f cardFields, opts NewCardOptions) string {
 		b.WriteString("|---|---------|--------|--------|-----------|--------|\n")
 	case "issue":
 		b.WriteString("## Summary\n\n<!-- One paragraph: what is wrong and who it affects. -->\n\n## Reproduction\n\n1. \n\n## Expected vs Actual\n\n- Expected: \n- Actual: \n")
+		if len(opts.Criteria) > 0 {
+			b.WriteString("\n## Completion Criteria\n\n")
+			for _, criterion := range opts.Criteria {
+				fmt.Fprintf(&b, "- [ ] %s\n", strings.TrimSpace(criterion))
+			}
+		}
 	case "backlog":
 		b.WriteString("## Description\n\n<!-- What the idea is. -->\n\n## Expected Value\n\n<!-- Why it would be worth doing. -->\n")
 	default:

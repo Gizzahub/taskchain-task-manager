@@ -78,6 +78,37 @@ func TestStateSelection(t *testing.T) {
 	}
 }
 
+func TestStateSelectionUsesDeclaredZoneSkill(t *testing.T) {
+	root := t.TempDir()
+	writeCards(t, root, "tasks/todo/001-one.md", cardDoc("TASK-1", "One", "P2", "S", ""))
+	if err := os.WriteFile(filepath.Join(root, "ce-tasks.yaml"), []byte("card-dialect:\n  zones: [todo]\ntask-board:\n  zone-skills:\n    todo: task.todo-resolve\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := SelectState(root, "todo-run", []string{"TASK-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Skill != "task.todo-resolve" || result.Status != "agent-handoff" {
+		t.Fatalf("result=%+v", result)
+	}
+	var text bytes.Buffer
+	RenderStateText(&text, result)
+	if !strings.Contains(text.String(), "zone=todo, skill=task.todo-resolve") {
+		t.Fatalf("text=%q", text.String())
+	}
+}
+
+func TestStateSelectionRejectsInvalidZoneSkillDeclaration(t *testing.T) {
+	root := t.TempDir()
+	writeCards(t, root, "tasks/todo/001-one.md", cardDoc("TASK-1", "One", "P2", "S", ""))
+	if err := os.WriteFile(filepath.Join(root, "ce-tasks.yaml"), []byte("task-board: {zone-skills: {unknown: task.unknown}}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SelectState(root, "todo-run", nil); err == nil || !strings.Contains(err.Error(), "undeclared zone") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestStateDuplicateIDAndArchiveHidden(t *testing.T) {
 	root := t.TempDir()
 	writeCards(t, root,

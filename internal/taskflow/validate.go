@@ -52,6 +52,32 @@ func (r *ValidationResult) addWarning(field, message string) {
 	r.Warnings = append(r.Warnings, Finding{Field: field, Message: message})
 }
 
+func appendGateEvidence(result *ValidationResult, ctx context.Context, root, content string) {
+	errs, warns := CheckGateEvidence(ctx, root, content)
+	for _, finding := range errs {
+		result.addError(finding.Field, finding.Message)
+	}
+	for _, finding := range warns {
+		result.addWarning(finding.Field, finding.Message)
+	}
+}
+
+// evidenceScanText keeps file line numbers and skips a closed frontmatter
+// block, so a frontmatter key is not mistaken for an evidence block.
+func evidenceScanText(raw string) string {
+	lines := strings.Split(raw, "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return raw
+	}
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) != "---" {
+			continue
+		}
+		return strings.Repeat("\n", i+1) + strings.Join(lines[i+1:], "\n")
+	}
+	return raw
+}
+
 // Citations counts the path bindings validate examined across the board.
 type Citations struct {
 	Examined int
@@ -65,12 +91,15 @@ var cardFilenameShapeRe = regexp.MustCompile(`^([0-9]{2,3}|P[0-9])-[a-z0-9]+(-[a
 // order. The order is load-bearing: findings render errors-then-warnings per
 // card, and the fixture contract pins the sequence within each list.
 
-func validateCard(ctx context.Context, root, tasksDir string, card *Card, index *corpusIndex, citations *Citations, checks ...cardCheck) ValidationResult {
+func validateCard(ctx context.Context, root, tasksDir string, card *Card, index *corpusIndex, citations *Citations, checks ...cardCheck) (result ValidationResult) {
 	var check cardCheck
 	if len(checks) > 0 {
 		check = checks[0]
 	}
-	result := ValidationResult{Path: pathJoin(tasksDir, card.TasksRel)}
+	result = ValidationResult{Path: pathJoin(tasksDir, card.TasksRel)}
+	defer func() {
+		appendGateEvidence(&result, ctx, root, evidenceScanText(string(card.Raw)))
+	}()
 	fields, body, detected, err := parseCanonicalDocument(string(card.Raw))
 	if !detected {
 		return result
@@ -115,8 +144,10 @@ func validateCard(ctx context.Context, root, tasksDir string, card *Card, index 
 		validateCanonicalWorkTask(&result, fields, body)
 	case canonicalPlan:
 		validateCanonicalPlan(&result, fields, body)
-	case canonicalIssue, canonicalBacklog:
-		// The issue and backlog schemas are not exercised by any pinned
+	case canonicalIssue:
+		validateIssueDiscovery(&result, fields)
+	case canonicalBacklog:
+		// The backlog schema is not exercised by any pinned
 		// fixture and are deliberate divergences of this port; a card whose
 		// id or zone names those kinds still gets every shared check.
 	}
@@ -518,9 +549,12 @@ func validateAllIn(ctx context.Context, root, tasksDir string, tree *CriterionTr
 // validateDecisionDocument validates one ADR/decision document by the
 // decision schema. It never touches the citations census: decision documents
 // carry no verify bindings.
-func validateDecisionDocument(ctx context.Context, root, tasksDir string, card *Card) ValidationResult {
-	result := ValidationResult{Path: pathJoin(tasksDir, card.TasksRel)}
+func validateDecisionDocument(ctx context.Context, root, tasksDir string, card *Card) (result ValidationResult) {
+	result = ValidationResult{Path: pathJoin(tasksDir, card.TasksRel)}
 	content := string(card.Raw)
+	defer func() {
+		appendGateEvidence(&result, ctx, root, content)
+	}()
 	validateDecisionDoc(content, &result)
 	validateDecisionLinks(ctx, root, result.Path, content, &result)
 	return result

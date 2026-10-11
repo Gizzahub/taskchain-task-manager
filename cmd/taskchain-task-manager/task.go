@@ -17,11 +17,11 @@ import (
 // taskUsage is the noun's one-line contract, shown when the noun itself is
 // mistyped. Per-subcommand misuse is reported by the subcommand, at the exit
 // code the pinned reference gives that subcommand's own refusals.
-const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|validate|lint|preflight|gate|review-receipt|doctor|board|recommend|promote|issue-promote|plan-promote|backlog-promote|todo-run|doing-resume|review-run|blocked-recover|done-finalize|done-finalize-all|cleanup|maintenance|reconcile|run-doctor|run-start|run-status|run-list|run-finish|run-recover|run-abort|run-close|run-settle|run-discard> ..."
+const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|resolve|validate|lint|preflight|gate|gate-evidence|change-id|review-receipt|doctor|board|recommend|promote|issue-promote|plan-promote|backlog-promote|todo-run|doing-resume|review-run|blocked-recover|done-finalize|done-finalize-all|cleanup|maintenance|reconcile|run-doctor|run-start|run-status|run-list|run-finish|run-recover|run-abort|run-close|run-settle|run-discard> ..."
 
 // taskCommandList is the unknown-command diagnostic. It names every command
 // this noun dispatches, in the same order as taskUsage.
-const taskCommandList = "list, new, move, archive, validate, lint, preflight, gate, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, done-finalize-all, cleanup, maintenance, reconcile, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard"
+const taskCommandList = "list, new, move, archive, resolve, validate, lint, preflight, gate, gate-evidence, change-id, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, done-finalize-all, cleanup, maintenance, reconcile, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard"
 
 // runTask dispatches the CE-parity `task` noun. The pinned reference splits
 // its refusals two ways, and the split is preserved here: what the caller
@@ -57,6 +57,8 @@ func runTask(args []string, out, errOut io.Writer) int {
 		err = taskMove(ctx, args[1:], out)
 	case "archive":
 		err = taskArchive(args[1:], out)
+	case "resolve":
+		err = taskResolve(ctx, args[1:], out)
 	case "validate":
 		err = taskValidate(ctx, args[1:], out, errOut)
 	case "lint":
@@ -64,7 +66,11 @@ func runTask(args []string, out, errOut io.Writer) int {
 	case "preflight":
 		err = taskPreflight(ctx, args[1:], out)
 	case "gate":
-		err = taskGate(ctx, args[1:], out)
+		err = taskGate(ctx, args[1:], out, errOut)
+	case "gate-evidence":
+		err = taskGateEvidence(ctx, args[1:], out)
+	case "change-id":
+		err = taskChangeID(ctx, args[1:], out)
 	case "board":
 		err = taskBoard(ctx, args[1:], out)
 	case "recommend":
@@ -225,6 +231,16 @@ func parseTaskNewArgs(args []string, out io.Writer) (taskflow.NewCardOptions, bo
 			return opts, false, nil
 		case arg == "--json":
 			asJSON = true
+		case arg == "--discovered-in":
+			value, err := flagValue(args, i)
+			if err != nil {
+				return opts, false, usagef("%s", err)
+			}
+			if strings.TrimSpace(value) == "" || strings.HasPrefix(value, "--") {
+				return opts, false, usagef("--discovered-in needs a nonempty value")
+			}
+			i++
+			opts.DiscoveredIn = value
 		case arg == "--criterion":
 			value, err := flagValue(args, i)
 			if err != nil {
@@ -242,7 +258,7 @@ func parseTaskNewArgs(args []string, out io.Writer) (taskflow.NewCardOptions, bo
 				continue
 			}
 			if strings.HasPrefix(arg, "-") {
-				return opts, false, usagef("unknown argument %s (valid: --id, --title, --slug, --type, --priority, --effort, --exec-tier, --agent, --criterion, --json, --help, -h)", arg)
+				return opts, false, usagef("unknown argument %s (valid: --id, --title, --slug, --type, --priority, --effort, --exec-tier, --agent, --criterion, --discovered-in, --json, --help, -h)", arg)
 			}
 			if opts.Kind != "" {
 				return opts, false, usagef("one kind only; got %q and %q", opts.Kind, arg)

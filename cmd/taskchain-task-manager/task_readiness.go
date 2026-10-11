@@ -111,7 +111,7 @@ func taskPreflight(ctx context.Context, args []string, out io.Writer) error {
 	return nil
 }
 
-func taskGate(ctx context.Context, args []string, out io.Writer) error {
+func taskGate(ctx context.Context, args []string, out, errOut io.Writer) error {
 	asJSON := false
 	dir := ""
 	for i := 0; i < len(args); i++ {
@@ -158,6 +158,14 @@ func taskGate(ctx context.Context, args []string, out io.Writer) error {
 	}
 	switch report.Status {
 	case "ready":
+		cwd, cwdErr := os.Getwd()
+		if cwdErr != nil {
+			fmt.Fprintf(errOut, "gate receipt not written: %s\n", cwdErr)
+			return nil
+		}
+		if err := taskflow.WriteReadyGateReceipt(ctx, cwd); err != nil {
+			fmt.Fprintf(errOut, "gate receipt not written: %s\n", err)
+		}
 		return nil
 	case "unavailable":
 		return usagef("%s", report.Summary)

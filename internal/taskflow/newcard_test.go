@@ -46,6 +46,8 @@ func TestCreateRefusesBeforeWriting(t *testing.T) {
 		{"bad effort", NewCardOptions{Kind: "task", Title: "x", Effort: "XXL"}, "--effort"},
 		{"bad exec tier", NewCardOptions{Kind: "task", Title: "x", ExecTier: "fast"}, "--exec-tier"},
 		{"unbound criterion", NewCardOptions{Kind: "task", Title: "x", Criteria: []string{"just text"}}, "| verify"},
+		{"plan criteria", NewCardOptions{Kind: "plan", Title: "x", Criteria: []string{"just text"}}, "--criterion applies to task and issue cards; a plan card has no Completion Criteria section"},
+		{"criterion newline", NewCardOptions{Kind: "task", Title: "x", Criteria: []string{"a\nb"}}, "criterion \"a\\nb\" spans several lines; pass each criterion as its own --criterion"},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
