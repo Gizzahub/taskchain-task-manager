@@ -173,12 +173,19 @@ func checkEvidenceBlock(block evidenceBlock) []Finding {
 	}
 	if value, ok := values["tested-tree"]; ok && value != "" && value != "yes" && value != "no" {
 		findings = append(findings, evidenceFinding(numbers["tested-tree"], "tested-tree", "is neither yes nor no"))
+	} else if value == "no" {
+		findings = append(findings, evidenceFinding(numbers["tested-tree"], "tested-tree", "is not yes; evidence must bind the tested tree"))
 	}
 	if value, ok := values["gates-the-commit"]; ok && value != "" {
 		if !strings.HasPrefix(value, "yes") && !strings.HasPrefix(value, "no") {
 			findings = append(findings, evidenceFinding(numbers["gates-the-commit"], "gates-the-commit", "does not start with yes or no"))
-		} else if derived, ok := derivedFromBlock(values); ok && value != derived {
-			findings = append(findings, evidenceFinding(numbers["gates-the-commit"], "gates-the-commit", "claims "+value+", but the block derives: "+derived))
+		} else {
+			if derived, ok := derivedFromBlock(values); ok && value != derived {
+				findings = append(findings, evidenceFinding(numbers["gates-the-commit"], "gates-the-commit", "claims "+value+", but the block derives: "+derived))
+			}
+			if strings.HasPrefix(value, "no") {
+				findings = append(findings, evidenceFinding(numbers["gates-the-commit"], "gates-the-commit", "is not yes; evidence must gate the commit"))
+			}
 		}
 	}
 	return findings
@@ -205,6 +212,9 @@ func checkEvidenceResult(line int, value, fails string) []Finding {
 			return []Finding{evidenceFinding(line, "result", "is not `PASS (exit N)`")}
 		}
 		return []Finding{evidenceFinding(line, "result", "says "+word+" beside exit "+exitCode)}
+	}
+	if code, err := strconv.Atoi(exitCode); err != nil || code != 0 {
+		return []Finding{evidenceFinding(line, "result", "says PASS beside exit "+exitCode+"; evidence requires exit 0")}
 	}
 	if n, err := strconv.Atoi(fails); err == nil && n > 0 {
 		return []Finding{evidenceFinding(line, "result", fmt.Sprintf("says PASS beside %d counted failures", n))}
@@ -298,9 +308,18 @@ func changeIDIntegrated(ctx context.Context, root, changeID string) (string, boo
 	if err != nil {
 		return source, false, err
 	}
-	out, err := gitOutput(ctx, root, "--no-replace-objects", "--no-lazy-fetch", "log", peer, "--format=%B%x1e")
+	out, stderr, err := gitRaw(root, "log", "-z", "--format=%B", peer)
 	if err != nil {
-		return source, false, err
+		if message := strings.TrimSpace(stderr); message != "" {
+			return source, false, fmt.Errorf("read source branch %s commit messages: %s", peer, message)
+		}
+		return source, false, fmt.Errorf("read source branch %s commit messages: %w", peer, err)
 	}
-	return source, strings.Contains(out, "Change-Id: "+changeID), nil
+	for _, message := range splitGitLogMessages(string(out)) {
+		declared, err := ChangeIDFromCommitMessage(message)
+		if err == nil && declared == changeID {
+			return source, true, nil
+		}
+	}
+	return source, false, nil
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskflow"
 )
@@ -32,11 +31,6 @@ and binds HEAD, tree, and Change-Id.`)
 			}
 			i++
 			logFlag = args[i]
-		case strings.HasPrefix(arg, "--log="):
-			logFlag = strings.TrimPrefix(arg, "--log=")
-			if logFlag == "" {
-				return usagef("--log needs a path")
-			}
 		default:
 			return usagef("unknown argument %s (valid: --log PATH, --help, -h)", arg)
 		}

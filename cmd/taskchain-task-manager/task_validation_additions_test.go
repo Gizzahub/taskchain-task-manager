@@ -60,7 +60,7 @@ func TestValidationCommandRefusals(t *testing.T) {
 		{"gate-evidence help", []string{"gate-evidence", "--help"}, 0, "", "task gate-evidence", ""},
 		{"gate-evidence bogus", []string{"gate-evidence", "--bogus"}, 2, "unknown argument --bogus (valid: --log PATH, --help, -h)", "", ""},
 		{"gate-evidence log empty", []string{"gate-evidence", "--log"}, 2, "--log needs a path", "", ""},
-		{"gate-evidence log equals empty", []string{"gate-evidence", "--log="}, 2, "--log needs a path", "", ""},
+		{"gate-evidence log equals empty", []string{"gate-evidence", "--log="}, 2, "unknown argument --log= (valid: --log PATH, --help, -h)", "", ""},
 		{"gate-evidence bare", []string{"gate-evidence"}, 1, "ce-tasks.yaml does not declare gate.name and gate.log", "", ""},
 		{"change-id bogus", []string{"change-id", "--bogus"}, 2, "unknown argument --bogus (valid: --help, -h)", "", ""},
 		{"change-id bare", []string{"change-id"}, 1, "source branch is not declared and origin/HEAD is unresolved", "", ""},

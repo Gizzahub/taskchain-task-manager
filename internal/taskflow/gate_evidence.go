@@ -313,6 +313,9 @@ func bindGateEvidence(ctx context.Context, root, gateName string, receipt *ciRec
 	if receipt.Result != "PASS" {
 		return "", fmt.Errorf("CI log result is FAIL (exit %d); evidence requires a clean PASS after the commit", receipt.ExitCode)
 	}
+	if receipt.ExitCode != 0 {
+		return "", fmt.Errorf("CI log result is PASS (exit %d); evidence requires exit 0", receipt.ExitCode)
+	}
 	dated, err := gitOutput(ctx, root, "--no-replace-objects", "--no-lazy-fetch", "log", "-1", "--format=%cI", "HEAD")
 	if err != nil {
 		return "", err
