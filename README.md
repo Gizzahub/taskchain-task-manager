@@ -12,6 +12,20 @@
 claim/release와 소유권 기반 상태 전이·재개를 지원합니다. Intent/Batch/Iteration 문서의 구문 검증과 불변 등록·조회를 제공합니다.
 명시한 여러 저장소의 카드 또는 등록 context를 읽기 전용으로 조회할 수 있습니다.
 
+## 통합 요청 접수와 조회
+
+`task integration request --queue-root /absolute/shared/queue --repo /absolute/repo
+--repo-id CANONICAL_ID --task TASK --idempotency-key KEY --json`은 현재 delivery 실행과
+Git tip을 묶어 영속 요청을 접수합니다. 같은 coordinator root를 사용하는 요청은 자원별
+접수 순서를 공유합니다. `task integration status --queue-root /absolute/shared/queue --json`으로
+조회하고, 실행 전 취소는 `task integration cancel`을 사용합니다. 자세한 인자는 각 명령의
+`--help`에서 확인합니다.
+
+이 단계는 접수·조회·취소를 제공합니다. 실제 통합 실행기는 별도 구현 대상입니다.
+coordinator의 대기 순서는 로컬 요청에서 측정하며, provider의 입장 순서와 대기 사유는
+관측 자료가 없으면 `UNKNOWN`으로 표시합니다. 저장소 ID는 호출자가 확인한 정본 ID를
+지정하며 catalog의 명령 문자열을 실행하지 않습니다.
+
 ## 빌드와 실행
 
 Go 1.26.6 이상이 필요합니다.

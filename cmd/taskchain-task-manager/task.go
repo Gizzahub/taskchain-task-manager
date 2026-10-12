@@ -17,11 +17,11 @@ import (
 // taskUsage is the noun's one-line contract, shown when the noun itself is
 // mistyped. Per-subcommand misuse is reported by the subcommand, at the exit
 // code the pinned reference gives that subcommand's own refusals.
-const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|resolve|change-id|validate|lint|preflight|gate|gate-evidence|review-receipt|doctor|board|recommend|promote|issue-promote|plan-promote|backlog-promote|todo-run|doing-resume|review-run|blocked-recover|done-finalize|done-finalize-all|cleanup|maintenance|reconcile|run-doctor|run-start|run-status|run-list|run-finish|run-recover|run-abort|run-close|run-settle|run-discard> ..."
+const taskUsage = "usage: taskchain-task-manager task <list|new|move|archive|resolve|change-id|validate|lint|preflight|gate|gate-evidence|review-receipt|doctor|board|recommend|promote|issue-promote|plan-promote|backlog-promote|todo-run|doing-resume|review-run|blocked-recover|done-finalize|done-finalize-all|cleanup|maintenance|reconcile|run-doctor|run-start|run-status|run-list|run-finish|run-recover|run-abort|run-close|run-settle|run-discard|integration> ..."
 
 // taskCommandList is the unknown-command diagnostic. It names every command
 // this noun dispatches, in the same order as taskUsage.
-const taskCommandList = "list, new, move, archive, resolve, change-id, validate, lint, preflight, gate, gate-evidence, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, done-finalize-all, cleanup, maintenance, reconcile, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard"
+const taskCommandList = "list, new, move, archive, resolve, change-id, validate, lint, preflight, gate, gate-evidence, review-receipt, doctor, board, recommend, promote, issue-promote, plan-promote, backlog-promote, todo-run, doing-resume, review-run, blocked-recover, done-finalize, done-finalize-all, cleanup, maintenance, reconcile, run-doctor, run-start, run-status, run-list, run-finish, run-recover, run-abort, run-close, run-settle, run-discard, integration"
 
 // runTask dispatches the CE-parity `task` noun. The pinned reference splits
 // its refusals two ways, and the split is preserved here: what the caller
@@ -49,6 +49,8 @@ func runTask(args []string, out, errOut io.Writer) int {
 	ctx := context.Background()
 	var err error
 	switch args[0] {
+	case "integration":
+		err = taskIntegration(ctx, args[1:], out)
 	case "list":
 		err = taskList(args[1:], out)
 	case "new":

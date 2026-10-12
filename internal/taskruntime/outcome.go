@@ -2,6 +2,12 @@ package taskruntime
 
 import "context"
 
+// ResolveOwner resolves the caller using the same identity policy as lifecycle
+// commands. It does not load a runtime declaration or mutate execution state.
+func (s *Service) ResolveOwner(ctx context.Context) (Owner, error) {
+	return s.owner(ctx)
+}
+
 func (s *Service) owner(ctx context.Context) (Owner, error) {
 	current, _, err := s.resolveOwner(ctx)
 	return current, err
