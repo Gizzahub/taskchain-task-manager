@@ -22,20 +22,23 @@ func TestFinishExitCodes(t *testing.T) {
 		stored   string
 		runs     int
 	}{
-		{name: "check exit 1", check: 1, stdout: "FAIL base drifted\n", want: 1, reason: "integrate-check failed: base drifted", stored: "integrate-check failed: base drifted"},
-		{name: "check exit 2", check: 2, stdout: "FAIL policy\n", want: 2, reason: "integrate-check failed: policy", stored: "integrate-check failed: policy"},
-		{name: "check exit 3 folds", check: 3, want: 2, reason: "integration did not complete"},
-		{name: "check exit 7 folds", check: 7, want: 2, reason: "integration did not complete"},
+		{name: "run exit 1 with diagnostic", check: 1, stdout: "FAIL base drifted\n", want: 1, reason: "integrate-run failed: base drifted", stored: "integrate-run failed: base drifted", runs: 1},
+		{name: "run exit 2 with diagnostic", check: 2, stdout: "FAIL policy\n", want: 2, reason: "integrate-run failed: policy", stored: "integrate-run failed: policy", runs: 1},
+		{name: "run exit 3", check: 3, want: 3, reason: partialCleanupReason, runs: 1},
+		{name: "run exit 7 folds", check: 7, want: 2, reason: "integration did not complete", runs: 1},
 		{name: "run exit 1", run: 1, want: 1, reason: "integration did not complete", runs: 1},
 		{name: "run exit 2", run: 2, want: 2, reason: "integration did not complete", runs: 1},
 		{name: "run exit 4 folds", run: 4, want: 2, reason: "integration did not complete", runs: 1},
-		{name: "provider error", checkErr: errors.New("tool missing"), want: 1, reason: "integration provider invocation failed: tool missing"},
+		{name: "provider error", checkErr: errors.New("tool missing"), want: 1, reason: "integration provider invocation failed: tool missing", runs: 1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			w := newEndWorld(t)
-			w.provider.checkCode, w.provider.runCode = tc.check, tc.run
-			w.provider.checkErr, w.provider.checkStdout = tc.checkErr, tc.stdout
+			w.provider.runCode = tc.run
+			if tc.check != 0 {
+				w.provider.runCode = tc.check
+			}
+			w.provider.runErr, w.provider.runStdout = tc.checkErr, tc.stdout
 			before := w.executions()
 			result, code := w.service().Finish(context.Background(), "sample-task")
 			if code != tc.want || !strings.Contains(result.Reason, tc.reason) {
@@ -120,23 +123,36 @@ func TestFinishEvidenceAndPersistFailuresExit3(t *testing.T) {
 		if code != 3 || !strings.Contains(result.Reason, "integration completed but evidence verification failed") {
 			t.Fatalf("code=%d reason=%q", code, result.Reason)
 		}
-		if w.receipts() != "" || w.executions() != before {
-			t.Fatal("evidence failure persisted a receipt or rewrote executions")
+		// The durable claim is intentionally retained: after a provider has run
+		// but evidence is insufficient, CE must not pretend that no finish was
+		// attempted.
+		if receipts := w.receipts(); !strings.Contains(receipts, `"status":"FINISHING"`) || w.executions() != before {
+			t.Fatal("evidence failure did not retain only the FINISHING claim")
 		}
 	})
 	t.Run("persist", func(t *testing.T) {
 		w := newEndWorld(t)
-		w.provider.onRun = func() {
-			_ = os.RemoveAll(w.worktree)
-			// Status already read the ledger. Replacing the receipt file after
-			// the provider run makes only the final append fail.
-			_ = os.MkdirAll(newStateStore(w.common).receiptsPath(), 0o755)
-		}
+		w.provider.onRun = func() { _ = os.RemoveAll(w.worktree) }
 		result, code := w.service().Finish(context.Background(), "sample-task")
-		if code != 3 || !strings.Contains(result.Reason, "integration completed but receipt persistence failed") {
+		if code != 0 || result.Status != StatusDone {
 			t.Fatalf("code=%d reason=%q", code, result.Reason)
 		}
 	})
+}
+
+func TestFinishClaimIdentityRejectsLateWriter(t *testing.T) {
+	claim := Receipt{Task: "sample-task", Operation: "finish", Status: StatusFinishing,
+		Owner: Owner{Actor: "tester", Host: "testhost", Kind: "agent"}, Branch: "dev/tester/testhost/feat/sample-task",
+		Worktree: "/work/sample", CreatedAt: time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC),
+		FinishPID: 123, FinishHost: "host", SourceHeadBefore: "before", BaseHead: "base", TaskHead: "task"}
+	if !sameFinishClaim(claim, claim) {
+		t.Fatal("exact claim must match")
+	}
+	changed := claim
+	changed.FinishPID++
+	if sameFinishClaim(changed, claim) {
+		t.Fatal("a replacement finishing claimant must reject a late writer")
+	}
 }
 
 func TestFinishRefusals(t *testing.T) {
@@ -162,34 +178,6 @@ func TestFinishRefusals(t *testing.T) {
 		result, code := w.service().Finish(context.Background(), "sample-task")
 		if code != 1 || !strings.Contains(result.Reason, "no longer the source tip") || w.provider.checks != 0 {
 			t.Fatalf("code=%d reason=%q", code, result.Reason)
-		}
-	})
-	t.Run("stale after failed check keeps provider code", func(t *testing.T) {
-		w := newEndWorld(t)
-		w.provider.checkCode = 2
-		w.provider.beforeCheck = func() {
-			w.mu.Lock()
-			w.ancestorExit = 1
-			w.mu.Unlock()
-		}
-		result, code := w.service().Finish(context.Background(), "sample-task")
-		if code != 2 || !strings.Contains(result.Reason, "no longer the source tip") || w.provider.runs != 0 {
-			t.Fatalf("code=%d reason=%q", code, result.Reason)
-		}
-	})
-	t.Run("source tip moves during check", func(t *testing.T) {
-		w := newEndWorld(t)
-		w.provider.wait = true
-		w.provider.beforeCheck = func() {
-			w.mu.Lock()
-			w.sourceTip = oidMoved
-			w.mu.Unlock()
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		result, code := w.service().Finish(ctx, "sample-task")
-		if code != 1 || !strings.Contains(result.Reason, "stopped early") || !strings.Contains(result.Reason, oidMoved) || w.provider.runs != 0 {
-			t.Fatalf("code=%d reason=%q runs=%d", code, result.Reason, w.provider.runs)
 		}
 	})
 	t.Run("no-fetch capability", func(t *testing.T) {

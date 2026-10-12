@@ -70,6 +70,9 @@ func (s *Service) Close(ctx context.Context, task, reason string) (Response, int
 	if TerminalStatus(previous.Status) {
 		return response(StatusBlocked, task, "terminal receipt is not valid for this execution", "inspect task receipt binding"), 1
 	}
+	if previous.Status == StatusFinishing {
+		return response(StatusBlocked, task, "run-close refuses an execution with a FINISHING claim", "wait for the finishing claimant or use run-status"), 1
+	}
 	if _, err := os.Stat(current.Worktree); !os.IsNotExist(err) {
 		return response(StatusBlocked, task, "recorded worktree is present or cannot be inspected", "resolve the live execution before administrative closure"), 1
 	}

@@ -31,6 +31,9 @@ func (s *Service) Settle(ctx context.Context, task string) (Response, int) {
 	if err != nil {
 		return response(StatusBlocked, task, err.Error(), "inspect task receipts"), 1
 	}
+	if observedReceipts[task].Status == StatusFinishing {
+		return response(StatusBlocked, task, "run-settle refuses an execution with a FINISHING claim", "wait for the finishing claimant or use run-status"), 1
+	}
 	var taskHead, sourceHead string
 	if !TerminalStatus(observedReceipts[task].Status) {
 		taskHead, sourceHead, err = s.settlementEvidence(ctx, execution)
@@ -63,6 +66,9 @@ func (s *Service) Settle(ctx context.Context, task string) (Response, int) {
 	}
 	if previous := receipts[task]; TerminalStatus(previous.Status) {
 		return response(StatusBlocked, task, "terminal receipt is not valid for this execution", "inspect task receipt binding"), 1
+	}
+	if previous := receipts[task]; previous.Status == StatusFinishing {
+		return response(StatusBlocked, task, "run-settle refuses an execution with a FINISHING claim", "wait for the finishing claimant or use run-status"), 1
 	}
 	if taskHead == "" || sourceHead == "" {
 		return response(StatusBlocked, task, "terminal evidence changed before settlement", "retry after inspecting receipts"), 1

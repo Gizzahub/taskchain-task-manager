@@ -18,6 +18,9 @@ type Service struct {
 	// provider, when set, replaces the gz-git command line. Production leaves
 	// it nil so Check and Run are the documented integrate invocations.
 	provider IntegrationProvider
+	// Test override for the production ten-minute outcome relock bound.
+	finishRelockWait  time.Duration
+	claimProcessStart func(context.Context, int) (time.Time, error)
 	// sourcePollInterval is how often run-finish re-reads the source tip
 	// during the integration check. Zero selects the default.
 	sourcePollInterval time.Duration

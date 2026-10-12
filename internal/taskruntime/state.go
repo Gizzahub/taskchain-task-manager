@@ -27,6 +27,19 @@ func (s *Service) deriveState(ctx context.Context, execution Execution, receipt 
 		state.NextAction = "run ce task run-recover " + execution.Task
 		return state
 	}
+	if receipt.Status == StatusFinishing {
+		state.FinishReady = false
+		state.AllowedActions = []string{"run-status"}
+		state.Reason = "run-finish is waiting for the integration provider"
+		state.NextAction = "wait for the finishing claimant or inspect run-status"
+		if s.claimLiveness(ctx, receipt) == claimDead {
+			state.Status = StatusBlocked
+			state.AllowedActions = []string{"run-status", "run-recover"}
+			state.Reason = "run-finish claimant ended without recording an integration outcome"
+			state.NextAction = "run-recover " + execution.Task
+		}
+		return state
+	}
 	if locked {
 		return block("repository task runtime mutation is in progress or stale", "inspect the mutation lock with run-doctor")
 	}

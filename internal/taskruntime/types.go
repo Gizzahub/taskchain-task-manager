@@ -20,6 +20,10 @@ const (
 	StatusBlocked = "BLOCKED"
 	StatusDone    = "DONE"
 	StatusUnknown = "UNKNOWN"
+	// StatusFinishing is an in-progress, durable finish claim.  It is not a
+	// terminal result: the claimant must either record the provider outcome or
+	// leave enough identity for recovery to diagnose the interrupted attempt.
+	StatusFinishing = "FINISHING"
 
 	worktrunkVersion  = "0.80"
 	worktrunkMinMajor = 0
@@ -141,6 +145,11 @@ type Receipt struct {
 	ToolVersion         string              `json:"tool_version,omitempty"`
 	ToolRevision        string              `json:"tool_revision,omitempty"`
 	Diagnostics         []CommandDiagnostic `json:"diagnostics,omitempty"`
+	// FinishPID and FinishHost are present only on a FINISHING claim.  They are
+	// deliberately separate from Owner: owner is a stable logical task owner,
+	// while these identify the process which may still be running a provider.
+	FinishPID  int    `json:"processID,omitempty"`
+	FinishHost string `json:"processHost,omitempty"`
 }
 
 // Response is the JSON envelope every run command prints.

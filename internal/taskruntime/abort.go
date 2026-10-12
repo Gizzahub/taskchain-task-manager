@@ -35,6 +35,9 @@ func (s *Service) Abort(ctx context.Context, task, reason string) (Response, int
 		return response(StatusUnknown, task, "task execution was not found", "ce task run-list", "run-list"), 1
 	}
 	previous := receipts[task]
+	if previous.Status == StatusFinishing {
+		return response(StatusBlocked, task, "run-abort refuses an execution with a FINISHING claim", "wait for the finishing claimant or use run-status"), 1
+	}
 	validDone := previous.Status == StatusDone && validateDoneReceipt(task, &execution, &previous) == nil
 	if validTerminalAbortReceipt(execution, previous) || validDone {
 		r := response(previous.Status, task, "task execution is already "+previous.Status+": "+previous.Reason, "no action required", "run-status")

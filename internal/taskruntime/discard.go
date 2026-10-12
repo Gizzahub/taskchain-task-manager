@@ -47,6 +47,9 @@ func (s *Service) Discard(ctx context.Context, task, reason, takeOverFrom string
 	if previous := receipts[task]; previous.Status == StatusDone {
 		return response(StatusBlocked, task, "run-discard refuses an execution with a DONE receipt", "inspect task runtime receipt evidence"), 1
 	}
+	if previous := receipts[task]; previous.Status == StatusFinishing {
+		return response(StatusBlocked, task, "run-discard refuses an execution with a FINISHING claim", "wait for the finishing claimant or use run-status"), 1
+	}
 	if previous := receipts[task]; isPartialCleanupReceipt(execution, previous) {
 		return response(StatusBlocked, task, "run-discard refuses an execution with recorded integration cleanup failure", "use ce task run-recover to preserve the integrated outcome"), 1
 	}

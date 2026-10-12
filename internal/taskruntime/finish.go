@@ -2,18 +2,21 @@ package taskruntime
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 )
 
-// Finish verifies a pushed clean task, asks the integration provider to
-// check and then run, and records whether recovery removed the task.
-// An empty task selects the single active execution owned by this actor
-// and host. The check may be stopped when the source tip moves. The run
-// is never stopped.
+// Finish persists a claim, runs the provider outside the mutation lock,
+// and conditionally records its outcome after reacquiring that lock.
+// Interrupts cancel outcome-lock acquisition, not the integration already in
+// progress. The provider retains the caller's context, matching CE's contract.
 func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
+	finishCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	store, err := s.store(ctx)
 	if err != nil {
 		return response(StatusBlocked, task, err.Error(), "run ce task run-doctor"), 1
@@ -22,7 +25,11 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 	if err != nil {
 		return response(StatusBlocked, task, err.Error(), "inspect the mutation lock with run-doctor"), 1
 	}
-	defer unlock()
+	defer func() {
+		if unlock != nil {
+			unlock()
+		}
+	}()
 	if NormalizeIdentity(task) == "" {
 		selected, refused, code := s.selectBareFinish(ctx)
 		if selected == "" {
@@ -129,70 +136,113 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 	if s.branchBaseIsStale(ctx, execution) {
 		return s.refuseStaleFinish(ctx, store, execution, "", diagnostics, preSourceHead, baseHead, preTaskHead, noFetch)
 	}
-	for index, call := range []func(context.Context, string, string, bool) (CommandResult, error){provider.Check, provider.Run} {
-		callCtx, movedTo, stopWatch := ctx, func() string { return "" }, func() {}
-		if index == 0 {
-			callCtx, movedTo, stopWatch = s.watchSourceTip(ctx, execution, preSourceHead)
+	// The claim is durable before releasing the repository-wide mutation lock.
+	// Provider admission can wait for an arbitrary time; holding that lock there
+	// used to make unrelated starts and status-changing maintenance unavailable.
+	claim := Receipt{
+		Task: execution.Task, Operation: "finish", Status: StatusFinishing,
+		Owner: execution.Owner, Branch: execution.Branch, Worktree: execution.Worktree,
+		CreatedAt: s.now().UTC(), SourceHeadBefore: preSourceHead, BaseHead: baseHead, TaskHead: preTaskHead,
+		ExecutionStartedAt: &execution.StartedAt, ExecutionType: execution.Type, Source: execution.Source,
+		FinishPID: os.Getpid(), FinishHost: lockHost(), ToolVersion: toolVersion(), ToolRevision: toolRevision(),
+	}
+	if err := store.appendReceipt(claim); err != nil {
+		return response(StatusBlocked, task, "persist FINISHING claim failed: "+err.Error(), "repair task runtime storage and retry"), 1
+	}
+	unlock()
+	unlock = nil
+	// All post-provider mutations must prove that this exact generation and
+	// claim are still current.  A competing terminal action therefore cannot be
+	// overwritten by a late provider result.
+	relock := func(providerExit int, providerFailed bool) (Response, int, bool) {
+		var lockErr error
+		wait := 10 * time.Minute
+		if s.finishRelockWait > 0 {
+			wait = s.finishRelockWait
 		}
-		result, runErr := call(callCtx, execution.Worktree, integrationTarget(execution), noFetch)
-		stopWatch()
-		diagnostics = append(diagnostics, diagnostic(result))
-		if moved := movedTo(); moved != "" {
-			note := fmt.Sprintf("the source tip moved from %s to %s during the integration check, which was stopped early", preSourceHead, moved)
-			return s.refuseStaleFinish(ctx, store, execution, note, diagnostics, preSourceHead, baseHead, preTaskHead, noFetch)
+		unlock, lockErr = store.lockWait(finishCtx, wait, 20*time.Millisecond)
+		if lockErr != nil {
+			code := 1
+			if !providerFailed && (providerExit == 0 || providerExit == 3) {
+				code = 3
+			}
+			r := response(StatusBlocked, task, "integration provider completed but the mutation lock could not be reacquired: "+lockErr.Error(), "run-status", "run-status")
+			r.Execution, r.Diagnostics = &execution, diagnostics
+			return r, code, false
 		}
-		if runErr != nil {
-			reason := "integration provider invocation failed: " + runErr.Error()
-			receipt, evidenceErr := s.receipt(ctx, execution, StatusBlocked, reason, diagnostics, preSourceHead, baseHead, preTaskHead, noFetch)
-			if evidenceErr != nil {
-				reason += "; post-operation evidence failed: " + evidenceErr.Error()
+		current, loadErr := store.load()
+		receipts, receiptErr := store.latestReceipts()
+		if loadErr != nil || receiptErr != nil || !containsExecutionGeneration(current, execution) || !sameFinishClaim(receipts[task], claim) {
+			code := 1
+			if !providerFailed && (providerExit == 0 || providerExit == 3) {
+				code = 3
 			}
-			if err := store.appendReceipt(receipt); err != nil {
-				reason += "; persist receipt failed: " + err.Error()
+			reason := "integration provider completed but the FINISHING claim or execution generation changed"
+			if loadErr != nil {
+				reason = "integration provider completed but read executions failed: " + loadErr.Error()
 			}
-			r := response(StatusBlocked, task, reason, "inspect integration provider diagnostics and retry")
-			r.Receipt, r.Diagnostics = &receipt, receipt.Diagnostics
-			return r, 1
+			if receiptErr != nil {
+				reason = "integration provider completed but read receipts failed: " + receiptErr.Error()
+			}
+			r := response(StatusBlocked, task, reason, "run-status", "run-status")
+			r.Execution, r.Diagnostics = &execution, diagnostics
+			return r, code, false
 		}
-		if result.ExitCode != 0 {
-			reason, exitCode := "integration did not complete", result.ExitCode
-			next := "resolve gz-git diagnostics and retry"
-			if index == 1 && result.ExitCode == 3 {
-				reason = partialCleanupReason
-			} else if exitCode < 1 || exitCode > 2 {
-				exitCode = 2
-			}
-			stale := index == 0 && s.branchBaseIsStale(ctx, execution)
-			failing := ""
-			if !stale && reason == "integration did not complete" {
-				failing = failingCheckReason(index, result)
-			}
-			receipt, evidenceErr := s.receipt(ctx, execution, StatusBlocked, reason, diagnostics, preSourceHead, baseHead, preTaskHead, noFetch)
-			switch {
-			case stale:
-				tip := receipt.SourceHead
-				if tip == "" {
-					tip = preSourceHead
-				}
-				reason = fmt.Sprintf("task branch is based on %s, but the current source tip is %s; the branch is based on a commit that is no longer the source tip", baseHead, tip)
-				receipt.Reason = reason
-				next = "rebase onto the source tip in the worktree, then retry run-finish"
-			case failing != "":
-				reason = failing
-				if evidenceErr != nil && !errors.Is(evidenceErr, errRecoveryIncomplete) {
-					reason += "; post-operation evidence failed: " + evidenceErr.Error()
-				}
-				receipt.Reason = reason
-			case evidenceErr != nil:
-				reason += "; post-operation evidence failed: " + evidenceErr.Error()
-			}
-			if err := store.appendReceipt(receipt); err != nil {
-				reason += "; persist receipt failed: " + err.Error()
-			}
-			r := response(StatusBlocked, task, reason, next)
-			r.Receipt, r.Diagnostics = &receipt, diagnostics
-			return r, exitCode
+		return Response{}, 0, true
+	}
+	// gz-git owns readiness, admission, integration, and cleanup in one run.
+	// A separate check would duplicate its gate and hold no useful protection.
+	result, runErr := provider.Run(ctx, execution.Worktree, integrationTarget(execution), noFetch)
+	if runErr != nil && result.Error == "" {
+		result.Error = runErr.Error()
+	}
+	diagnostics = append(diagnostics, diagnostic(result))
+	if runErr != nil {
+		if blocked, code, ok := relock(result.ExitCode, true); !ok {
+			return blocked, code
 		}
+		reason := "integration provider invocation failed: " + runErr.Error()
+		receipt, evidenceErr := s.receipt(ctx, execution, StatusBlocked, reason, diagnostics, preSourceHead, baseHead, preTaskHead, noFetch)
+		if evidenceErr != nil {
+			reason += "; post-operation evidence failed: " + evidenceErr.Error()
+		}
+		if err := store.appendReceipt(receipt); err != nil {
+			reason += "; persist receipt failed: " + err.Error()
+		}
+		r := response(StatusBlocked, task, reason, "inspect integration provider diagnostics and retry")
+		r.Receipt, r.Diagnostics = &receipt, receipt.Diagnostics
+		return r, 1
+	}
+	if result.ExitCode != 0 {
+		if blocked, code, ok := relock(result.ExitCode, false); !ok {
+			return blocked, code
+		}
+		reason, exitCode := "integration did not complete", result.ExitCode
+		next := "resolve gz-git diagnostics and retry"
+		if result.ExitCode == 3 {
+			reason = partialCleanupReason
+		} else if exitCode < 1 || exitCode > 2 {
+			exitCode = 2
+		}
+		failing := ""
+		if reason == "integration did not complete" {
+			failing = failingCheckReason(1, result)
+		}
+		receipt, evidenceErr := s.receipt(ctx, execution, StatusBlocked, reason, diagnostics, preSourceHead, baseHead, preTaskHead, noFetch)
+		if failing != "" {
+			reason, receipt.Reason = failing, failing
+		} else if evidenceErr != nil {
+			reason += "; post-operation evidence failed: " + evidenceErr.Error()
+		}
+		if err := store.appendReceipt(receipt); err != nil {
+			reason += "; persist receipt failed: " + err.Error()
+		}
+		r := response(StatusBlocked, task, reason, next)
+		r.Receipt, r.Diagnostics = &receipt, diagnostics
+		return r, exitCode
+	}
+	if blocked, code, ok := relock(0, false); !ok {
+		return blocked, code
 	}
 	receipt, evidenceErr := s.receipt(ctx, execution, StatusDone, "integration and recovery completed", diagnostics, preSourceHead, baseHead, preTaskHead, noFetch)
 	if evidenceErr != nil {

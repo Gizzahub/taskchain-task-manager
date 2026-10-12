@@ -12,7 +12,7 @@ import (
 
 const (
 	runFinishHelp  = "Usage: ce task run-finish [task] [--json]\n\nVerify, integrate, and recover a pushed clean task through gz-git.\nWith no task, finish the single active execution owned by the current actor and host.\nNo match names ce task run-list. Several matches refuse and print ce task run-finish <task> for each id.\n"
-	runRecoverHelp = "Usage: ce task run-recover <task> [--json]\n\nClose a proven exit-3 provider cleanup failure without repeating integration or removing residual paths or refs.\n"
+	runRecoverHelp = "Usage: ce task run-recover <task> [--claim-dead] [--json]\n\nObserve an interrupted finish or proven partial cleanup without repeating integration or removing resources. --claim-dead is an owner declaration and refuses a positively live local claimant.\n"
 	runAbortHelp   = "Usage: ce task run-abort <task> [--reason R] [--json]\n\nClose one execution as ABORTED by appending a receipt, without integrating it.\nThe task is named explicitly; no worktree, branch, or remote ref is removed.\n"
 	runSettleHelp  = "Usage: ce task run-settle <task> [--json]\n\nClose a missing-worktree execution as ABORTED only after local Git proves its surviving task tip is contained in its named source branch. This command does not fetch or mutate Git state.\n"
 	runCloseHelp   = "Usage: ce task run-close <task> --reason <reason> [--json]\n\nRepository-designated administrator closure of one missing-worktree execution as ABORTED.\nAppends an audited receipt without integration, Git proof or cleanup claims.\n"
@@ -68,7 +68,13 @@ func taskRunRecover(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	result, code := svc.Recover(context.Background(), task)
+	claimDead := false
+	for _, arg := range args {
+		if arg == "--claim-dead" {
+			claimDead = true
+		}
+	}
+	result, code := svc.Recover(context.Background(), task, claimDead)
 	return finishRunCode(out, result, asJSON, code)
 }
 
@@ -175,8 +181,10 @@ func parseRunRecover(args []string) (bool, string, bool, error) {
 			return false, "", true, nil
 		case arg == "--json":
 			asJSON = true
+		case arg == "--claim-dead":
+		// Passed separately to Recover; declaration never implies success.
 		case strings.HasPrefix(arg, "-"):
-			return false, "", false, fmt.Errorf("unknown flag %s (valid: --json, --help, -h)", arg)
+			return false, "", false, fmt.Errorf("unknown flag %s (valid: --claim-dead, --json, --help, -h)", arg)
 		case task != "":
 			return false, "", false, fmt.Errorf("run-recover accepts one task")
 		default:
@@ -184,7 +192,7 @@ func parseRunRecover(args []string) (bool, string, bool, error) {
 		}
 	}
 	if task == "" {
-		return false, "", false, fmt.Errorf("usage: ce task run-recover <task> [--json]")
+		return false, "", false, fmt.Errorf("usage: ce task run-recover <task> [--claim-dead] [--json]")
 	}
 	return asJSON, task, false, nil
 }

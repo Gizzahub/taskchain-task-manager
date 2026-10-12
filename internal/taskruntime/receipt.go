@@ -1,9 +1,27 @@
 package taskruntime
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
+
+func sameFinishClaim(current, claim Receipt) bool {
+	if current.Status != StatusFinishing || current.Operation != "finish" {
+		return false
+	}
+	for _, r := range []*Receipt{&current, &claim} {
+		r.CreatedAt = r.CreatedAt.UTC()
+		if r.ExecutionStartedAt != nil {
+			started := r.ExecutionStartedAt.UTC()
+			r.ExecutionStartedAt = &started
+		}
+	}
+	a, errA := json.Marshal(current)
+	b, errB := json.Marshal(claim)
+	return errA == nil && errB == nil && bytes.Equal(a, b)
+}
 
 // receiptBindsExecution names the execution being closed. A receipt cannot
 // predate the execution it closes, so a zero CreatedAt binds only an

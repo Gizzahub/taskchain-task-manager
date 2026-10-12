@@ -2,6 +2,7 @@ package taskruntime
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -18,6 +19,8 @@ const (
 	reclaimGuardPoll = 10 * time.Millisecond
 	reclaimGuardWait = 500 * time.Millisecond
 )
+
+var errMutationLockExists = errors.New("task runtime mutation lock exists")
 
 func (s stateStore) lockPath() string { return filepath.Join(s.dir, "mutation.lock") }
 
@@ -41,7 +44,7 @@ func (s stateStore) lock() (func(), error) {
 	}
 	if err != nil {
 		if os.IsExist(err) {
-			return nil, fmt.Errorf("task runtime mutation lock exists: %s", path)
+			return nil, fmt.Errorf("%w: %s", errMutationLockExists, path)
 		}
 		return nil, err
 	}
@@ -75,7 +78,7 @@ func (s stateStore) reclaimDeadLock() error {
 	}
 	info := s.parseLockInfo(seen, time.Now())
 	if !info.Reclaimable {
-		return fmt.Errorf("task runtime mutation lock exists: %s", path)
+		return fmt.Errorf("%w: %s", errMutationLockExists, path)
 	}
 	guardPath := s.guardPath()
 	guard, err := os.OpenFile(guardPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
@@ -102,7 +105,7 @@ func (s stateStore) reclaimDeadLock() error {
 		return fmt.Errorf("reread mutation lock: %w", err)
 	}
 	if !bytes.Equal(current, seen) {
-		return fmt.Errorf("task runtime mutation lock exists: %s", path)
+		return fmt.Errorf("%w: %s", errMutationLockExists, path)
 	}
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove dead-owner mutation lock: %w", err)
@@ -180,4 +183,33 @@ func lockHost() string {
 		return ""
 	}
 	return strings.Join(strings.Fields(host), "_")
+}
+
+// lockWait retries contention only; storage/reclaim failures remain visible.
+func (s stateStore) lockWait(ctx context.Context, wait, poll time.Duration) (func(), error) {
+	ctx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		unlock, err := s.lock()
+		if err == nil {
+			if canceled := ctx.Err(); canceled != nil {
+				unlock()
+				return nil, canceled
+			}
+			return unlock, nil
+		}
+		if !errors.Is(err, errMutationLockExists) {
+			return nil, err
+		}
+		timer := time.NewTimer(poll)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }

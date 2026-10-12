@@ -60,6 +60,11 @@ func (s *Service) Start(ctx context.Context, task, kind string, resume bool) Res
 			continue
 		}
 		previous := receipts[task]
+		if previous.Status == StatusFinishing {
+			res := response(StatusBlocked, task, "run-start refuses an execution with a FINISHING claim", "wait for run-finish or inspect run-status", "run-status")
+			res.Execution, res.Receipt = &executions[i], &previous
+			return res
+		}
 		if previous.Status == StatusAborted && !validTerminalAbortReceipt(executions[i], previous) {
 			res := response(StatusBlocked, task, "abort receipt does not bind and close this execution", "inspect task runtime receipt evidence", "run-status", "run-abort")
 			res.Execution, res.Receipt = &executions[i], &previous

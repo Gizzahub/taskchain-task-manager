@@ -11,7 +11,7 @@ import (
 // the integration provider and never removes a worktree or a ref. It verifies
 // that the recorded task commit is in the pushed source branch, then appends
 // a DONE receipt naming whatever cleanup left behind.
-func (s *Service) Recover(ctx context.Context, task string) (Response, int) {
+func (s *Service) Recover(ctx context.Context, task string, claimDead ...bool) (Response, int) {
 	task = NormalizeIdentity(task)
 	if task == "" {
 		return response(StatusBlocked, task, "task is required", "ce task run-recover <task>"), 1
@@ -43,7 +43,12 @@ func (s *Service) Recover(ctx context.Context, task string) (Response, int) {
 		r.Execution, r.Receipt = &execution, &previous
 		return r, 0
 	}
-	if !isPartialCleanupReceipt(execution, previous) {
+	declared := len(claimDead) > 0 && claimDead[0]
+	claimed := previous.Status == StatusFinishing
+	if declared && !claimed {
+		return response(StatusBlocked, task, "--claim-dead requires a FINISHING claim as the latest receipt", "run-status", "run-status"), 1
+	}
+	if !claimed && !isPartialCleanupReceipt(execution, previous) {
 		return response(StatusBlocked, task, "run-recover requires the recorded exit-3 provider cleanup failure", "inspect task runtime receipt evidence"), 1
 	}
 	owner, err := s.owner(ctx)
@@ -55,6 +60,9 @@ func (s *Service) Recover(ctx context.Context, task string) (Response, int) {
 	cfg, err := s.config()
 	if err != nil {
 		return response(StatusBlocked, task, err.Error(), "repair task runtime configuration"), 1
+	}
+	if claimed {
+		return s.recoverFinishClaim(ctx, store, execution, previous, cfg, declared, owner)
 	}
 	receipt, err := s.recoveryReceipt(ctx, execution, previous, cfg)
 	if err != nil {

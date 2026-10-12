@@ -57,10 +57,12 @@ func (s *Service) Doctor(ctx context.Context) Response {
 		res.Lock = &lock
 		return res
 	}
-	if _, err := store.latestReceipts(); err != nil {
+	receipts, receiptErr := store.latestReceipts()
+	if err := receiptErr; err != nil {
 		res.Status, res.Reason, res.NextAction = StatusBlocked, "read task receipts: "+err.Error(), "inspect task runtime receipt evidence"
 		return res
 	}
+	res.Warnings = append(res.Warnings, s.finishClaimWarnings(ctx, receipts)...)
 	version, err := s.command(ctx, s.root, "wt", "--version")
 	if err != nil {
 		res.Status, res.Reason = StatusBlocked, err.Error()

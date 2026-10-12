@@ -17,9 +17,9 @@ func TestRunTerminationFlagRefusals(t *testing.T) {
 	}{
 		{"finish two", []string{"run-finish", "one", "two"}, "Error: run-finish accepts at most one task\n"},
 		{"finish flag", []string{"run-finish", "--bogus"}, "Error: unknown flag: --bogus (valid: --json, --help, -h)\n"},
-		{"recover missing", []string{"run-recover"}, "Error: usage: ce task run-recover <task> [--json]\n"},
+		{"recover missing", []string{"run-recover"}, "Error: usage: ce task run-recover <task> [--claim-dead] [--json]\n"},
 		{"recover two", []string{"run-recover", "one", "two"}, "Error: run-recover accepts one task\n"},
-		{"recover flag", []string{"run-recover", "sample-task", "--bogus"}, "Error: unknown flag --bogus (valid: --json, --help, -h)\n"},
+		{"recover flag", []string{"run-recover", "sample-task", "--bogus"}, "Error: unknown flag --bogus (valid: --claim-dead, --json, --help, -h)\n"},
 		{"abort missing", []string{"run-abort"}, "Error: usage: ce task run-abort <task> [--reason R] [--json]\n"},
 		{"abort two", []string{"run-abort", "one", "two"}, "Error: run-abort accepts one task\n"},
 		{"abort reason", []string{"run-abort", "sample-task", "--reason"}, "Error: --reason requires a value\n"},

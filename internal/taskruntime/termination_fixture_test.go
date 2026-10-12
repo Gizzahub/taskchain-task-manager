@@ -229,6 +229,8 @@ func (r scriptRunner) Run(ctx context.Context, req CommandRequest) (CommandResul
 type fakeProvider struct {
 	checkCode   int
 	runCode     int
+	runErr      error
+	runStdout   string
 	checkErr    error
 	checkStdout string
 	diagnoseErr error
@@ -258,7 +260,7 @@ func (f *fakeProvider) Run(_ context.Context, dir, target string, noFetch bool) 
 	if f.onRun != nil {
 		f.onRun()
 	}
-	return CommandResult{Command: providerGZGit, Args: integrateArgs("run", target, noFetch), WorkDir: dir, ExitCode: f.runCode}, nil
+	return CommandResult{Command: providerGZGit, Args: integrateArgs("run", target, noFetch), WorkDir: dir, ExitCode: f.runCode, Stdout: f.runStdout}, f.runErr
 }
 
 func (f *fakeProvider) DiagnoseNoFetch(context.Context, string) (ProviderReport, []CommandDiagnostic, error) {
