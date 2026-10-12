@@ -2,3 +2,4 @@
 # Keep target selection and reclaim behavior in the existing explicit workflow.
 branch:
   makeTimeout: "45m"
+  resourceHighLoad: true
