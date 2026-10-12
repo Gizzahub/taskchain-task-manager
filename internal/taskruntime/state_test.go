@@ -22,7 +22,7 @@ func TestDerivedStateOrder(t *testing.T) {
 		actions string
 	}{
 		{name: "terminal done", receipt: doneReceipt(execution), status: StatusDone, reason: "integrated", next: "no action required", actions: "run-status"},
-		{name: "invalid abort", receipt: Receipt{Task: execution.Task, Operation: "abort", Status: StatusAborted, CreatedAt: now.Add(-time.Hour)}, status: StatusBlocked, reason: "abort receipt does not bind and close this execution", next: "inspect task runtime receipt evidence", actions: "run-status,run-abort"},
+		{name: "invalid abort", receipt: Receipt{Task: execution.Task, Operation: "abort", Status: StatusAborted, Owner: execution.Owner, Branch: execution.Branch, Worktree: execution.Worktree, CreatedAt: now.Add(-time.Hour)}, status: StatusBlocked, reason: "abort receipt does not bind and close this execution", next: "inspect task runtime receipt evidence", actions: "run-status,run-abort"},
 		{name: "partial cleanup", receipt: partialReceipt(execution, now), status: StatusBlocked, reason: partialCleanupReason, next: "run ce task run-recover sample-task", actions: "run-status,run-recover,run-abort"},
 		{name: "lock", locked: true, status: StatusBlocked, reason: "repository task runtime mutation is in progress or stale", next: "inspect the mutation lock with run-doctor", actions: "run-status,run-abort"},
 	}

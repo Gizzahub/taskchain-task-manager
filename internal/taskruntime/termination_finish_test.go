@@ -198,6 +198,9 @@ func TestFinishRefusals(t *testing.T) {
 		if result.Receipt == nil || !hasNotStarted(result.Receipt.Diagnostics) {
 			t.Fatal("missing not-started diagnostic")
 		}
+		if result.Receipt.Purpose != PurposeDelivery {
+			t.Fatalf("refusal receipt purpose=%q", result.Receipt.Purpose)
+		}
 	})
 	t.Run("bare none", func(t *testing.T) {
 		w := newEndWorld(t)

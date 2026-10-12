@@ -3,6 +3,7 @@ package taskruntime
 import (
 	"context"
 	"os"
+	"strings"
 )
 
 // Abort closes one execution as ABORTED by appending a receipt. It does not
@@ -34,6 +35,9 @@ func (s *Service) Abort(ctx context.Context, task, reason string) (Response, int
 	if !found {
 		return response(StatusUnknown, task, "task execution was not found", "ce task run-list", "run-list"), 1
 	}
+	if refused, invalid := purposeMutationRefusal(execution); invalid {
+		return refused, 1
+	}
 	previous := receipts[task]
 	if previous.Status == StatusFinishing {
 		return response(StatusBlocked, task, "run-abort refuses an execution with a FINISHING claim", "wait for the finishing claimant or use run-status"), 1
@@ -50,8 +54,14 @@ func (s *Service) Abort(ctx context.Context, task, reason string) (Response, int
 		appendIdentityDiagnostic(&res, err)
 		return res, 1
 	}
+	if EffectivePurpose(execution.Purpose) != PurposeDelivery && strings.TrimSpace(reason) == "" {
+		res := response(StatusBlocked, task, "non-delivery run-abort requires a non-empty reason", "record the experiment or review outcome with --reason", "run-status", "run-abort")
+		res.Execution = &execution
+		return res, 1
+	}
 	receipt := Receipt{
-		Task: task, Operation: "abort", Status: StatusAborted,
+		Purpose: EffectivePurpose(execution.Purpose),
+		Task:    task, Operation: "abort", Status: StatusAborted,
 		Owner: execution.Owner, Branch: execution.Branch, Worktree: execution.Worktree,
 		Reason: abortReason(reason), CreatedAt: s.now().UTC(),
 	}

@@ -13,7 +13,7 @@ import (
 
 const (
 	runDoctorHelp = "Usage: ce task run-doctor [--json]\n\nCheck task runtime configuration, integration provider presence/version/path/capabilities, lock, receipt evidence readability and parseability, Worktrunk 0.80 or newer stable, and schema 2 output.\n"
-	runStartHelp  = "Usage: ce task run-start <task> --type <feat|fix|refactor|docs|test|chore|perf> [--resume] [--json]\n\nCreate one owner-bound task worktree through Worktrunk.\n\nAn unfinished execution of the same task is never returned implicitly: the\ncommand is BLOCKED and names its branch, worktree, start time and owner, because\nanother session of the same owner cannot be told apart. --resume returns your own\nexisting execution; another owner stays blocked.\n"
+	runStartHelp  = "Usage: taskchain-task-manager task run-start <task> --type <feat|fix|refactor|docs|test|chore|perf> [--purpose delivery|experiment|review] [--resume] [--json]\n\nCreate one owner-bound task worktree through Worktrunk.\n\nAn unfinished execution of the same task is never returned implicitly: the\ncommand is BLOCKED and names its branch, worktree, start time and owner, because\nanother session of the same owner cannot be told apart. --resume returns your own\nexisting execution; another owner stays blocked.\n"
 	runStatusHelp = "Usage: ce task run-status [task] [--json]\n\nDerive one task's runtime state without acquiring the mutation lock.\n"
 	runListHelp   = "Usage: ce task run-list [--json]\n\n" +
 		"List repository-shared task executions without acquiring the mutation lock.\n" +
@@ -49,7 +49,7 @@ func taskRunDoctor(args []string, out io.Writer) error {
 }
 
 func taskRunStart(args []string, out io.Writer) error {
-	asJSON, task, kind, resume, help, err := parseRunStart(args)
+	asJSON, task, kind, purpose, purposeSet, resume, help, err := parseRunStartOptions(args)
 	if err != nil || help {
 		if help {
 			fmt.Fprint(out, runStartHelp)
@@ -59,6 +59,9 @@ func taskRunStart(args []string, out io.Writer) error {
 	svc, err := newRunService()
 	if err != nil {
 		return err
+	}
+	if purposeSet {
+		return finishRun(out, svc.Start(context.Background(), task, kind, resume, purpose), asJSON, false, false)
 	}
 	return finishRun(out, svc.Start(context.Background(), task, kind, resume), asJSON, false, false)
 }
@@ -123,11 +126,17 @@ func parseRunJSONOnly(args []string) (bool, bool, error) {
 }
 
 func parseRunStart(args []string) (bool, string, string, bool, bool, error) {
-	asJSON, resume, task, kind := false, false, "", ""
+	asJSON, task, kind, _, _, resume, help, err := parseRunStartOptions(args)
+	return asJSON, task, kind, resume, help, err
+}
+
+func parseRunStartOptions(args []string) (bool, string, string, string, bool, bool, bool, error) {
+	asJSON, resume, task, kind, purpose := false, false, "", "", ""
+	purposeSet := false
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--help", "-h":
-			return false, "", "", false, true, nil
+			return false, "", "", "", false, false, true, nil
 		case "--json":
 			asJSON = true
 		case "--resume":
@@ -135,23 +144,33 @@ func parseRunStart(args []string) (bool, string, string, bool, bool, error) {
 		case "--type":
 			i++
 			if i >= len(args) {
-				return false, "", "", false, false, fmt.Errorf("--type requires a value")
+				return false, "", "", "", false, false, false, fmt.Errorf("--type requires a value")
 			}
 			kind = args[i]
+		case "--purpose":
+			i++
+			if i >= len(args) {
+				return false, "", "", "", false, false, false, fmt.Errorf("--purpose requires a value")
+			}
+			purpose = args[i]
+			purposeSet = true
+			if purpose != "delivery" && purpose != "experiment" && purpose != "review" {
+				return false, "", "", "", false, false, false, fmt.Errorf("--purpose must be delivery, experiment, or review")
+			}
 		default:
 			if strings.HasPrefix(args[i], "-") {
-				return false, "", "", false, false, fmt.Errorf("unknown flag %s (valid: --type, --resume, --json, --help, -h)", args[i])
+				return false, "", "", "", false, false, false, fmt.Errorf("unknown flag %s (valid: --type, --purpose, --resume, --json, --help, -h)", args[i])
 			}
 			if task != "" {
-				return false, "", "", false, false, fmt.Errorf("run-start accepts one task")
+				return false, "", "", "", false, false, false, fmt.Errorf("run-start accepts one task")
 			}
 			task = args[i]
 		}
 	}
 	if task == "" || kind == "" {
-		return false, "", "", false, false, fmt.Errorf("usage: ce task run-start <task> --type <type>")
+		return false, "", "", "", false, false, false, fmt.Errorf("usage: taskchain-task-manager task run-start <task> --type <type> [--purpose delivery|experiment|review]")
 	}
-	return asJSON, task, kind, resume, false, nil
+	return asJSON, task, kind, purpose, purposeSet, resume, false, nil
 }
 
 func parseRunRead(args []string, list bool) (bool, string, bool, error) {

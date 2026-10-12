@@ -39,6 +39,9 @@ func (s *Service) Discard(ctx context.Context, task, reason, takeOverFrom string
 	if !found {
 		return response(StatusUnknown, task, "task execution was not found", "ce task run-list", "run-list"), 1
 	}
+	if refused, invalid := purposeMutationRefusal(execution); invalid {
+		return refused, 1
+	}
 	if previous := receipts[task]; terminalAbortReceipt(previous) && previous.Operation == "discard" && receiptBindsExecution(execution, previous) {
 		r := response(StatusAborted, task, "task execution is already discarded: "+previous.Reason, "no action required", "run-status")
 		r.Execution, r.Receipt = &execution, &previous
@@ -305,7 +308,8 @@ func discardRemoteAbsentExit(cfg Config) int {
 
 func discardReceipt(execution Execution, status, reason string, performedBy *Owner, diagnostics []CommandDiagnostic, prefix string, createdAt time.Time) Receipt {
 	return Receipt{
-		Task: execution.Task, Operation: "discard", Status: status, Owner: execution.Owner, PerformedBy: performedBy,
+		Purpose: EffectivePurpose(execution.Purpose),
+		Task:    execution.Task, Operation: "discard", Status: status, Owner: execution.Owner, PerformedBy: performedBy,
 		Branch: execution.Branch, Worktree: execution.Worktree, Reason: prefix + ": " + reason, CreatedAt: createdAt,
 		Diagnostics: diagnostics, ToolVersion: toolVersion(), ToolRevision: toolRevision(),
 	}

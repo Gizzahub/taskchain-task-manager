@@ -27,8 +27,12 @@ func sameFinishClaim(current, claim Receipt) bool {
 // predate the execution it closes, so a zero CreatedAt binds only an
 // execution whose StartedAt is also zero.
 func receiptBindsExecution(execution Execution, receipt Receipt) bool {
+	if ValidatePurposeBranch(execution.Purpose, execution.Branch) != nil || ValidatePurposeBranch(receipt.Purpose, receipt.Branch) != nil {
+		return false
+	}
 	return receipt.Task == execution.Task && receipt.Owner == execution.Owner &&
 		receipt.Branch == execution.Branch && receipt.Worktree == execution.Worktree &&
+		EffectivePurpose(receipt.Purpose) == EffectivePurpose(execution.Purpose) &&
 		!receipt.CreatedAt.Before(execution.StartedAt)
 }
 
@@ -72,7 +76,7 @@ func validCloseReceipt(execution Execution, receipt Receipt) bool {
 
 func validNewTerminalGeneration(execution Execution, receipt Receipt) bool {
 	return receipt.ExecutionStartedAt != nil && receipt.ExecutionStartedAt.Equal(execution.StartedAt) &&
-		receipt.ExecutionType == execution.Type && receipt.Source == execution.Source &&
+		receipt.ExecutionType == execution.Type && EffectivePurpose(receipt.Purpose) == EffectivePurpose(execution.Purpose) && receipt.Source == execution.Source &&
 		receipt.PerformedBy != nil && receipt.PerformedBy.Valid() &&
 		NormalizeIdentity(receipt.PerformedBy.Actor) == receipt.PerformedBy.Actor &&
 		NormalizeIdentity(receipt.PerformedBy.Host) == receipt.PerformedBy.Host &&
@@ -106,6 +110,12 @@ func validateIntegratedFinish(task string, execution *Execution, receipt *Receip
 	if execution.Task != task {
 		return fmt.Errorf("execution task %q does not match requested task %q", execution.Task, task)
 	}
+	if EffectivePurpose(execution.Purpose) != PurposeDelivery {
+		return fmt.Errorf("only delivery executions may record integrated completion")
+	}
+	if err := ValidatePurposeBranch(execution.Purpose, execution.Branch); err != nil {
+		return err
+	}
 	if receipt == nil {
 		return fmt.Errorf("receipt is missing")
 	}
@@ -114,6 +124,12 @@ func validateIntegratedFinish(task string, execution *Execution, receipt *Receip
 	}
 	if receipt.Task != execution.Task {
 		return fmt.Errorf("receipt task %q does not match execution task %q", receipt.Task, execution.Task)
+	}
+	if EffectivePurpose(receipt.Purpose) != EffectivePurpose(execution.Purpose) {
+		return fmt.Errorf("receipt purpose does not match execution purpose")
+	}
+	if err := ValidatePurposeBranch(receipt.Purpose, receipt.Branch); err != nil {
+		return err
 	}
 	if receipt.Owner != execution.Owner || receipt.Branch != execution.Branch || receipt.Worktree != execution.Worktree {
 		return fmt.Errorf("receipt identity does not match execution identity")
@@ -133,11 +149,26 @@ func validateIntegratedFinish(task string, execution *Execution, receipt *Receip
 // validateDoneReceipt accepts a normal finish receipt and the narrow recovery
 // receipt that proves integration while keeping a cleanup residual.
 func validateDoneReceipt(task string, execution *Execution, receipt *Receipt) error {
+	if execution == nil || EffectivePurpose(execution.Purpose) != PurposeDelivery {
+		return fmt.Errorf("only delivery executions may record verified completion")
+	}
+	if err := ValidatePurposeBranch(execution.Purpose, execution.Branch); err != nil {
+		return err
+	}
+	if receipt != nil {
+		if EffectivePurpose(receipt.Purpose) != EffectivePurpose(execution.Purpose) {
+			return fmt.Errorf("receipt purpose does not match execution purpose")
+		}
+		if err := ValidatePurposeBranch(receipt.Purpose, receipt.Branch); err != nil {
+			return err
+		}
+	}
 	if err := validateIntegratedFinish(task, execution, receipt); err == nil {
 		return nil
 	}
 	if execution == nil || receipt == nil || NormalizeIdentity(task) == "" || execution.Task != task || receipt.Task != execution.Task ||
 		receipt.Owner != execution.Owner || receipt.Branch != execution.Branch || receipt.Worktree != execution.Worktree ||
+		EffectivePurpose(receipt.Purpose) != EffectivePurpose(execution.Purpose) ||
 		receipt.Operation != "recover" || receipt.Status != StatusDone ||
 		strings.TrimSpace(receipt.SourceHeadBefore) == "" || strings.TrimSpace(receipt.TaskHead) == "" || strings.TrimSpace(receipt.SourceHead) == "" ||
 		!receipt.SourcePushed || (receipt.WorktreeRemoved && receipt.LocalBranchRemoved && receipt.RemoteBranchRemoved) {
@@ -148,6 +179,7 @@ func validateDoneReceipt(task string, execution *Execution, receipt *Receipt) er
 
 func isPartialCleanupReceipt(execution Execution, receipt Receipt) bool {
 	if receipt.Task != execution.Task || receipt.Owner != execution.Owner || receipt.Branch != execution.Branch || receipt.Worktree != execution.Worktree ||
+		EffectivePurpose(execution.Purpose) != PurposeDelivery || EffectivePurpose(receipt.Purpose) != PurposeDelivery ||
 		receipt.Operation != "finish" || receipt.Status != StatusBlocked || receipt.Reason != partialCleanupReason ||
 		strings.TrimSpace(receipt.SourceHeadBefore) == "" || strings.TrimSpace(receipt.TaskHead) == "" || !receipt.SourcePushed {
 		return false
@@ -174,7 +206,7 @@ func isIntegrateRun(args []string, target string) bool {
 func containsExecutionGeneration(executions []Execution, captured Execution) bool {
 	for _, current := range executions {
 		if current.Task == captured.Task {
-			return current.Type == captured.Type && current.Source == captured.Source && current.Owner == captured.Owner &&
+			return current.Type == captured.Type && EffectivePurpose(current.Purpose) == EffectivePurpose(captured.Purpose) && current.Source == captured.Source && current.Owner == captured.Owner &&
 				current.Branch == captured.Branch && current.Worktree == captured.Worktree && current.StartedAt.Equal(captured.StartedAt)
 		}
 	}

@@ -37,7 +37,13 @@ func (s *Service) Recover(ctx context.Context, task string, claimDead ...bool) (
 	if !found {
 		return response(StatusUnknown, task, "task execution was not found", "ce task run-list", "run-list"), 1
 	}
+	if refused, invalid := purposeMutationRefusal(execution); invalid {
+		return refused, 1
+	}
 	previous := receipts[task]
+	if EffectivePurpose(execution.Purpose) != PurposeDelivery && previous.Status != StatusFinishing {
+		return response(StatusBlocked, task, "run-recover cannot record integration for a non-delivery execution", "preserve with a reasoned run-abort or use guarded run-discard", "run-status", "run-abort", "run-discard"), 1
+	}
 	if previous.Status == StatusDone && validateDoneReceipt(task, &execution, &previous) == nil {
 		r := response(StatusDone, task, "task execution is already DONE: "+previous.Reason, "no action required", "run-status")
 		r.Execution, r.Receipt = &execution, &previous
@@ -78,7 +84,8 @@ func (s *Service) Recover(ctx context.Context, task string, claimDead ...bool) (
 
 func (s *Service) recoveryReceipt(ctx context.Context, execution Execution, previous Receipt, cfg Config) (Receipt, error) {
 	recorded := Receipt{
-		Task: execution.Task, Operation: "recover", Status: StatusDone,
+		Purpose: EffectivePurpose(execution.Purpose),
+		Task:    execution.Task, Operation: "recover", Status: StatusDone,
 		Owner: execution.Owner, Branch: execution.Branch, Worktree: execution.Worktree,
 		CreatedAt: s.now().UTC(), SourceHeadBefore: previous.SourceHeadBefore, BaseHead: previous.BaseHead,
 		TaskHead: previous.TaskHead, ToolVersion: toolVersion(), ToolRevision: toolRevision(),

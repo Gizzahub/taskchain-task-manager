@@ -22,7 +22,7 @@ func (s *Service) selectBareFinish(ctx context.Context) (string, Response, int) 
 	}
 	ids := make([]string, 0, 1)
 	for _, state := range listed.States {
-		if state.Status != StatusActive || !sameOwner(state.Execution.Owner, current) {
+		if state.Status != StatusActive || EffectivePurpose(state.Execution.Purpose) != PurposeDelivery || !sameOwner(state.Execution.Owner, current) {
 			continue
 		}
 		ids = append(ids, state.Execution.Task)

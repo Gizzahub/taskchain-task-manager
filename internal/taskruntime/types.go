@@ -88,6 +88,7 @@ func (o Owner) String() string { return o.Actor + "/" + o.Host }
 type Execution struct {
 	Task      string    `json:"task"`
 	Type      string    `json:"type"`
+	Purpose   Purpose   `json:"purpose,omitempty"`
 	Source    string    `json:"source"`
 	Owner     Owner     `json:"owner"`
 	Branch    string    `json:"branch"`
@@ -124,6 +125,7 @@ type ProviderReport struct {
 type Receipt struct {
 	ExecutionStartedAt  *time.Time          `json:"executionStartedAt,omitempty"`
 	ExecutionType       string              `json:"executionType,omitempty"`
+	Purpose             Purpose             `json:"purpose,omitempty"`
 	Source              string              `json:"source,omitempty"`
 	Task                string              `json:"task"`
 	Operation           string              `json:"operation"`

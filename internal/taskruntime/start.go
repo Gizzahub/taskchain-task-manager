@@ -9,10 +9,22 @@ import (
 // Start creates one execution. An unfinished execution is never handed back
 // unless resume is set: actor, host, and kind cannot tell two sessions of
 // the same owner apart.
-func (s *Service) Start(ctx context.Context, task, kind string, resume bool) Response {
+func (s *Service) Start(ctx context.Context, task, kind string, resume bool, purposes ...string) Response {
 	task = NormalizeIdentity(task)
+	if len(purposes) > 1 {
+		return response(StatusBlocked, task, "task, a valid --type, and purpose delivery|experiment|review are required", "use feat|fix|refactor|docs|test|chore|perf")
+	}
+	purposeProvided := len(purposes) == 1
+	purpose := PurposeDelivery
+	if purposeProvided {
+		var err error
+		purpose, err = ParsePurpose(purposes[0])
+		if err != nil {
+			return response(StatusBlocked, task, "task, a valid --type, and purpose delivery|experiment|review are required", "use feat|fix|refactor|docs|test|chore|perf")
+		}
+	}
 	if task == "" || !ValidType(kind) {
-		return response(StatusBlocked, task, "task and a valid --type are required", "use feat|fix|refactor|docs|test|chore|perf")
+		return response(StatusBlocked, task, "task, a valid --type, and purpose delivery|experiment|review are required", "use feat|fix|refactor|docs|test|chore|perf")
 	}
 	owner, _, err := s.resolveOwner(ctx)
 	if err != nil {
@@ -59,6 +71,9 @@ func (s *Service) Start(ctx context.Context, task, kind string, resume bool) Res
 		if executions[i].Task != task {
 			continue
 		}
+		if refused, invalid := purposeMutationRefusal(executions[i]); invalid {
+			return refused
+		}
 		previous := receipts[task]
 		if previous.Status == StatusFinishing {
 			res := response(StatusBlocked, task, "run-start refuses an execution with a FINISHING claim", "wait for run-finish or inspect run-status", "run-status")
@@ -85,15 +100,22 @@ func (s *Service) Start(ctx context.Context, task, kind string, resume bool) Res
 		}
 		if !resume {
 			existing := executions[i]
+			recordedPurpose := EffectivePurpose(existing.Purpose)
 			reason := fmt.Sprintf("task already has an unfinished execution (branch %s, worktree %s, started %s, owner %s); it may belong to another session of the same owner",
 				existing.Branch, existing.Worktree, existing.StartedAt.UTC().Format(time.RFC3339), existing.Owner.String())
 			res := response(StatusBlocked, task, reason,
-				"if this execution is yours, run ce task run-start "+task+" --type "+kind+" --resume; otherwise inspect it with run-status or end it with run-abort",
+				"if this execution is yours, taskchain-task-manager task run-start "+task+" --type "+kind+" --purpose "+string(recordedPurpose)+" --resume; otherwise inspect it with run-status or end it with run-abort",
 				"run-status", "run-abort")
 			res.Execution = &executions[i]
 			return res
 		}
-		res := response(StatusActive, task, "existing execution returned", "run ce task run-status "+task+" to evaluate finish readiness", "run-status")
+		if kind != executions[i].Type {
+			return response(StatusBlocked, task, "requested type does not match existing execution type", "resume with the recorded --type or inspect run-status", "run-status")
+		}
+		if purposeProvided && purpose != EffectivePurpose(executions[i].Purpose) {
+			return response(StatusBlocked, task, "requested purpose does not match existing execution purpose", "resume with the recorded --purpose or inspect run-status", "run-status")
+		}
+		res := response(StatusActive, task, "existing execution returned", "taskchain-task-manager task run-status "+task+" to evaluate finish readiness", "run-status")
 		res.Execution = &executions[i]
 		res.Warnings = identityWarnings
 		return res
@@ -106,7 +128,7 @@ func (s *Service) Start(ctx context.Context, task, kind string, resume bool) Res
 	if err != nil {
 		return response(StatusBlocked, task, err.Error(), "fetch origin "+source+" in the primary checkout and retry")
 	}
-	branch := fmt.Sprintf("dev/%s/%s/%s/%s", owner.Actor, owner.Host, kind, task)
+	branch := branchForPurpose(purpose, owner, kind, task)
 	worktree := expectedWorktreePath(worktreeRoot, branch)
 	result, err := s.runner.Run(ctx, CommandRequest{Command: "wt", Args: []string{"--config-set", worktreePathOverride(worktree), "switch", "--create", "--base", base, "--no-cd", "--format=json", branch}, WorkDir: s.root})
 	if err != nil {
@@ -139,13 +161,13 @@ func (s *Service) Start(ctx context.Context, task, kind string, resume bool) Res
 			"remove the unexpected worktree manually and inspect Worktrunk configuration")
 	}
 	now := s.now().UTC()
-	execution := Execution{Task: task, Type: kind, Source: source, Owner: owner, Branch: branch, Worktree: worktree, StartedAt: now, UpdatedAt: now}
+	execution := Execution{Task: task, Type: kind, Purpose: purpose, Source: source, Owner: owner, Branch: branch, Worktree: worktree, StartedAt: now, UpdatedAt: now}
 	if replace >= 0 {
 		executions[replace] = execution
 	} else {
 		executions = append(executions, execution)
 	}
-	startReceipt := Receipt{Task: task, Operation: "start", Status: StatusActive, Owner: owner, Branch: branch, Worktree: worktree, Reason: "worktree created and inventory verified", CreatedAt: now, Diagnostics: []CommandDiagnostic{diagnostic(result), diagnostic(inventory.Diagnostic)}}
+	startReceipt := Receipt{Task: task, Operation: "start", Status: StatusActive, Purpose: purpose, Owner: owner, Branch: branch, Worktree: worktree, Reason: "worktree created and inventory verified", CreatedAt: now, Diagnostics: []CommandDiagnostic{diagnostic(result), diagnostic(inventory.Diagnostic)}}
 	if err := store.save(executions); err != nil {
 		startReceipt.Status, startReceipt.Reason, startReceipt.CreatedAt = StatusBlocked, "worktree was created but execution metadata persistence failed: "+err.Error(), s.now().UTC()
 		if receiptErr := store.appendReceipt(startReceipt); receiptErr != nil {

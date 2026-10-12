@@ -10,7 +10,7 @@ import (
 )
 
 func TestFinishClaimCASPreservesForeignChanges(t *testing.T) {
-	for _, change := range []string{"claim-field", "generation", "terminal"} {
+	for _, change := range []string{"claim-field", "generation", "purpose", "terminal"} {
 		for _, outcome := range []struct {
 			name string
 			exit int
@@ -32,9 +32,13 @@ func TestFinishClaimCASPreservesForeignChanges(t *testing.T) {
 						t.Fatal(err)
 					}
 					defer unlock()
-					if change == "generation" {
+					if change == "generation" || change == "purpose" {
 						e := w.execution
-						e.StartedAt = e.StartedAt.Add(time.Second)
+						if change == "purpose" {
+							e.Purpose = PurposeReview
+						} else {
+							e.StartedAt = e.StartedAt.Add(time.Second)
+						}
 						if err := store.save([]Execution{e}); err != nil {
 							t.Fatal(err)
 						}

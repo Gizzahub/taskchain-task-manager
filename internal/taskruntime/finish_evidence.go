@@ -18,7 +18,7 @@ var errRecoveryIncomplete = errors.New("task recovery is incomplete")
 
 func (s *Service) receipt(ctx context.Context, execution Execution, status, reason string, diagnostics []CommandDiagnostic, sourceHeadBefore, baseHead, taskHead string, noFetch bool) (Receipt, error) {
 	recorded := Receipt{
-		Task: execution.Task, Operation: "finish", Status: status, Owner: execution.Owner,
+		Task: execution.Task, Operation: "finish", Status: status, Purpose: EffectivePurpose(execution.Purpose), Owner: execution.Owner,
 		Branch: execution.Branch, Worktree: execution.Worktree, Reason: reason, CreatedAt: s.now().UTC(),
 		Diagnostics: diagnostics, SourceHeadBefore: sourceHeadBefore, BaseHead: baseHead, TaskHead: taskHead,
 		ToolVersion: toolVersion(), ToolRevision: toolRevision(),

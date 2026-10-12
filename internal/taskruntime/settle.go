@@ -27,6 +27,9 @@ func (s *Service) Settle(ctx context.Context, task string) (Response, int) {
 	if !found {
 		return response(StatusUnknown, task, "task execution was not found", "run ce task run-list"), 1
 	}
+	if refused, invalid := purposeMutationRefusal(execution); invalid {
+		return refused, 1
+	}
 	observedReceipts, err := store.latestReceipts()
 	if err != nil {
 		return response(StatusBlocked, task, err.Error(), "inspect task receipts"), 1
@@ -86,7 +89,8 @@ func (s *Service) Settle(ctx context.Context, task string) (Response, int) {
 	}
 	startedAt := current.StartedAt
 	receipt := Receipt{
-		Task: task, Operation: "settle", Status: StatusAborted, Owner: current.Owner, PerformedBy: &performedBy,
+		Purpose: EffectivePurpose(current.Purpose),
+		Task:    task, Operation: "settle", Status: StatusAborted, Owner: current.Owner, PerformedBy: &performedBy,
 		Branch: current.Branch, Worktree: current.Worktree,
 		Reason:    "CE recorded settlement: the surviving task branch tip is contained in the named source branch",
 		CreatedAt: s.now().UTC(), ExecutionStartedAt: &startedAt, ExecutionType: current.Type, Source: current.Source,

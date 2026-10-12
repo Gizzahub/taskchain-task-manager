@@ -32,7 +32,7 @@ func WriteResponse(w io.Writer, result Response, jsonOutput, listMode bool) erro
 		return err
 	}
 	if result.Execution != nil {
-		if _, err := fmt.Fprintf(w, "branch: %s\nworktree: %s\nowner: %s\n", result.Execution.Branch, result.Execution.Worktree, result.Execution.Owner.String()); err != nil {
+		if _, err := fmt.Fprintf(w, "purpose: %s\nbranch: %s\nworktree: %s\nowner: %s\n", EffectivePurpose(result.Execution.Purpose), result.Execution.Branch, result.Execution.Worktree, result.Execution.Owner.String()); err != nil {
 			return err
 		}
 	}
@@ -65,7 +65,7 @@ func writeExecutionStates(w io.Writer, states []DerivedState) error {
 			settled[state.Status]++
 			continue
 		}
-		if _, err := fmt.Fprintf(w, "%s %s: branch=%s worktree=%s", state.Status, state.Execution.Task, state.Execution.Branch, state.Execution.Worktree); err != nil {
+		if _, err := fmt.Fprintf(w, "%s %s: purpose=%s branch=%s worktree=%s", state.Status, state.Execution.Task, EffectivePurpose(state.Execution.Purpose), state.Execution.Branch, state.Execution.Worktree); err != nil {
 			return err
 		}
 		if state.Status != StatusActive && state.Reason != "" {

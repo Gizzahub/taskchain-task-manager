@@ -77,6 +77,8 @@ lock 디렉터리를 만들지 않습니다. 입력 한도와 동시 변경 경�
 [workspace integration skill](skills/task-manager-workspace/SKILL.md)을 사용하세요.
 재현 가능한 manifest·합성 보드·출력은 번들 안의
 [workspace fixture](skills/task-manager-workspace/assets/workspace/README.md)에 있습니다.
+격리된 task 실행의 목적(delivery·experiment·review), 목적별 branch/worktree, 보존·폐기
+경계는 [task lifecycle skill](skills/task-manager-lifecycle/SKILL.md)을 사용하세요.
 이 저장소는 스킬 설치나 클라이언트 자동 탐색을 수행하지 않습니다. 사용자가 설정한
 클라이언트 스킬 디렉터리에 번들 전체를 수동으로 복사하고 CLI를 `PATH`에 둡니다.
 아래 명령은 저장소 루트에서 실행하며, 대상 번들 경로가 아직 없어야 합니다.
@@ -88,6 +90,8 @@ client_skills_dir=${CLIENT_SKILLS_DIR:?set your configured client skill director
 test -d "$client_skills_dir"
 test ! -e "$client_skills_dir/task-manager-workspace"
 cp -R skills/task-manager-workspace "$client_skills_dir/"
+test ! -e "$client_skills_dir/task-manager-lifecycle"
+cp -R skills/task-manager-lifecycle "$client_skills_dir/"
 ```
 
 실제 작업에서는 caller가 제공한 workspace manifest를 사용합니다. 번들 안의

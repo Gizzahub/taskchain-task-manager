@@ -30,6 +30,9 @@ func (s *Service) Close(ctx context.Context, task, reason string) (Response, int
 	if !found {
 		return response(StatusUnknown, task, "task execution was not found", "ce task run-list"), 1
 	}
+	if refused, invalid := purposeMutationRefusal(observed); invalid {
+		return refused, 1
+	}
 	performer, err := s.owner(ctx)
 	if err != nil {
 		return response(StatusBlocked, task, err.Error(), "repair local task identity"), 1
@@ -78,6 +81,7 @@ func (s *Service) Close(ctx context.Context, task, reason string) (Response, int
 	}
 	startedAt := current.StartedAt
 	receipt := Receipt{
+		Purpose:            EffectivePurpose(current.Purpose),
 		ExecutionStartedAt: &startedAt, ExecutionType: current.Type, Source: current.Source,
 		Task: task, Operation: "close", Status: StatusAborted, Owner: current.Owner, PerformedBy: &performer,
 		Branch: current.Branch, Worktree: current.Worktree,

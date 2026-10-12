@@ -43,12 +43,14 @@ func TestRunCommandHelpAndRefusals(t *testing.T) {
 	}{
 		{"doctor positional", []string{"run-doctor", "extra"}, 1, "Error: unknown flag extra (valid: --json, --help, -h)\n"},
 		{"doctor flag", []string{"run-doctor", "--bogus"}, 1, "Error: unknown flag --bogus (valid: --json, --help, -h)\n"},
-		{"start usage", []string{"run-start"}, 1, "Error: usage: ce task run-start <task> --type <type>\n"},
-		{"start no type", []string{"run-start", "sample-task"}, 1, "Error: usage: ce task run-start <task> --type <type>\n"},
-		{"start no task", []string{"run-start", "--type", "feat"}, 1, "Error: usage: ce task run-start <task> --type <type>\n"},
+		{"start usage", []string{"run-start"}, 1, "Error: usage: taskchain-task-manager task run-start <task> --type <type> [--purpose delivery|experiment|review]\n"},
+		{"start no type", []string{"run-start", "sample-task"}, 1, "Error: usage: taskchain-task-manager task run-start <task> --type <type> [--purpose delivery|experiment|review]\n"},
+		{"start no task", []string{"run-start", "--type", "feat"}, 1, "Error: usage: taskchain-task-manager task run-start <task> --type <type> [--purpose delivery|experiment|review]\n"},
 		{"start two tasks", []string{"run-start", "one", "two", "--type", "feat"}, 1, "Error: run-start accepts one task\n"},
 		{"start type value", []string{"run-start", "sample-task", "--type"}, 1, "Error: --type requires a value\n"},
-		{"start flag", []string{"run-start", "sample-task", "--type", "feat", "--bogus"}, 1, "Error: unknown flag --bogus (valid: --type, --resume, --json, --help, -h)\n"},
+		{"start purpose value", []string{"run-start", "sample-task", "--type", "feat", "--purpose"}, 1, "Error: --purpose requires a value\n"},
+		{"start purpose invalid", []string{"run-start", "sample-task", "--type", "feat", "--purpose", "scratch"}, 1, "Error: --purpose must be delivery, experiment, or review\n"},
+		{"start flag", []string{"run-start", "sample-task", "--type", "feat", "--bogus"}, 1, "Error: unknown flag --bogus (valid: --type, --purpose, --resume, --json, --help, -h)\n"},
 		{"list positional", []string{"run-list", "sample-task"}, 1, "Error: unexpected argument sample-task\n"},
 		{"status extra", []string{"run-status", "one", "two"}, 1, "Error: unexpected argument two\n"},
 		{"status flag", []string{"run-status", "--bogus"}, 1, "Error: unknown flag --bogus (valid: --json, --help, -h)\n"},
@@ -64,7 +66,7 @@ func TestRunCommandHelpAndRefusals(t *testing.T) {
 		})
 	}
 	stdout, stderr, code := invoke("run-start", "sample-task", "--type", "-feat")
-	if code != 1 || stderr != "Error: task and a valid --type are required\n" || !strings.Contains(stdout, "BLOCKED sample-task: task and a valid --type are required\n") || !strings.Contains(stdout, "next: use feat|fix|refactor|docs|test|chore|perf\n") {
+	if code != 1 || stderr != "Error: task, a valid --type, and purpose delivery|experiment|review are required\n" || !strings.Contains(stdout, "BLOCKED sample-task: task, a valid --type, and purpose delivery|experiment|review are required\n") || !strings.Contains(stdout, "next: use feat|fix|refactor|docs|test|chore|perf\n") {
 		t.Fatalf("invalid type code=%d\nstderr=%q\nstdout=%q", code, stderr, stdout)
 	}
 }
@@ -299,7 +301,7 @@ func TestRunDoctorStartStatusAndList(t *testing.T) {
 		t.Fatalf("status json: %+v", status)
 	}
 	stdout, stderr, code = invoke("run-list")
-	if code != 0 || stderr != "" || !strings.Contains(stdout, "ACTIVE sample-task: branch=dev/tester/testhost/feat/sample-task worktree="+worktree+"\n") || !strings.Contains(stdout, "next: select a task\n") {
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "ACTIVE sample-task: purpose=delivery branch=dev/tester/testhost/feat/sample-task worktree="+worktree+"\n") || !strings.Contains(stdout, "next: select a task\n") {
 		t.Fatalf("list code=%d\nstderr=%q\nstdout=%q", code, stderr, stdout)
 	}
 

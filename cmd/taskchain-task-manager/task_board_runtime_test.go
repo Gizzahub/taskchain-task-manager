@@ -293,8 +293,8 @@ func TestReconcileDryRunPreservesBytes(t *testing.T) {
 	initGitRepo(t)
 	const card = "---\nid: TASK-7\ntitle: Hold\npriority: P2\neffort: S\nstatus: in-progress\ncreated: 2026-10-11\n---\n\n## Summary\n\nWork.\n\n| **Status** | [~] In Progress |\n"
 	writeCardFile(t, "tasks/doing/007-hold.md", card)
-	writeRuntimeFile(t, "executions.json", `[{"task":"TASK-7","type":"feat","source":"source","owner":{"actor":"runner","host":"builder","kind":"agent"},"branch":"work","worktree":"primary","startedAt":"2026-10-11T00:00:00Z","updatedAt":"2026-10-11T00:00:00Z"}]`+"\n")
-	writeRuntimeFile(t, "receipts.jsonl", `{"task":"TASK-7","operation":"abort","status":"ABORTED","owner":{"actor":"runner","host":"builder","kind":"agent"},"branch":"work","worktree":"primary","createdAt":"2026-10-11T00:00:00Z","sourcePushed":false,"worktreeRemoved":false,"localBranchRemoved":false,"remoteBranchRemoved":false}`+"\n")
+	writeRuntimeFile(t, "executions.json", `[{"task":"TASK-7","type":"feat","source":"source","owner":{"actor":"runner","host":"builder","kind":"agent"},"branch":"dev/runner/builder/feat/task-7","worktree":"primary","startedAt":"2026-10-11T00:00:00Z","updatedAt":"2026-10-11T00:00:00Z"}]`+"\n")
+	writeRuntimeFile(t, "receipts.jsonl", `{"task":"TASK-7","operation":"abort","status":"ABORTED","owner":{"actor":"runner","host":"builder","kind":"agent"},"branch":"dev/runner/builder/feat/task-7","worktree":"primary","createdAt":"2026-10-11T00:00:00Z","sourcePushed":false,"worktreeRemoved":false,"localBranchRemoved":false,"remoteBranchRemoved":false}`+"\n")
 	before := worktreeFiles(t)
 
 	var out, diag bytes.Buffer
@@ -309,6 +309,57 @@ func TestReconcileDryRunPreservesBytes(t *testing.T) {
 	assertNoMutationLock(t)
 	if _, err := os.Stat("tasks/blocked/007-hold.md"); !os.IsNotExist(err) {
 		t.Fatal("dry-run created a destination")
+	}
+}
+
+func TestReconcileNonDeliveryTerminalEvidenceStaysPut(t *testing.T) {
+	cases := []struct {
+		name     string
+		purpose  string
+		prefix   string
+		receipt  string
+		wantMove string
+	}{
+		{
+			name:     "experiment abort",
+			purpose:  "experiment",
+			prefix:   "exp",
+			receipt:  `{"purpose":"experiment","task":"TASK-7","operation":"abort","status":"ABORTED","owner":{"actor":"runner","host":"builder","kind":"agent"},"branch":"exp/runner/builder/feat/task-7","worktree":"primary","createdAt":"2026-10-11T00:00:00Z","sourcePushed":false,"worktreeRemoved":false,"localBranchRemoved":false,"remoteBranchRemoved":false}` + "\n",
+			wantMove: "move-to-blocked",
+		},
+		{
+			name:     "review done",
+			purpose:  "review",
+			prefix:   "review",
+			receipt:  `{"purpose":"review","task":"TASK-7","operation":"finish","status":"DONE","owner":{"actor":"runner","host":"builder","kind":"agent"},"branch":"review/runner/builder/feat/task-7","worktree":"primary","createdAt":"2026-10-11T00:00:00Z","sourceHead":"after","sourceHeadBefore":"before","taskHead":"task","sourcePushed":true,"worktreeRemoved":true,"localBranchRemoved":true,"remoteBranchRemoved":true}` + "\n",
+			wantMove: "move-to-review",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			initGitRepo(t)
+			const card = "---\nid: TASK-7\ntitle: Hold\npriority: P2\neffort: S\nstatus: in-progress\ncreated: 2026-10-11\n---\n\n## Summary\n\nWork.\n\n| **Status** | [~] In Progress |\n"
+			writeCardFile(t, "tasks/doing/007-hold.md", card)
+			branch := tc.prefix + "/runner/builder/feat/task-7"
+			writeRuntimeFile(t, "executions.json", `[{"task":"TASK-7","type":"feat","purpose":"`+tc.purpose+`","source":"source","owner":{"actor":"runner","host":"builder","kind":"agent"},"branch":"`+branch+`","worktree":"primary","startedAt":"2026-10-11T00:00:00Z","updatedAt":"2026-10-11T00:00:00Z"}]`+"\n")
+			writeRuntimeFile(t, "receipts.jsonl", tc.receipt)
+
+			var out, diag bytes.Buffer
+			code := runTask([]string{"reconcile", "--dry-run"}, &out, &diag)
+			if code != 0 || diag.Len() != 0 {
+				t.Fatalf("code=%d stdout=%s stderr=%s", code, out.String(), diag.String())
+			}
+			if strings.Contains(out.String(), tc.wantMove) || !strings.Contains(out.String(), "non-delivery runtime evidence does not permit board transition") {
+				t.Fatalf("stdout=%s", out.String())
+			}
+			if _, err := os.Stat("tasks/blocked/007-hold.md"); !os.IsNotExist(err) {
+				t.Fatal("non-delivery abort moved the card")
+			}
+			if _, err := os.Stat("tasks/review/007-hold.md"); !os.IsNotExist(err) {
+				t.Fatal("non-delivery done moved the card")
+			}
+		})
 	}
 }
 
@@ -347,8 +398,8 @@ func TestReconcileApplyMovesToBlocked(t *testing.T) {
 	assertSameFiles(t, before, worktreeFiles(t))
 
 	gitOut(t, "checkout", "-qb", "work")
-	writeRuntimeFile(t, "executions.json", `[{"task":"TASK-7","type":"feat","source":"source","owner":{"actor":"runner","host":"builder","kind":"agent"},"branch":"work","worktree":"primary","startedAt":"2026-10-11T00:00:00Z","updatedAt":"2026-10-11T00:00:00Z"}]`+"\n")
-	writeRuntimeFile(t, "receipts.jsonl", `{"task":"TASK-7","operation":"abort","status":"ABORTED","owner":{"actor":"runner","host":"builder","kind":"agent"},"branch":"work","worktree":"primary","createdAt":"2026-10-11T00:00:00Z","sourcePushed":false,"worktreeRemoved":false,"localBranchRemoved":false,"remoteBranchRemoved":false}`+"\n")
+	writeRuntimeFile(t, "executions.json", `[{"task":"TASK-7","type":"feat","source":"source","owner":{"actor":"runner","host":"builder","kind":"agent"},"branch":"dev/runner/builder/feat/task-7","worktree":"primary","startedAt":"2026-10-11T00:00:00Z","updatedAt":"2026-10-11T00:00:00Z"}]`+"\n")
+	writeRuntimeFile(t, "receipts.jsonl", `{"task":"TASK-7","operation":"abort","status":"ABORTED","owner":{"actor":"runner","host":"builder","kind":"agent"},"branch":"dev/runner/builder/feat/task-7","worktree":"primary","createdAt":"2026-10-11T00:00:00Z","sourcePushed":false,"worktreeRemoved":false,"localBranchRemoved":false,"remoteBranchRemoved":false}`+"\n")
 	out.Reset()
 	diag.Reset()
 	code = runTask([]string{"reconcile"}, &out, &diag)

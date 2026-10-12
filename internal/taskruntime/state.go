@@ -91,6 +91,11 @@ func (s *Service) deriveState(ctx context.Context, execution Execution, receipt 
 				return state
 			}
 			state.AllowedActions = append(state.AllowedActions, "run-discard")
+			if EffectivePurpose(execution.Purpose) != PurposeDelivery {
+				state.Reason = "non-delivery execution is active"
+				state.NextAction = "preserve with a reasoned run-abort or use guarded run-discard"
+				return state
+			}
 		case 3:
 			fields := strings.Fields(result.Stdout)
 			if len(fields) != 2 || fields[0] != "0" || fields[1] != "0" {
@@ -112,6 +117,16 @@ func stateResponse(state DerivedState) Response {
 }
 
 func (s *Service) verifiedExecutionState(ctx context.Context, execution Execution, receipt Receipt, inventory worktrunkInventory, locked bool) DerivedState {
+	if err := ValidatePurposeBranch(execution.Purpose, execution.Branch); err != nil {
+		return DerivedState{Execution: execution, Status: StatusBlocked, AllowedActions: []string{"run-status", "run-abort"},
+			Reason: "execution purpose or branch is invalid: " + err.Error(), NextAction: "inspect task runtime purpose evidence"}
+	}
+	if receipt.Status != "" {
+		if err := ValidatePurposeBranch(receipt.Purpose, receipt.Branch); err != nil || EffectivePurpose(receipt.Purpose) != EffectivePurpose(execution.Purpose) {
+			return DerivedState{Execution: execution, Status: StatusBlocked, AllowedActions: []string{"run-status", "run-abort"},
+				Reason: "receipt purpose is invalid or does not match the execution", NextAction: "inspect task runtime purpose evidence"}
+		}
+	}
 	if receipt.Status == StatusAborted && !validTerminalAbortReceipt(execution, receipt) {
 		return DerivedState{Execution: execution, Status: StatusBlocked, AllowedActions: []string{"run-status", "run-abort"},
 			Reason: "abort receipt does not bind and close this execution", NextAction: "inspect task runtime receipt evidence"}

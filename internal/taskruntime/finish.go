@@ -41,6 +41,11 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 	if status.Execution == nil {
 		return status, 1
 	}
+	if EffectivePurpose(status.Execution.Purpose) != PurposeDelivery {
+		res := response(StatusBlocked, task, "run-finish is only available for delivery executions", "preserve with a reasoned run-abort or use guarded run-discard", "run-status", "run-abort", "run-discard")
+		res.Execution = status.Execution
+		return res, 1
+	}
 	if status.Status != StatusActive {
 		if status.Status == StatusDone {
 			return status, 0
@@ -120,7 +125,8 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 				Cwd: execution.Worktree, Error: reason, NotStarted: true,
 			})
 			receipt := Receipt{
-				Task: execution.Task, Operation: "finish", Status: StatusBlocked, Owner: execution.Owner,
+				Purpose: EffectivePurpose(execution.Purpose),
+				Task:    execution.Task, Operation: "finish", Status: StatusBlocked, Owner: execution.Owner,
 				Branch: execution.Branch, Worktree: execution.Worktree, Reason: reason, CreatedAt: s.now().UTC(),
 				Diagnostics: diagnostics, SourceHeadBefore: preSourceHead, BaseHead: baseHead, TaskHead: preTaskHead,
 				ToolVersion: toolVersion(), ToolRevision: toolRevision(),
@@ -140,7 +146,8 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 	// Provider admission can wait for an arbitrary time; holding that lock there
 	// used to make unrelated starts and status-changing maintenance unavailable.
 	claim := Receipt{
-		Task: execution.Task, Operation: "finish", Status: StatusFinishing,
+		Purpose: EffectivePurpose(execution.Purpose),
+		Task:    execution.Task, Operation: "finish", Status: StatusFinishing,
 		Owner: execution.Owner, Branch: execution.Branch, Worktree: execution.Worktree,
 		CreatedAt: s.now().UTC(), SourceHeadBefore: preSourceHead, BaseHead: baseHead, TaskHead: preTaskHead,
 		ExecutionStartedAt: &execution.StartedAt, ExecutionType: execution.Type, Source: execution.Source,

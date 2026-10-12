@@ -224,6 +224,11 @@ func reconcileCandidates(root, tasksDir string, executions []taskruntime.Executi
 		}
 		execution := matches[0]
 		row.execution = &execution
+		if taskruntime.EffectivePurpose(execution.Purpose) != taskruntime.PurposeDelivery {
+			row.Reason = "non-delivery runtime evidence does not permit board transition"
+			out = append(out, row)
+			continue
+		}
 		if execution.Owner.Actor == "" || execution.Owner.Host == "" || execution.Owner.Kind == "" || execution.Branch == "" || execution.Worktree == "" || execution.StartedAt.IsZero() {
 			row.Reason = "incomplete runtime execution identity"
 			out = append(out, row)
