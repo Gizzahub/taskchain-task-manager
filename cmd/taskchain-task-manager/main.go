@@ -14,7 +14,7 @@ func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, out, errOut io.Writer) int {
 	if len(args) > 0 && args[0] == "task" {
-		return runTask(args[1:], out, errOut)
+		return runTaskWithTiming(args[1:], out, errOut)
 	}
 	if len(args) > 0 && args[0] == "rejoin-board" {
 		return runRejoinBoard(args, out, errOut)
