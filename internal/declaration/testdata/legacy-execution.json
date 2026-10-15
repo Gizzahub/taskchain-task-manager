@@ -1,0 +1,1 @@
+{"task":"example-task","type":"feat","purpose":"delivery","source":"master","owner":{"actor":"example-agent","host":"example-device","kind":"agent"},"branch":"dev/example-agent/example-device/feat/example-task","worktree":"/synthetic/worktrees/example-task","startedAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:10:00Z"}

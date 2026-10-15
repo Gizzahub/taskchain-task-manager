@@ -1,0 +1,51 @@
+{
+  "schema": "task-manager.declaration/v1",
+  "id": "declaration-example-1",
+  "occurred_at": "2026-01-01T00:00:01Z",
+  "repository": {
+    "scheme": "repository-id/v1",
+    "id": "example",
+    "common_dir": "/synthetic/example/.git"
+  },
+  "runtime": {
+    "name": "example-runtime",
+    "provenance": "native"
+  },
+  "subject": {
+    "task": "example-task"
+  },
+  "privacy": {
+    "version": "topic-redaction/v1",
+    "state": "omitted",
+    "reason": "not-requested"
+  },
+  "execution": {
+    "scheme": "execution-snapshot/v1",
+    "snapshot": {
+      "task": "example-task",
+      "type": "feat",
+      "purpose": "delivery",
+      "source": "master",
+      "owner": {
+        "actor": "example-agent",
+        "host": "example-device",
+        "kind": "agent"
+      },
+      "branch": "dev/example-agent/example-device/feat/example-task",
+      "worktree": "/synthetic/worktrees/example-task",
+      "startedAt": "2026-01-01T00:00:00Z"
+    }
+  },
+  "scope": {
+    "reads": [
+      {
+        "path": "docs",
+        "commit": "1111111111111111111111111111111111111111"
+      }
+    ],
+    "writes": [
+      "src/example"
+    ],
+    "contracts": []
+  }
+}

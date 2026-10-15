@@ -1,0 +1,7 @@
+{
+  "schema": "task-manager.declaration/v1", "id": "declaration-example-2", "occurred_at": "2026-01-01T00:00:02Z",
+  "repository": {"scheme": "repository-id/v1", "id": "example", "common_dir": "/synthetic/example/.git"},
+  "runtime": {"name": "example-runtime", "provenance": "unavailable", "unavailable_reason": "host-does-not-expose-native-id"},
+  "subject": {}, "privacy": {"version": "topic-redaction/v1", "state": "omitted", "reason": "sensitive-or-uncertain"},
+  "predecessor": "declaration-example-1"
+}

@@ -1,0 +1,1 @@
+{"schema":"task-manager.execution-timing/v1","run_id":"example-attempt-1","started_at":"2026-01-01T00:00:00Z","finished_at":"2026-01-01T00:00:01Z","status":"success","exit_code":0,"execution_evidence_v1":{"session_id":"native-example-1","tool_call_id":"tool-example-1","relation_type":"launches"}}

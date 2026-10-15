@@ -1,0 +1,7 @@
+{
+  "schema": "task-manager.declaration-link/v1", "event_id": "event-example-1", "occurred_at": "2026-01-01T00:00:03Z",
+  "repository": {"scheme": "repository-id/v1", "id": "example", "common_dir": "/synthetic/example/.git"},
+  "runtime": {"name": "example-runtime", "provenance": "native", "session_id": "native-example-1"},
+  "declaration_id": "declaration-example-1",
+  "invocation": {"schema": "task-manager.execution-timing/v1", "run_id": "example-attempt-1"}
+}
