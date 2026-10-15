@@ -37,6 +37,9 @@ func activatePolicyWithStep(dir string, raw []byte, options PolicyActivationOpti
 	if err != nil {
 		return result, err
 	}
+	if policy.FileRolesEnabled() {
+		return result, errors.New("file-role policies are reader-only; activation and revision require writer admission support")
+	}
 	if options.AdoptModules && len(policy.Modules()) == 0 {
 		return result, errors.New("adopt-modules requires a declared module scope")
 	}

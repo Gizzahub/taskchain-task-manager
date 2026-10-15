@@ -32,6 +32,9 @@ func revisePolicyWithStep(dir string, raw []byte, options PolicyRevisionOptions,
 	if err != nil {
 		return result, err
 	}
+	if policy.FileRolesEnabled() {
+		return result, errors.New("file-role policies are reader-only; activation and revision require writer admission support")
+	}
 	digest, err := policy.Digest()
 	if err != nil {
 		return result, err

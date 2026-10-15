@@ -14,6 +14,20 @@ type canonicalRoot struct {
 	TaskBoard     *canonicalTaskBoard `json:"task-board,omitempty"`
 }
 
+type canonicalFileRoles struct {
+	Enabled     bool                      `json:"enabled"`
+	Projections []canonicalProjectionRole `json:"projections"`
+	Guidance    []string                  `json:"guidance"`
+	Templates   []string                  `json:"templates"`
+}
+
+type canonicalProjectionRole struct {
+	Path     string `json:"path"`
+	Owner    string `json:"owner"`
+	Revision string `json:"revision"`
+	Marker   string `json:"marker"`
+}
+
 type canonicalTaskBoard struct {
 	ZoneSkills *map[string]string `json:"zone-skills,omitempty"`
 }
@@ -28,6 +42,7 @@ type canonicalBlock struct {
 	Relocations *[]canonicalTransition `json:"relocations,omitempty"`
 	KindStatus  *map[string]string     `json:"kind-status,omitempty"`
 	Modules     *[]string              `json:"modules,omitempty"`
+	FileRoles   *canonicalFileRoles    `json:"file-roles,omitempty"`
 }
 
 func (p Policy) Canonical() ([]byte, error) {
@@ -106,6 +121,22 @@ func (p Policy) Canonical() ([]byte, error) {
 		}
 		root.TaskBoard = taskBoard
 	}
+	if version >= 4 {
+		roles := p.FileRoles()
+		fileRoles := &canonicalFileRoles{Enabled: true, Projections: []canonicalProjectionRole{}, Guidance: []string{}, Templates: []string{}}
+		for _, role := range roles {
+			switch role.Kind {
+			case FileRoleProjection:
+				fileRoles.Projections = append(fileRoles.Projections, canonicalProjectionRole{Path: role.Path, Owner: role.Owner, Revision: role.Revision, Marker: role.Marker})
+			case FileRoleGuidance:
+				fileRoles.Guidance = append(fileRoles.Guidance, role.Path)
+			case FileRoleTemplate:
+				fileRoles.Templates = append(fileRoles.Templates, role.Path)
+			}
+		}
+		block.FileRoles = fileRoles
+	}
+	root.BoardPolicy = block
 	raw, err := json.Marshal(root)
 	if err != nil {
 		return nil, err

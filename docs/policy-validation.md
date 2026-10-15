@@ -69,3 +69,9 @@ completed 기록은 바인딩 digest를 유지한다. 중단 복구도 원래 �
 활성화된 journal v3는 policy digest와 authority·scope·namespace·완료 기록을 함께
 검사한다. 내부 파일을 직접 만들거나 복사해 활성화하지 않는다. shared-ID 활성화만으로
 정책이 활성화되지는 않는다.
+
+## 파일 역할 reader
+
+Schema 4의 명시 파일 역할은 [지원 범위](file-roles.md)를 따른다. 문서 검증은
+가능하지만 writer admission 연결 전 활성화·revision은 거부한다. 기존 정책을
+새 schema로 자동 변환하지 않는다.

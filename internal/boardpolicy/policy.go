@@ -19,6 +19,8 @@ type Declaration struct {
 	TaskBoardDeclared  bool
 	ZoneSkillsDeclared bool
 	ZoneSkills         map[string]string
+	FileRolesDeclared  bool
+	FileRoles          []FileRole
 }
 
 type Transition struct {
@@ -37,6 +39,7 @@ type Policy struct {
 	known             []string
 	taskBoardDeclared bool
 	zoneSkills        map[string]string
+	fileRoles         map[string]FileRole
 }
 
 func Default() Policy {
@@ -173,7 +176,14 @@ func New(d Declaration) (Policy, error) {
 	if d.Modules != nil {
 		version = 3
 	}
+	if d.FileRolesDeclared {
+		version = 4
+	}
 	zoneSkills, err := copyZoneSkills(d)
+	if err != nil {
+		return Policy{}, err
+	}
+	fileRoles, err := copyFileRoles(d)
 	if err != nil {
 		return Policy{}, err
 	}
@@ -181,6 +191,7 @@ func New(d Declaration) (Policy, error) {
 		schemaVersion: version, workflow: workflow, parked: parked, edges: edges,
 		relocations: relocations, kindStatus: kindStatus, modules: modules, known: known,
 		taskBoardDeclared: d.TaskBoardDeclared || d.ZoneSkillsDeclared, zoneSkills: zoneSkills,
+		fileRoles: fileRoles,
 	}, nil
 }
 
@@ -320,5 +331,30 @@ func (p Policy) ZoneSkills() map[string]string {
 	for zone, skill := range p.zoneSkills {
 		out[zone] = skill
 	}
+	return out
+}
+
+// FileRolesEnabled reports whether schema-version 4 explicitly enabled
+// file-role classification. Earlier policy schemas intentionally have no
+// implicit allowed files.
+func (p Policy) FileRolesEnabled() bool { return p.fileRoles != nil }
+
+// FileRole returns the declared role for one exact slash-relative path.
+// It returns false when file roles are not enabled or the path is undeclared.
+func (p Policy) FileRole(path string) (FileRole, bool) {
+	role, ok := p.fileRoles[path]
+	return role, ok
+}
+
+// FileRoles returns a sorted defensive copy of the declared file roles.
+func (p Policy) FileRoles() []FileRole {
+	if p.fileRoles == nil {
+		return nil
+	}
+	out := make([]FileRole, 0, len(p.fileRoles))
+	for _, role := range p.fileRoles {
+		out = append(out, role)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out
 }

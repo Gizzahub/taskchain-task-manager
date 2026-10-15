@@ -52,8 +52,8 @@ func Parse(raw []byte) (Policy, error) {
 			return Policy{}, fmt.Errorf("unknown root field %q", root.Content[i].Value)
 		}
 	}
-	if schema == nil || schema.Kind != yaml.ScalarNode || schema.Tag != "!!int" || (schema.Value != "1" && schema.Value != "2" && schema.Value != "3") {
-		return Policy{}, errors.New("schema-version must be 1, 2, or 3")
+	if schema == nil || schema.Kind != yaml.ScalarNode || schema.Tag != "!!int" || (schema.Value != "1" && schema.Value != "2" && schema.Value != "3" && schema.Value != "4") {
+		return Policy{}, errors.New("schema-version must be 1, 2, 3, or 4")
 	}
 	version := schema.Value[0] - '0'
 	if block == nil || block.Kind != yaml.MappingNode {
@@ -68,6 +68,7 @@ func Parse(raw []byte) (Policy, error) {
 		decl.KindStatus = map[string]string{}
 	}
 	modulesSeen := false
+	var fileRoles *yaml.Node
 	for i := 0; i < len(block.Content); i += 2 {
 		key, value := block.Content[i].Value, block.Content[i+1]
 		switch key {
@@ -176,12 +177,17 @@ func Parse(raw []byte) (Policy, error) {
 				}
 				decl.Modules = append(decl.Modules, item.Value)
 			}
+		case "file-roles":
+			if version < 4 {
+				return Policy{}, errors.New("file-roles require schema-version 4")
+			}
+			fileRoles = value
 		default:
 			return Policy{}, fmt.Errorf("unknown board-policy field %q", key)
 		}
 	}
-	if version == 3 && !modulesSeen {
-		return Policy{}, errors.New("schema-version 3 requires board-policy.modules")
+	if version >= 3 && !modulesSeen {
+		return Policy{}, errors.New("schema-version 3 and 4 require board-policy.modules")
 	}
 	if taskBoard != nil {
 		decl.TaskBoardDeclared = true
@@ -191,6 +197,20 @@ func Parse(raw []byte) (Policy, error) {
 		}
 		decl.ZoneSkillsDeclared = declared
 		decl.ZoneSkills = skills
+	}
+	if fileRoles != nil {
+		if version < 4 {
+			return Policy{}, errors.New("file-roles require schema-version 4")
+		}
+		roles, err := parseFileRoles(fileRoles)
+		if err != nil {
+			return Policy{}, err
+		}
+		decl.FileRolesDeclared = true
+		decl.FileRoles = roles
+	}
+	if version == 4 && !decl.FileRolesDeclared {
+		return Policy{}, errors.New("schema-version 4 requires file-roles")
 	}
 	policy, err := New(decl)
 	if err != nil {
@@ -254,7 +274,7 @@ func validateNode(n *yaml.Node, depth int) error {
 	}
 	validTag := (n.Kind == yaml.MappingNode && n.Tag == "!!map") ||
 		(n.Kind == yaml.SequenceNode && n.Tag == "!!seq") ||
-		(n.Kind == yaml.ScalarNode && (n.Tag == "!!str" || n.Tag == "!!int"))
+		(n.Kind == yaml.ScalarNode && (n.Tag == "!!str" || n.Tag == "!!int" || n.Tag == "!!bool"))
 	if !validTag {
 		return fmt.Errorf("board-policy YAML tag %q does not match a supported value type", n.Tag)
 	}
