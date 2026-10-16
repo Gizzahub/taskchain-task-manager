@@ -58,7 +58,20 @@ func (s FixtureStored) View(repo Repository, current *Snapshot, status string) F
 		return FixtureView{Provenance: "unknown", Current: "unavailable", Reason: "unverified-writer"}
 	}
 	a := Assess(s.record, repo, current, status)
-	return FixtureView{s.record.ID, "bound-at-write", a.Current, a.Reason}
+	reason := a.Reason
+	switch a.Current {
+	case "matching":
+		reason = "current-generation-matches"
+	case "different-generation":
+		reason = "current-generation-different"
+	case "terminal":
+		reason = "current-execution-terminal"
+	default:
+		if reason == "unverified-owner-provenance" {
+			reason = "current-execution-state-unavailable"
+		}
+	}
+	return FixtureView{s.record.ID, "bound-at-write", a.Current, reason}
 }
 
 // Write persists a bound fixture declaration and an immutable link under the

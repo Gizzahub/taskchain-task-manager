@@ -103,3 +103,26 @@ func TestFixtureWriterPinsCollectionDuringReplacement(t *testing.T) {
 		t.Fatal("later symlink access accepted")
 	}
 }
+
+func TestFixtureStoredReportsCurrentReasonSeparately(t *testing.T) {
+	w := writerWorld(t)
+	result, e := w.writer.Write(context.Background(), w.record, w.link, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, c := range []struct{ status, current, reason string }{
+		{taskruntime.StatusActive, "matching", "current-generation-matches"},
+		{taskruntime.StatusDone, "terminal", "current-execution-terminal"},
+		{taskruntime.StatusActive, "different-generation", "current-generation-different"},
+		{"unknown", "unavailable", "current-execution-state-unavailable"},
+	} {
+		current := w.record.Execution.Snapshot
+		if c.current == "different-generation" {
+			current.StartedAt = "2026-01-01T01:00:00Z"
+		}
+		view := result.Stored.View(w.record.Repository, &current, c.status)
+		if view.Provenance != "bound-at-write" || view.Current != c.current || view.Reason != c.reason {
+			t.Fatalf("contradictory trusted view: %+v", view)
+		}
+	}
+}
