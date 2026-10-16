@@ -1,5 +1,5 @@
-// Package declaration reads inactive, versioned declaration fixtures. It never
-// creates declarations, claims executions, calls providers, or changes a ledger.
+// Package declaration provides inactive versioned readers and an explicitly
+// synthetic fixture writer foundation. It never claims executions or invokes providers.
 package declaration
 
 import (

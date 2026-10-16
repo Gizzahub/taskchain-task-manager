@@ -1,8 +1,9 @@
-# Inactive declaration reader and wire compatibility
+# Inactive declaration fixtures and wire compatibility
 
 `internal/declaration` is an opt-in library for local, synthetic declaration
-fixtures. No command, producer, declaration store, runtime admission, hook,
-provider invocation, installation, or writer cutover is enabled. Existing run
+fixtures. No command, live producer/store, runtime admission, hook,
+provider invocation, installation, or writer cutover is enabled. An internal
+synthetic writer foundation is described below. Existing run
 ledgers, receipts, timing records and evidence contexts keep their bytes and
 meaning. Reading a declaration never creates an execution or resumes its owner.
 
@@ -78,7 +79,7 @@ they have no declaration link and must remain connection-unknown. The evidence
 v1 reader rejects a `declaration_id` extension. The declaration reader rejects
 legacy timing/evidence as declaration input. New audit/timing references use the separate `task-manager.declaration-link/v1`
 envelope and `DecodeLink`; v1 timing/evidence is not extended or downcast. No
-audit link producer is enabled here.
+live audit link producer is enabled here.
 
 The link fields are required `schema`, `event_id`, `occurred_at`, `repository`,
 `runtime`, `declaration_id`, and optional `invocation`. Repository/runtime have
@@ -121,6 +122,50 @@ platforms refuse file reads; byte decoding remains available for fixtures.
 
 The legacy execution store's existing permissions are **not** evidence that a
 declaration collection is safe. The reader must not be used to change those
-permissions. There is no live writer, TTL, retention cleanup, file deletion,
+permissions. There is no live writer, TTL, retention cleanup, existing-data deletion,
 cross-store transaction or automatic recovery. Writer activation, ownership
 validation, retention, rollback and consumer E2E remain separate work.
+
+## Synthetic durable writer foundation
+
+`NewFixtureWriter` is an internal library seam with no CLI, hook, discovery,
+environment opt-in or installation path. Callers must explicitly select a
+synthetic owner-private sandbox. Repository root, Git-resolved common directory
+and captured worktree must be contained there. No-follow ancestor validation
+rejects symlinks, unsafe owners and writable parents before runtime locking.
+This is not authentication against a hostile process running as the same UID.
+
+`WithFixtureExecution` resolves repository identity and the caller's existing
+owner under the runtime's existing mutation lock, checks the entire captured
+generation and terminal receipt, and calls persistence within that boundary.
+Literal legacy purpose is retained for snapshot comparison while the existing
+runtime reader's delivery default remains unchanged. No execution or receipt is
+rewritten, no extra lock is introduced, and no provider is called.
+
+This foundation persists bound records only. Topics must be omitted; even
+self-declared redacted strings are rejected before serialization. A separate
+0700 `declaration-fixture-v1` collection below the synthetic common directory
+contains 0600 records and links keyed by a digest of their identifiers only.
+Neither topics nor raw inputs are hashed. Existing ledger permissions are unchanged.
+File sync, atomic rename and directory sync are checked. A post-rename sync
+failure reports durability unknown; retry rereads the same immutable identity
+and repeats synchronization, rather than claiming that visibility proves durability.
+Before publication, failed temporary writes are cleaned without deleting old data.
+
+Same ID/same typed payload reuses the stored record; different payload conflicts.
+Links use stable event IDs and their own immutable comparison. Declaration and
+link persistence are separate: a link failure retains the durable declaration.
+Optional synthetic consumer delivery occurs after releasing the mutation lock;
+failure reports audit-unconfirmed and never restarts or rolls back execution.
+Retries can physically redeliver the same event. Exactly-once delivery is not claimed.
+
+Only a successful writer result constructs the process-local `FixtureStored`
+handle. Its redacted view exposes historical bound-at-write separately from
+current matching/different-generation/terminal/unavailable. It exports no topic,
+absolute paths, owner or session identity, and cannot import authority. Ordinary
+decoded files and metadata remain provenance-unknown. Reconstructing trusted
+provenance across production restarts is outside this synthetic foundation.
+
+Production activation requires a separate owner-approved lifecycle transition,
+retention/reclamation policy, rollback, installed executable identity and actual
+consumer proof. Fixture persistence alone does not authorize that activation.
