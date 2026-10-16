@@ -172,3 +172,40 @@ provenance across production restarts is outside this synthetic foundation.
 Production activation requires a separate owner-approved lifecycle transition,
 retention/reclamation policy, rollback, installed executable identity and actual
 consumer proof. Fixture persistence alone does not authorize that activation.
+
+
+## Inactive restart-storage fixture
+
+`NewRestartFixtureWriter` is a second explicitly synthetic constructor, not a
+production opt-in. It reuses the same fixture binding and runtime mutation lock,
+with a separate `declaration-restart-fixture-v1` owner-private collection. Its
+immutable envelope has schema `task-manager.restart-fixture/v1`, writer
+`synthetic-task-manager/v1`, and the complete nested declaration `record`.
+The envelope is bounded by the same 64-KiB limit, strict keys/types/schema rules
+and omitted-topic requirement. Declaration v1 bytes and the original fixture
+namespace stay unchanged. No automatic migration or provenance backfill occurs.
+
+The writer checks the complete execution under the existing lock before storing
+this envelope. Its `Read(repository, id)` pins an explicitly selected synthetic
+collection, checks owner/mode, no-follow ancestors and file identity, validates
+schema/writer/repository/ID, and repeats file/directory sync before restoring a
+historical fixture handle. Missing data never creates a collection or ledger.
+The repository argument is the caller's trusted selection, never inferred from
+stored JSON. Independent decoding/importing remains provenance-unknown; there is
+no API that promotes supplied bytes to authority. This is not authentication
+against a malicious process with the same UID and write access to that trusted
+collection. A writer tag or checksum by itself is not proof of origin.
+
+Historical provenance survives execution termination or disappearance. Current
+matching, drift, terminal and unavailable are still separately assessed; restored
+provenance grants no current owner/resume rights. Unknown or unsafe reads return
+no trusted handle. Record visibility after a crash alone is not durability proof;
+reads and identical-ID write retries must complete synchronization. A link/audit
+failure preserves the declaration and never reexecutes the lifecycle/provider.
+
+This prepares restart-storage behavior only. Production authority selection,
+legacy-writer refusal, lifecycle transition, storage quota enforcement, installation,
+actual consumer adoption and production recovery are not implemented here. No
+CLI, hook, environment switch, live discovery, retention mutation or delete API
+is added. The default retention behavior is preservation. Separate lifecycle
+ownership and consumer verification are required before any live activation.

@@ -21,6 +21,17 @@ func (w *FixtureWriter) fail(stage string) error {
 }
 
 func (w *FixtureWriter) collection(common string) (*os.Root, error) {
+	return w.openCollection(common, true)
+}
+
+func (w *FixtureWriter) collectionName() string {
+	if w.restart {
+		return "declaration-restart-fixture-v1"
+	}
+	return "declaration-fixture-v1"
+}
+
+func (w *FixtureWriter) openCollection(common string, create bool) (*os.Root, error) {
 	r, err := taskruntime.OpenFixtureSandbox(w.sandbox)
 	if err != nil {
 		return nil, err
@@ -34,7 +45,7 @@ func (w *FixtureWriter) collection(common string) (*os.Root, error) {
 	for _, part := range strings.Split(rel, string(filepath.Separator)) {
 		path = filepath.Join(path, part)
 		i, e := r.Lstat(path)
-		if e != nil || !i.IsDir() || i.Mode()&os.ModeSymlink != 0 {
+		if e != nil || !i.IsDir() || i.Mode()&os.ModeSymlink != 0 || i.Mode().Perm()&0o022 != 0 || !ownerPrivate(i, i.Mode().Perm()) {
 			return nil, ErrUnavailable
 		}
 	}
@@ -43,9 +54,11 @@ func (w *FixtureWriter) collection(common string) (*os.Root, error) {
 		return nil, ErrUnavailable
 	}
 	defer parent.Close()
-	const name = "declaration-fixture-v1"
-	if err := parent.Mkdir(name, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
-		return nil, ErrFixtureStorage
+	name := w.collectionName()
+	if create {
+		if err := parent.Mkdir(name, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+			return nil, ErrFixtureStorage
+		}
 	}
 	i, err := parent.Lstat(name)
 	if err != nil || !i.IsDir() || !ownerPrivate(i, 0o700) {
@@ -59,6 +72,9 @@ func (w *FixtureWriter) collection(common string) (*os.Root, error) {
 	if err != nil || !os.SameFile(i, j) || !ownerPrivate(j, 0o700) {
 		_ = child.Close()
 		return nil, ErrUnavailable
+	}
+	if !create {
+		return child, nil
 	}
 	// Retry parent sync even when the directory already exists after a crash.
 	f, err := parent.Open(".")
@@ -86,7 +102,7 @@ func (w *FixtureWriter) verifyCollection(common string, pinned *os.Root) error {
 		return ErrFixtureDurability
 	}
 	defer r.Close()
-	rel, err := filepath.Rel(w.sandbox, filepath.Join(common, "declaration-fixture-v1"))
+	rel, err := filepath.Rel(w.sandbox, filepath.Join(common, w.collectionName()))
 	if err != nil {
 		return ErrFixtureDurability
 	}

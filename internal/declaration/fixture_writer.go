@@ -18,6 +18,7 @@ var ErrFixtureDurability = errors.New("fixture declaration durability unknown")
 // production caller constructs it. Topics are omitted before any serialization.
 type FixtureWriter struct {
 	sandbox string
+	restart bool // separate synthetic restart envelope and collection
 	runtime *taskruntime.Service
 	fault   func(string) error // private deterministic filesystem fault seam
 }
@@ -110,6 +111,13 @@ func (w *FixtureWriter) Write(ctx context.Context, record Record, link Link, con
 	}
 	x := record.Execution.Snapshot
 	started, _ := time.Parse(time.RFC3339Nano, x.StartedAt)
+	storedBytes := b
+	if w.restart {
+		storedBytes, err = encodeRestartFixture(record)
+		if err != nil {
+			return out, err
+		}
+	}
 	captured := taskruntime.Execution{Task: x.Task, Type: x.Type, Purpose: taskruntime.Purpose(x.Purpose), Source: x.Source, Owner: x.Owner, Branch: x.Branch, Worktree: x.Worktree, StartedAt: started}
 	err = w.runtime.WithFixtureExecution(ctx, w.sandbox, record.Repository.ID, record.Repository.CommonDir, captured, func() error {
 		r, e := w.collection(record.Repository.CommonDir)
@@ -117,8 +125,11 @@ func (w *FixtureWriter) Write(ctx context.Context, record Record, link Link, con
 			return e
 		}
 		defer r.Close()
-		out.Disposition, e = w.persist(r, "declaration", record.ID, b, func(old []byte) error {
+		out.Disposition, e = w.persist(r, "declaration", record.ID, storedBytes, func(old []byte) error {
 			v, e := Decode(old)
+			if w.restart {
+				v, e = decodeRestartFixture(old)
+			}
 			if e != nil {
 				return ErrFixtureStorage
 			}
