@@ -162,12 +162,14 @@ Optional synthetic consumer delivery occurs after releasing the mutation lock;
 failure reports audit-unconfirmed and never restarts or rolls back execution.
 Retries can physically redeliver the same event. Exactly-once delivery is not claimed.
 
-Only a successful writer result constructs the process-local `FixtureStored`
-handle. Its redacted view exposes historical bound-at-write separately from
+In the original `NewFixtureWriter` foundation, only a successful writer result
+constructs its process-local `FixtureStored` handle. Its redacted view exposes historical bound-at-write separately from
 current matching/different-generation/terminal/unavailable. It exports no topic,
 absolute paths, owner or session identity, and cannot import authority. Ordinary
 decoded files and metadata remain provenance-unknown. Reconstructing trusted
-provenance across production restarts is outside this synthetic foundation.
+provenance across production restarts remains outside this synthetic foundation.
+The separate inactive restart fixture below adds a protected synthetic read path
+that can also construct `FixtureStored`; arbitrary decoding still cannot.
 
 Production activation requires a separate owner-approved lifecycle transition,
 retention/reclamation policy, rollback, installed executable identity and actual

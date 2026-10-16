@@ -44,8 +44,10 @@ type FixtureResult struct {
 	Stored      FixtureStored
 }
 
-// FixtureStored is process-local writer provenance, not an importable authority.
-// A decoded record or arbitrary metadata cannot construct a trusted value.
+// FixtureStored is historical synthetic writer provenance, not importable authority.
+// The original fixture writer constructs a process-local result. A verified Read
+// from protected restart-fixture storage can also restore this handle in a later
+// process. Decoded records or arbitrary metadata cannot construct a trusted value.
 type FixtureStored struct {
 	record  Record
 	trusted bool
