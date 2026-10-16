@@ -131,3 +131,94 @@ func TestFixtureExecutionRejectsUnsafeAncestorsBeforeLock(t *testing.T) {
 		})
 	}
 }
+
+func TestFixtureExecutionRejectsRuntimeStateSymlinks(t *testing.T) {
+	for _, part := range []string{RuntimeStateDir, filepath.Join(RuntimeStateDir, "task-runtime"), filepath.Join(RuntimeStateDir, "task-runtime", "v1")} {
+		t.Run(part, func(t *testing.T) {
+			w := newEndWorld(t)
+			sandbox := filepath.Dir(w.root)
+			if err := os.Chmod(sandbox, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			outside, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(w.common, part)
+			executions := w.executions()
+			if err := os.Rename(path, path+"-retained"); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(outside, path); err != nil {
+				t.Fatal(err)
+			}
+			wantEntries := 0
+			if part == filepath.Join(RuntimeStateDir, "task-runtime", "v1") {
+				if err := os.WriteFile(filepath.Join(outside, "executions.json"), []byte(executions), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				wantEntries = 1
+			}
+			err = w.service().WithFixtureExecution(context.Background(), sandbox, "sample-repo", w.common, w.execution, func() error { t.Fatal("symlink binding"); return nil })
+			if err == nil {
+				t.Fatal("runtime-state symlink accepted")
+			}
+			entries, err := os.ReadDir(outside)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != wantEntries {
+				t.Fatal("runtime-state/lock created outside sandbox")
+			}
+		})
+	}
+}
+
+func TestFixtureRuntimeLockRemainsPinnedAfterReplacement(t *testing.T) {
+	w := newEndWorld(t)
+	sandbox := filepath.Dir(w.root)
+	if err := os.Chmod(sandbox, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	r, err := OpenFixtureSandbox(sandbox)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	s, check, err := newStateStore(w.common).pinFixture(r, sandbox)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.fixtureRoot.Close()
+	if err := os.Rename(s.dir, s.dir+"-retained"); err != nil {
+		t.Fatal(err)
+	}
+	outside, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, s.dir); err != nil {
+		t.Fatal(err)
+	}
+	unlock, err := s.lock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	if _, err := os.Stat(filepath.Join(s.dir+"-retained", "mutation.lock")); err != nil {
+		t.Fatal("lock not pinned", err)
+	}
+	entries, err := os.ReadDir(outside)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("lock escaped pinned directory", err)
+	}
+	if err := check(); err == nil {
+		t.Fatal("moved state path was accepted")
+	}
+	if err := s.save([]Execution{w.execution}); err == nil {
+		t.Fatal("fixture runtime execution save enabled")
+	}
+	if err := s.appendReceipt(Receipt{Task: w.execution.Task}); err == nil {
+		t.Fatal("fixture runtime receipt append enabled")
+	}
+}

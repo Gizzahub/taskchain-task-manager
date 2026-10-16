@@ -50,6 +50,11 @@ func (s *Service) WithFixtureExecution(ctx context.Context, sandbox, repositoryI
 	if err != nil || !identity.IsDir() || identity.Mode()&os.ModeSymlink != 0 {
 		return ErrFixtureBinding
 	}
+	store, checkStatePath, err := store.pinFixture(r, sandbox)
+	if err != nil {
+		return err
+	}
+	defer store.fixtureRoot.Close()
 	unlock, err := store.lock()
 	if err != nil {
 		return ErrFixtureBinding
@@ -71,7 +76,7 @@ func (s *Service) WithFixtureExecution(ctx context.Context, sandbox, repositoryI
 	if err != nil || owner != captured.Owner {
 		return ErrFixtureBinding
 	}
-	data, err := os.ReadFile(store.executionsPath())
+	data, err := store.fsReadFile(store.executionsPath())
 	if err != nil {
 		return ErrFixtureBinding
 	}
@@ -109,6 +114,9 @@ func (s *Service) WithFixtureExecution(ctx context.Context, sandbox, repositoryI
 		return ErrFixtureBinding
 	}
 	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := checkStatePath(); err != nil {
 		return err
 	}
 	return persist()

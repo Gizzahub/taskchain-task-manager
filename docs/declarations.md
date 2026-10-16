@@ -133,6 +133,9 @@ environment opt-in or installation path. Callers must explicitly select a
 synthetic owner-private sandbox. Repository root, Git-resolved common directory
 and captured worktree must be contained there. No-follow ancestor validation
 rejects symlinks, unsafe owners and writable parents before runtime locking.
+The existing runtime-state descendants are also validated and descriptor-pinned
+before acquiring that same lock. Fixture lock/reclaim/read operations stay on
+the pinned descriptor after replacement; normal runtime storage is unchanged.
 This is not authentication against a hostile process running as the same UID.
 
 `WithFixtureExecution` resolves repository identity and the caller's existing

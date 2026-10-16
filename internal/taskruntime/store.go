@@ -12,13 +12,25 @@ import (
 	"time"
 )
 
-type stateStore struct{ dir string }
+type stateStore struct {
+	dir         string
+	fixtureRoot *os.Root // non-nil only for explicitly pinned synthetic binding
+}
 
 func newStateStore(commonDir string) stateStore {
 	return stateStore{dir: filepath.Join(commonDir, RuntimeStateDir, "task-runtime", "v1")}
 }
 
-func (s stateStore) init() error { return os.MkdirAll(s.dir, 0o755) }
+func (s stateStore) init() error {
+	if s.fixtureRoot != nil {
+		i, err := s.fixtureRoot.Stat(".")
+		if err != nil || !fixtureSafeDirectory(i) {
+			return ErrFixtureBoundary
+		}
+		return nil
+	}
+	return os.MkdirAll(s.dir, 0o755)
+}
 
 func (s stateStore) executionsPath() string { return filepath.Join(s.dir, "executions.json") }
 
@@ -27,7 +39,7 @@ func (s stateStore) receiptsPath() string { return filepath.Join(s.dir, "receipt
 // load reads executions.json. A missing file is an empty ledger. A present
 // file that cannot be decoded is an error, and this read never rewrites it.
 func (s stateStore) load() ([]Execution, error) {
-	b, err := os.ReadFile(s.executionsPath())
+	b, err := s.fsReadFile(s.executionsPath())
 	if os.IsNotExist(err) {
 		return []Execution{}, nil
 	}
@@ -42,6 +54,9 @@ func (s stateStore) load() ([]Execution, error) {
 }
 
 func (s stateStore) save(executions []Execution) error {
+	if s.fixtureRoot != nil {
+		return ErrFixtureBinding
+	}
 	if err := s.init(); err != nil {
 		return err
 	}
@@ -66,6 +81,9 @@ func (s stateStore) save(executions []Execution) error {
 }
 
 func (s stateStore) appendReceipt(receipt Receipt) error {
+	if s.fixtureRoot != nil {
+		return ErrFixtureBinding
+	}
 	if err := s.init(); err != nil {
 		return err
 	}
@@ -91,7 +109,7 @@ func (s stateStore) appendReceipt(receipt Receipt) error {
 // latestReceipts keeps the last decodable record for each task. An empty
 // line or a broken record fails the whole read; nothing is skipped.
 func (s stateStore) latestReceipts() (map[string]Receipt, error) {
-	f, err := os.Open(s.receiptsPath())
+	f, err := s.fsOpenFile(s.receiptsPath(), os.O_RDONLY, 0)
 	if os.IsNotExist(err) {
 		return map[string]Receipt{}, nil
 	}

@@ -14,6 +14,8 @@ import (
 
 var ErrFixtureBoundary = errors.New("unsafe or unavailable synthetic fixture boundary")
 
+func fixtureOpenFlags(flags int) int { return flags | unix.O_NOFOLLOW | unix.O_NONBLOCK }
+
 // OpenFixtureSandbox pins an explicitly selected owner-private synthetic root.
 // It does not discover a live repository or create/repair any directory.
 func OpenFixtureSandbox(path string) (*os.Root, error) {
