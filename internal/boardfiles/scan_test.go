@@ -37,6 +37,7 @@ func TestScanClassifiesDeclaredRolesCardsAndPrivateTrees(t *testing.T) {
 func TestScanFindsUnknownFilesDirectoriesAndSymlinks(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "tasks/README.md", "wrong marker\n")
+	write(t, root, "tasks/TEMPLATE.md", "template")
 	write(t, root, "tasks/todo/001-card.md", "card")
 	for _, name := range []string{"README.md", "INDEX.md", "AGENTS.md", "CLAUDE.md", "TEMPLATE.md"} {
 		write(t, root, "tasks/todo/"+name, "reserved")
@@ -72,7 +73,7 @@ func TestScanReturnsIOErrorsSeparatelyFromFindings(t *testing.T) {
 }
 
 func TestScanRestrictsRootZonesAndStorageToTheirDeclaredLayouts(t *testing.T) {
-	root := t.TempDir()
+	root := declaredBoard(t)
 	write(t, root, "tasks/_archive/done/001-archived.md", "card")
 	write(t, root, "tasks/archive/2026-10/002-archived.md", "card")
 	write(t, root, "tasks/todo/arbitrary/note.md", "not a card")
@@ -149,4 +150,81 @@ func findingsText(result Result) string {
 		lines = append(lines, finding.Path+": "+finding.Detail)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func TestScanRootStaysPinnedAfterBoardRename(t *testing.T) {
+	root := declaredBoard(t)
+	write(t, root, "tasks/README.md", "generated: indexer r1\n")
+	r, err := os.OpenRoot(filepath.Join(root, "tasks"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	if err := os.Rename(filepath.Join(root, "tasks"), filepath.Join(root, "retained")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, root, "tasks/README.md", "replacement invalid marker\n")
+	write(t, root, "tasks/AGENTS.md", "guidance")
+	write(t, root, "tasks/TEMPLATE.md", "template")
+	result, err := ScanRoot(r, policy(t, true))
+	if err != nil || len(result.Findings) != 0 {
+		t.Fatalf("pinned board result=%+v err=%v", result, err)
+	}
+	result, err = Scan(root, "tasks", policy(t, true))
+	if err != nil || len(result.Findings) != 1 {
+		t.Fatalf("replacement board result=%+v err=%v", result, err)
+	}
+}
+
+func TestScanRejectsSymlinkBoardRoot(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "actual/README.md", "generated: indexer r1\n")
+	if err := os.Symlink("actual", filepath.Join(root, "tasks")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Scan(root, "tasks", policy(t, true)); err == nil {
+		t.Fatal("accepted symlink board root")
+	}
+}
+
+func TestScanTypedStateNamesDoNotPermitUnownedHiddenFiles(t *testing.T) {
+	root := declaredBoard(t)
+	write(t, root, "tasks/.task-manager-stage-0123456789abcdef0123456789abcdef", "stage")
+	write(t, root, "tasks/.task-manager-archive-capacity-"+strings.Repeat("a", 64)+".bin", "owned")
+	write(t, root, "tasks/.task-manager-stage-forged", "unowned")
+	write(t, root, "tasks/.task-manager-archive-capacity-"+strings.Repeat("g", 64)+".bin", "unowned")
+	result, err := Scan(root, "tasks", policy(t, true))
+	if err != nil || len(result.Findings) != 2 {
+		t.Fatalf("findings=%+v err=%v", result.Findings, err)
+	}
+	for _, finding := range result.Findings {
+		if !strings.Contains(finding.Path, "forged") && !strings.Contains(finding.Path, strings.Repeat("g", 64)) {
+			t.Fatalf("unexpected finding: %+v", finding)
+		}
+	}
+}
+
+func declaredBoard(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	write(t, root, "tasks/README.md", "generated: indexer r1\n")
+	write(t, root, "tasks/AGENTS.md", "guidance")
+	write(t, root, "tasks/TEMPLATE.md", "template")
+	return root
+}
+
+func TestScanReportsEveryMissingDeclaredFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "tasks"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Scan(root, "tasks", policy(t, true))
+	if err != nil || len(result.Findings) != 3 {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	for _, finding := range result.Findings {
+		if finding.Detail != "declared file role is missing" {
+			t.Fatalf("unexpectedfinding: %+v", finding)
+		}
+	}
 }

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
+	"github.com/Gizzahub/taskchain-task-manager/internal/boardstate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -115,10 +117,25 @@ func FindCards(root string, excludeArchive bool) ([]*Card, error) {
 // FindCardsIn walks the board rooted at tasksDir — the directory TASKS_DIR
 // redirects the walk at — with the same card exclusions as FindCards.
 func FindCardsIn(root, tasksDir string, excludeArchive bool) ([]*Card, error) {
+	return findCardsInWithPolicy(root, tasksDir, excludeArchive, nil)
+}
+
+// FindCardsWithPolicy walks cards using an already authority-bound policy.
+// It differs from the legacy reader only for opted-in file roles: an exact
+// declared role is never parsed as a card. Callers resolve the policy through
+// ActiveBoardPolicy; this function deliberately accepts no raw policy bytes.
+func FindCardsWithPolicy(root string, excludeArchive bool, policy boardpolicy.Policy) ([]*Card, error) {
+	return findCardsInWithPolicy(root, tasksDirName(), excludeArchive, &policy)
+}
+
+func findCardsInWithPolicy(root, tasksDir string, excludeArchive bool, policy *boardpolicy.Policy) ([]*Card, error) {
 	tasksPath := filepath.Join(root, tasksDir)
 	var cards []*Card
 	err := filepath.WalkDir(tasksPath, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
+			if policy != nil && policy.FileRolesEnabled() {
+				return err
+			}
 			return nil // unreadable entries are not cards
 		}
 		relToTasks, relErr := filepath.Rel(tasksPath, p)
@@ -126,9 +143,15 @@ func FindCardsIn(root, tasksDir string, excludeArchive bool) ([]*Card, error) {
 			return nil
 		}
 		name := d.Name()
+		if policy != nil && policy.FileRolesEnabled() && d.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refuse symlink while reading opted-in board: %s", filepath.ToSlash(relToTasks))
+		}
 		if d.IsDir() {
 			if p == tasksPath {
 				return nil
+			}
+			if policy != nil && policy.FileRolesEnabled() && boardstate.IsDirectory(filepath.ToSlash(relToTasks)) {
+				return filepath.SkipDir
 			}
 			if name == ".ce" || name == "evidence" {
 				return filepath.SkipDir
@@ -141,18 +164,29 @@ func FindCardsIn(root, tasksDir string, excludeArchive bool) ([]*Card, error) {
 		if filepath.Ext(name) != ".md" {
 			return nil
 		}
+		if policy != nil && policy.FileRolesEnabled() {
+			if _, declared := policy.FileRole(filepath.ToSlash(relToTasks)); declared {
+				return nil
+			}
+		}
 		switch strings.ToLower(name) {
 		case "readme.md", "index.md", "template.md":
 			return nil
 		}
 		card, readErr := ReadCardIn(root, tasksDir, filepath.ToSlash(relToTasks))
+		if policy != nil && policy.FileRolesEnabled() && readErr != nil {
+			return fmt.Errorf("read card %s: %w", filepath.ToSlash(relToTasks), readErr)
+		}
 		if readErr != nil || card == nil {
 			return nil
 		}
 		cards = append(cards, card)
 		return nil
 	})
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && (policy == nil || !policy.FileRolesEnabled()) && !os.IsNotExist(err) {
+		return cards, err
+	}
+	if err != nil && policy != nil && policy.FileRolesEnabled() {
 		return cards, err
 	}
 	return cards, nil

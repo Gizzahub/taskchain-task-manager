@@ -120,7 +120,10 @@ var filenameCardNumber = regexp.MustCompile(`^(\d+)[a-z]?-`)
 func Lint(root string) *LintReport {
 	live, _ := FindCards(root, true)
 	all, _ := FindCards(root, false)
+	return lintReport(root, live, all)
+}
 
+func lintReport(root string, live, all []*Card) *LintReport {
 	report := &LintReport{Counts: map[LintStrayKind]int{}}
 	cardsPerDir := map[string]int{}
 	for _, card := range all {

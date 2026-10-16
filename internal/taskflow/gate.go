@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"io"
 	"os"
 	"os/exec"
@@ -224,6 +225,14 @@ func RequireTasksDirectory() error {
 // object on stdout; the step's error text survives in the report either way.
 // The steps render into out, which is os.Stdout in text mode.
 func RunGate(ctx context.Context, out io.Writer, quiet bool) GateReport {
+	policy, err := ActiveBoardPolicy(".")
+	if err != nil {
+		return gateStepUnavailable(GateReport{ToolVersion: ReferenceStampVersion, ToolRevision: ReferenceStampRevision}, GateStepValidate, err.Error())
+	}
+	return runGateWithPolicy(ctx, out, quiet, policy)
+}
+
+func runGateWithPolicy(ctx context.Context, out io.Writer, quiet bool, policy boardpolicy.Policy) GateReport {
 	report := GateReport{
 		Status:       "ready",
 		Summary:      GateSummaryReady,
@@ -236,8 +245,30 @@ func RunGate(ctx context.Context, out io.Writer, quiet bool) GateReport {
 		sink = io.Discard
 	}
 
+	// A new file-role board must be structurally readable before opening
+	// candidate cards. Keep the legacy validate-first sequence unchanged.
+	var policyLint *LintReport
+	if policy.FileRolesEnabled() {
+		var err error
+		policyLint, err = LintWithPolicy(".", policy)
+		if err != nil {
+			return gateStepUnavailable(report, GateStepLint, err.Error())
+		}
+		if len(policyLint.Structure) > 0 {
+			report.Steps = append(report.Steps, GateStep{Step: GateStepValidate, Status: "skipped", Detail: "file-role structure prevents safe card validation"})
+			RenderLint(sink, policyLint)
+			return gateStepFailed(report, GateStepLint, GateSummaryLint, LintFailureDetail(policyLint))
+		}
+	}
+
 	// validate: the whole-board pass. A single invalid card fails the step.
-	invalid, err := RenderValidateAll(ctx, sink, ".")
+	var invalid int
+	var err error
+	if policy.FileRolesEnabled() {
+		invalid, err = renderValidateAllWithPolicy(ctx, sink, ".", tasksDirName(), policy)
+	} else {
+		invalid, err = RenderValidateAll(ctx, sink, ".")
+	}
 	if err != nil {
 		return gateStepUnavailable(report, GateStepValidate, err.Error())
 	}
@@ -248,7 +279,13 @@ func RunGate(ctx context.Context, out io.Writer, quiet bool) GateReport {
 	report.Steps = append(report.Steps, GateStep{Step: GateStepValidate, Status: "pass"})
 
 	// lint: every card somewhere the board looks.
-	lint := Lint(".")
+	lint := policyLint
+	if lint == nil {
+		lint, err = LintActive(".")
+	}
+	if err != nil {
+		return gateStepUnavailable(report, GateStepLint, err.Error())
+	}
 	RenderLint(sink, lint)
 	if !lint.Clean {
 		return gateStepFailed(report, GateStepLint, GateSummaryLint, LintFailureDetail(lint))
@@ -258,7 +295,15 @@ func RunGate(ctx context.Context, out io.Writer, quiet bool) GateReport {
 	// preflight: a runnable queue, or an honestly closed one. NO_QUEUE is
 	// valid for a cleared/reference-only board, so it passes here with its
 	// one-line form; BLOCKED and hidden WIP do not pass.
-	preflight := PreflightCheck(".", PreflightOptions{})
+	var preflight *PreflightReport
+	if policy.FileRolesEnabled() {
+		preflight, err = preflightCheckWithPolicy(".", PreflightOptions{}, policy)
+	} else {
+		preflight, err = PreflightCheckActive(".", PreflightOptions{})
+	}
+	if err != nil {
+		return gateStepUnavailable(report, GateStepPreflight, err.Error())
+	}
 	RenderPreflightReport(sink, preflight, 0, true)
 	if reason, blocked := preflightGateRefusal(preflight); blocked {
 		return gateStepFailed(report, GateStepPreflight, GateSummaryPreflight, reason)

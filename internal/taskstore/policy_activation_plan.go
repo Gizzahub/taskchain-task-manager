@@ -29,6 +29,13 @@ func preparePolicyChangeJournal(r *os.Root, policy boardpolicy.Policy, binding p
 
 func preparePolicyChangeWithModules(r *os.Root, policy boardpolicy.Policy, binding policyAuthorityBinding, head string, j transitionJournal, revision *policyRevision, adopt bool) (policyActivationState, []byte, error) {
 	var state policyActivationState
+	// A target file-role policy must classify the pre-existing board before an
+	// activation or revision preparation writes any authority metadata. Recovery
+	// reconstructs its already-saved target and keeps its existing receipt
+	// checks; it does not invoke this new-preparation path.
+	if err := admitBoardFiles(r, policy); err != nil {
+		return state, nil, err
+	}
 	if j.StorageProtocol == 5 {
 		if _, err := validateCompletedArchiveCapacity(r, j); err != nil {
 			return state, nil, err

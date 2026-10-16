@@ -2,6 +2,7 @@ package taskflow
 
 import (
 	"fmt"
+	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -99,11 +100,47 @@ type PreflightOptions struct {
 // PreflightCheck reads the queue and returns its readiness without mutating
 // anything.
 func PreflightCheck(root string, opts PreflightOptions) *PreflightReport {
+	cards, _ := FindCards(root, true)
+	return preflightCheck(root, opts, cards, Lint(root))
+}
+
+// PreflightCheckActive uses the same authority-bound reader as lint. It is
+// the CLI and gate entry point for an opted-in board; older boards retain
+// PreflightCheck's legacy discovery exactly.
+func PreflightCheckActive(root string, opts PreflightOptions) (*PreflightReport, error) {
+	policy, err := ActiveBoardPolicy(root)
+	if err != nil {
+		return nil, err
+	}
+	if !policy.FileRolesEnabled() {
+		return PreflightCheck(root, opts), nil
+	}
+	return preflightCheckWithPolicy(root, opts, policy)
+}
+
+func preflightCheckWithPolicy(root string, opts PreflightOptions, policy boardpolicy.Policy) (*PreflightReport, error) {
+	lint, err := LintWithPolicy(root, policy)
+	if err != nil {
+		return nil, err
+	}
+	if len(lint.Structure) > 0 {
+		report := preflightCheck(root, opts, nil, lint)
+		report.Verdict = PreflightBlocked
+		return report, nil
+	}
+	cards, err := FindCardsWithPolicy(root, true, policy)
+	if err != nil {
+		return nil, err
+	}
+	return preflightCheck(root, opts, cards, lint), nil
+
+}
+
+func preflightCheck(root string, opts PreflightOptions, cards []*Card, lint *LintReport) *PreflightReport {
 	if opts.MaxCardBytes <= 0 {
 		opts.MaxCardBytes = DefaultMaxCardBytes
 	}
 
-	cards, _ := FindCards(root, true)
 	sort.Slice(cards, func(i, j int) bool { return cards[i].RepoRel() < cards[j].RepoRel() })
 
 	report := &PreflightReport{
@@ -142,7 +179,7 @@ func PreflightCheck(root string, opts PreflightOptions) *PreflightReport {
 		}
 	}
 
-	report.Lint = Lint(root)
+	report.Lint = lint
 	if report.Total == 0 {
 		if missing := preflightMissingWorkflowZones(opts.Zones, report.Lint); len(missing) > 0 {
 			if !preflightHasDrainedArchiveEvidence(cards) {

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"gopkg.in/yaml.v3"
 )
 
@@ -514,6 +515,21 @@ func validateAllIn(ctx context.Context, root, tasksDir string, tree *CriterionTr
 	if err != nil {
 		return nil, Citations{}, err
 	}
+	return validateCardsIn(ctx, root, tasksDir, cards, tree, checks...)
+}
+
+// validateAllWithPolicy uses the same card validation rules with the
+// authority-bound schema 4 reader. It is intentionally internal: policy
+// resolution stays at the command/gate boundary.
+func validateAllWithPolicy(ctx context.Context, root, tasksDir string, policy boardpolicy.Policy, tree *CriterionTree, checks ...cardCheck) ([]ValidationResult, Citations, error) {
+	cards, err := FindCardsWithPolicy(root, true, policy)
+	if err != nil {
+		return nil, Citations{}, err
+	}
+	return validateCardsIn(ctx, root, tasksDir, cards, tree, checks...)
+}
+
+func validateCardsIn(ctx context.Context, root, tasksDir string, cards []*Card, tree *CriterionTree, checks ...cardCheck) ([]ValidationResult, Citations, error) {
 	index := buildCorpusIndex(root)
 	citations := Citations{}
 	results := make([]ValidationResult, 0, len(cards))
@@ -563,7 +579,27 @@ func validateDecisionDocument(ctx context.Context, root, tasksDir string, card *
 // RenderValidateAll writes the whole-board validate output. It returns the
 // number of invalid cards for the caller's exit decision.
 func RenderValidateAll(ctx context.Context, w io.Writer, root string) (int, error) {
+	policy, err := ActiveBoardPolicy(root)
+	if err != nil {
+		return 0, err
+	}
+	if policy.FileRolesEnabled() {
+		return renderValidateAllWithPolicy(ctx, w, root, tasksDirName(), policy)
+	}
 	return RenderValidateAllIn(ctx, w, root, tasksDirName())
+}
+
+func renderValidateAllWithPolicy(ctx context.Context, w io.Writer, root, tasksDir string, policy boardpolicy.Policy) (int, error) {
+	tree := currentCriterionTree(ctx, root)
+	fmt.Fprintln(w, ReferenceStamp)
+	fmt.Fprintf(w, "Criterion tree: %s\n", tree.Description)
+	fmt.Fprintln(w, "📋 Validating all tasks...")
+	fmt.Fprintln(w)
+	results, citations, err := validateAllWithPolicy(ctx, root, tasksDir, policy, &tree)
+	if err != nil {
+		return 0, err
+	}
+	return renderValidateResults(w, results, citations, tree)
 }
 
 // RenderValidateAllIn writes the whole-board validate output for the board
@@ -584,6 +620,10 @@ func RenderValidateAllInWithTree(ctx context.Context, w io.Writer, root, tasksDi
 	if err != nil {
 		return 0, err
 	}
+	return renderValidateResults(w, results, citations, tree)
+}
+
+func renderValidateResults(w io.Writer, results []ValidationResult, citations Citations, tree CriterionTree) (int, error) {
 	if len(results) == 0 {
 		// An empty board ends the report after the bare notice: there are no
 		// per-card verdicts to sum, so the ---, the summary, and the citation

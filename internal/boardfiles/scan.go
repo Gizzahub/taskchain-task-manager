@@ -5,6 +5,7 @@
 package boardfiles
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -14,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
+	"github.com/Gizzahub/taskchain-task-manager/internal/boardstate"
 )
 
 // Finding is one file-tree shape which is not assigned a declared role.
@@ -34,7 +36,7 @@ type Result struct {
 // content and does not execute or modify anything. root exists to keep the
 // public signature aligned with callers that already resolve a repository;
 // tasksDir may be absolute or repository-relative.
-func Scan(root, tasksDir string, policy boardpolicy.Policy) (Result, error) {
+func Scan(root, tasksDir string, policy boardpolicy.Policy) (result Result, err error) {
 	if !policy.FileRolesEnabled() {
 		return Result{Enabled: false, Findings: []Finding{}}, nil
 	}
@@ -50,19 +52,35 @@ func Scan(root, tasksDir string, policy boardpolicy.Policy) (Result, error) {
 		return Result{}, fmt.Errorf("tasks directory is not a non-symlink directory")
 	}
 
+	r, err := os.OpenRoot(base)
+	if err != nil {
+		return Result{}, fmt.Errorf("open tasks directory: %w", err)
+	}
+	defer func() { err = errors.Join(err, r.Close()) }()
+	opened, err := r.Stat(".")
+	if err != nil || !os.SameFile(info, opened) {
+		return Result{}, errors.New("tasks directory changed while opening")
+	}
+	return ScanRoot(r, policy)
+}
+
+// ScanRoot scans a caller-owned pinned board handle. Writers call it under
+// their existing mutation lock; it never opens a second path-based board root.
+func ScanRoot(r *os.Root, policy boardpolicy.Policy) (Result, error) {
+	if !policy.FileRolesEnabled() {
+		return Result{Enabled: false, Findings: []Finding{}}, nil
+	}
+
 	result := Result{Enabled: true, Findings: []Finding{}}
-	err = filepath.WalkDir(base, func(full string, entry fs.DirEntry, walkErr error) error {
+	seen := map[string]bool{}
+	err := fs.WalkDir(r.FS(), ".", func(rel string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
-			return fmt.Errorf("read %s: %w", display(base, full), walkErr)
+			return fmt.Errorf("read %s: %w", rel, walkErr)
 		}
-		if full == base {
+		if rel == "." {
 			return nil
 		}
-		rel, err := filepath.Rel(base, full)
-		if err != nil {
-			return fmt.Errorf("relative path %s: %w", full, err)
-		}
-		rel = filepath.ToSlash(rel)
+		seen[rel] = true
 		if entry.Type()&os.ModeSymlink != 0 {
 			result.Findings = append(result.Findings, Finding{Path: rel, Detail: "symlinks are not permitted below an opted-in task board"})
 			if entry.IsDir() {
@@ -75,7 +93,7 @@ func Scan(root, tasksDir string, policy boardpolicy.Policy) (Result, error) {
 			return nil
 		}
 		if entry.IsDir() {
-			if privateDir(rel, policy) || enginePrivateDirectory(rel) {
+			if privateDir(rel, policy) || boardstate.IsDirectory(rel) {
 				return filepath.SkipDir
 			}
 			if allowedDirectory(rel, policy) {
@@ -85,7 +103,7 @@ func Scan(root, tasksDir string, policy boardpolicy.Policy) (Result, error) {
 			return filepath.SkipDir
 		}
 		if role, ok := policy.FileRole(rel); ok {
-			issue, issueErr := declaredRoleIssue(full, rel, role)
+			issue, issueErr := declaredRoleIssue(r, rel, role)
 			if issueErr != nil {
 				return issueErr
 			}
@@ -94,7 +112,7 @@ func Scan(root, tasksDir string, policy boardpolicy.Policy) (Result, error) {
 			}
 			return nil
 		}
-		if enginePrivateFile(rel) {
+		if boardstate.IsFile(rel) {
 			return nil
 		}
 		if reservedNonCardName(entry.Name()) {
@@ -114,6 +132,11 @@ func Scan(root, tasksDir string, policy boardpolicy.Policy) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	for _, role := range policy.FileRoles() {
+		if !seen[role.Path] {
+			result.Findings = append(result.Findings, Finding{Path: role.Path, Detail: "declared file role is missing"})
+		}
+	}
 	sort.Slice(result.Findings, func(i, j int) bool {
 		if result.Findings[i].Path == result.Findings[j].Path {
 			return result.Findings[i].Detail < result.Findings[j].Detail
@@ -121,14 +144,6 @@ func Scan(root, tasksDir string, policy boardpolicy.Policy) (Result, error) {
 		return result.Findings[i].Path < result.Findings[j].Path
 	})
 	return result, nil
-}
-
-func display(base, full string) string {
-	rel, err := filepath.Rel(base, full)
-	if err != nil {
-		return full
-	}
-	return filepath.ToSlash(rel)
 }
 
 // privateDir names the existing reader exclusions. The scanner deliberately
@@ -140,25 +155,6 @@ func privateDir(rel string, policy boardpolicy.Policy) bool {
 		if part == ".ce" || part == "evidence" {
 			return index == 0 || allowedDirectory(strings.Join(parts[:index], "/"), policy)
 		}
-	}
-	return false
-}
-
-func enginePrivateDirectory(rel string) bool {
-	return rel == ".task-manager-context" || rel == ".task-manager.lock"
-}
-
-func enginePrivateFile(rel string) bool {
-	if strings.Contains(rel, "/") {
-		return false
-	}
-	switch rel {
-	case ".task-manager-ids.json", ".task-manager-claims.json", ".task-manager-transitions.json",
-		".task-manager-archives.json", ".task-manager-repairs.json", ".task-manager-bundles.json",
-		".task-manager-relocations.json", ".task-manager-policy.json", ".task-manager-policy-activation.json",
-		".task-manager-archive-capacity.json", ".task-manager-owner-rejoin.json",
-		".ce-maintenance-receipt.json":
-		return true
 	}
 	return false
 }
@@ -226,7 +222,7 @@ func reservedNonCardName(name string) bool {
 	return false
 }
 
-func declaredRoleIssue(full, rel string, role boardpolicy.FileRole) (string, error) {
+func declaredRoleIssue(r *os.Root, rel string, role boardpolicy.FileRole) (string, error) {
 	if !strings.EqualFold(filepath.Ext(rel), ".md") {
 		return "declared file role requires a Markdown regular file", nil
 	}
@@ -238,14 +234,25 @@ func declaredRoleIssue(full, rel string, role boardpolicy.FileRole) (string, err
 		if len(role.Marker) > 64<<10 {
 			return "projection marker exceeds 65536 bytes", nil
 		}
-		file, err := os.Open(full)
+		before, err := r.Lstat(rel)
+		if err != nil {
+			return "", fmt.Errorf("inspect declared projection %s: %w", rel, err)
+		}
+		if !before.Mode().IsRegular() {
+			return "", fmt.Errorf("declared projection %s changed to a non-regular file", rel)
+		}
+		file, err := openProjection(r, rel)
 		if err != nil {
 			return "", fmt.Errorf("open declared projection %s: %w", rel, err)
+		}
+		opened, statErr := file.Stat()
+		if statErr != nil || !opened.Mode().IsRegular() || !os.SameFile(before, opened) {
+			return "", errors.Join(fmt.Errorf("declared projection %s changed while opening", rel), statErr, file.Close())
 		}
 		data, readErr := io.ReadAll(io.LimitReader(file, int64(len(role.Marker)+2)))
 		closeErr := file.Close()
 		if readErr != nil {
-			return "", fmt.Errorf("read declared projection %s: %w", rel, readErr)
+			return "", fmt.Errorf("read declared projection %s: %w", rel, errors.Join(readErr, closeErr))
 		}
 		if closeErr != nil {
 			return "", fmt.Errorf("close declared projection %s: %w", rel, closeErr)

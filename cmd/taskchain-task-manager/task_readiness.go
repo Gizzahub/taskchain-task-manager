@@ -35,7 +35,10 @@ func taskLint(ctx context.Context, args []string, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("get working directory: %w", err)
 	}
-	report := taskflow.Lint(root)
+	report, err := taskflow.LintActive(root)
+	if err != nil {
+		return usagef("task lint unavailable: %s", err)
+	}
 	if asJSON {
 		if err := taskflow.RenderLintJSON(out, report); err != nil {
 			return err
@@ -97,7 +100,10 @@ func taskPreflight(ctx context.Context, args []string, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("get working directory: %w", err)
 	}
-	report := taskflow.PreflightCheck(root, opts)
+	report, err := taskflow.PreflightCheckActive(root, opts)
+	if err != nil {
+		return usagef("task preflight unavailable: %s", err)
+	}
 	if asJSON {
 		if err := taskflow.RenderPreflightJSON(out, report); err != nil {
 			return err
