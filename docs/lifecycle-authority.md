@@ -99,6 +99,28 @@ arbitrary bytes nor a serialized/imported result can establish current authority
 Production integration still requires the existing mutation lock, pinned file/
 directory sync, authority CAS, all-mutator guards and old-caller/finish recovery.
 
+## Inactive locked boundary
+
+An internal, inactive callback boundary wraps the protected
+schema-6 read. `withCanonicalConfig` keeps the validated config descriptor and
+its owner-private `.ce` directory descriptor open for one synchronous callback.
+`withAuthorityMutation` performs a side-effect-free precheck, obtains the
+existing `mutation.lock` once, and delegates to
+`withLockedCanonicalAuthority`, which never acquires or releases that lock.
+
+Only an exact `ce` or `task-manager` writer match can receive the
+process-local `authorityLease`; `none`, a foreign writer, malformed schema or
+legacy input is rejected before runtime state or a lock is created. The lease
+is tied to the canonical repository, raw descriptor, expected writer and the
+owned lock's bytes and filesystem identity. It expires at callback return and
+detects replacement of either the config pathname or mutation lock. Config and
+parent directory `Sync` errors, callback errors and owned-lock release errors
+remain visible. A replaced lock pathname is never removed.
+
+This boundary has no CLI, provider, ledger, publisher, new lock domain or
+legacy transition. Existing service mutators do not call it, so delivery of
+this code does not activate authority or change normal runtime behavior.
+
 The descriptor/security query follows the public filesec APIs; Apple's
 [ACL wrapper](https://github.com/apple-oss-distributions/Libc/blob/main/posix1e/acl_file.c)
 conflates missing ACL properties with a null ACL result. The protected reader
