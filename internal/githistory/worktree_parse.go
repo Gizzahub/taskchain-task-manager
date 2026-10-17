@@ -21,6 +21,12 @@ type Worktree struct {
 	PruneReason string `json:"pruneReason,omitempty"`
 }
 
+// ParseWorktreeInventory decodes Git's NUL-delimited porcelain inventory.
+// Parsing alone verifies neither filesystem identity nor repository authority.
+func ParseWorktreeInventory(raw []byte) ([]Worktree, error) {
+	return parseWorktrees(raw)
+}
+
 func parseWorktrees(raw []byte) ([]Worktree, error) {
 	if !utf8.Valid(raw) {
 		return nil, errors.New("worktree porcelain is not UTF-8")
