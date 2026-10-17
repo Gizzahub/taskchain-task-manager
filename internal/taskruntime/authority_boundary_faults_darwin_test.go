@@ -278,3 +278,77 @@ func TestAuthorityLockedBoundarySymlinkLockPreserved(t *testing.T) {
 		t.Fatalf("replacement symlink removed: %v", err)
 	}
 }
+
+func TestAuthorityLockedBoundaryReleaseCheckWindow(t *testing.T) {
+	s, store, _ := authorityBoundaryFixture(t)
+	var replaced []byte
+	err := s.withAuthorityMutationHook(context.Background(), "task-manager", func(point string) error {
+		if point != "release-stat" {
+			return nil
+		}
+		var err error
+		replaced, err = os.ReadFile(store.lockPath())
+		if err != nil {
+			return err
+		}
+		if err := os.Rename(store.lockPath(), store.lockPath()+".own"); err != nil {
+			return err
+		}
+		return os.WriteFile(store.lockPath(), replaced, 0644)
+	}, func(*authorityLease) error { return nil })
+	if err == nil {
+		t.Fatal("replacement in release check/delete window accepted")
+	}
+	data, readErr := os.ReadFile(store.lockPath())
+	if readErr != nil || string(data) != string(replaced) {
+		t.Fatalf("foreign replacement deleted: %q %v", data, readErr)
+	}
+}
+
+func TestAuthorityLockedBoundaryReleaseStagingWindow(t *testing.T) {
+	s, store, _ := authorityBoundaryFixture(t)
+	err := s.withAuthorityMutationHook(context.Background(), "task-manager", func(point string) error {
+		if point == "lock-retired" {
+			return os.WriteFile(store.lockPath(), []byte("new owner"), 0644)
+		}
+		return nil
+	}, func(*authorityLease) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(store.lockPath())
+	if err != nil || string(data) != "new owner" {
+		t.Fatalf("post-claim replacement deleted: %q %v", data, err)
+	}
+}
+
+func TestAuthorityLockedBoundaryReleaseRetainsConflict(t *testing.T) {
+	s, store, _ := authorityBoundaryFixture(t)
+	err := s.withAuthorityMutationHook(context.Background(), "task-manager", func(point string) error {
+		if point == "release-stat" {
+			if err := os.Rename(store.lockPath(), store.lockPath()+".own"); err != nil {
+				return err
+			}
+			return os.WriteFile(store.lockPath(), []byte("first foreign owner"), 0644)
+		}
+		if point == "lock-retired" {
+			return os.WriteFile(store.lockPath(), []byte("second foreign owner"), 0644)
+		}
+		return nil
+	}, func(*authorityLease) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "residual retained at") {
+		t.Fatalf("missing residual evidence: %v", err)
+	}
+	data, readErr := os.ReadFile(store.lockPath())
+	if readErr != nil || string(data) != "second foreign owner" {
+		t.Fatalf("restore overwrote owner: %q %v", data, readErr)
+	}
+	residuals, globErr := filepath.Glob(filepath.Join(store.dir, ".mutation.lock.release-*"))
+	if globErr != nil || len(residuals) != 1 {
+		t.Fatalf("missing retained foreign file: %v %v", residuals, globErr)
+	}
+	data, readErr = os.ReadFile(residuals[0])
+	if readErr != nil || string(data) != "first foreign owner" {
+		t.Fatalf("retained content lost: %q %v", data, readErr)
+	}
+}

@@ -4,6 +4,7 @@ package taskruntime
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -175,4 +176,61 @@ func canonicalSafeStat(st unix.Stat_t, kind int, effectiveUID uint32) bool {
 		return st.Uid == effectiveUID && st.Mode&0o7777 == 0o700
 	}
 	return (st.Uid == effectiveUID || st.Uid == 0) && st.Mode&(unix.S_ISUID|unix.S_ISGID) == 0 && (st.Mode&0o022 == 0 || (st.Uid == 0 && st.Mode&unix.S_ISVTX != 0))
+}
+
+// retireOwnedMutationLock claims a contested public pathname into an exclusive,
+// operation-private name before inspecting and unlinking it. No cooperative
+// writer touches these staging names. This is not same-UID hostile-process
+// authentication. A mismatch is restored without overwriting, or retained with
+// an explicit residual path; a foreign inode is never unlinked.
+func retireOwnedMutationLock(path string, owned os.FileInfo, expected []byte, remove func(string) error, syncDir func() error, hook canonicalReadHook) error {
+	var nonce [16]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return fmt.Errorf("release staging identity: %w", err)
+	}
+	staging := filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.release-%x", filepath.Base(path), nonce))
+	if err := unix.RenameatxNp(unix.AT_FDCWD, path, unix.AT_FDCWD, staging, unix.RENAME_EXCL); err != nil {
+		return fmt.Errorf("claim lock for release (original retained): %w", err)
+	}
+	restore := func(cause error) error {
+		if err := unix.RenameatxNp(unix.AT_FDCWD, staging, unix.AT_FDCWD, path, unix.RENAME_EXCL); err != nil {
+			return errors.Join(cause, fmt.Errorf("lock release residual retained at %s: %w", staging, err), syncDir())
+		}
+		return errors.Join(cause, syncDir())
+	}
+	if err := canonicalReadPoint(hook, "lock-retired"); err != nil {
+		return restore(err)
+	}
+	st, err := os.Lstat(staging)
+	if err != nil || !st.Mode().IsRegular() || owned == nil || !os.SameFile(owned, st) {
+		return restore(fmt.Errorf("refusing to remove replaced mutation lock: %v", err))
+	}
+	fd, err := unix.Open(staging, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return restore(fmt.Errorf("open release staging: %w", err))
+	}
+	file := os.NewFile(uintptr(fd), staging)
+	opened, statErr := file.Stat()
+	if statErr != nil || !os.SameFile(owned, opened) {
+		return restore(errors.Join(fmt.Errorf("release staging identity changed: %v", statErr), file.Close()))
+	}
+	var readErr error
+	if expected != nil {
+		var data []byte
+		data, readErr = io.ReadAll(io.LimitReader(file, int64(len(expected))+1))
+		if !bytes.Equal(data, expected) {
+			readErr = errors.Join(readErr, errors.New("release staging bytes changed"))
+		}
+	}
+	if err := errors.Join(readErr, file.Close()); err != nil {
+		return restore(err)
+	}
+	last, err := os.Lstat(staging)
+	if err != nil || !last.Mode().IsRegular() || !os.SameFile(owned, last) {
+		return restore(fmt.Errorf("release staging replaced: %v", err))
+	}
+	if err := remove(staging); err != nil {
+		return restore(fmt.Errorf("remove owned release staging: %w", err))
+	}
+	return nil
 }
