@@ -52,8 +52,8 @@ func Parse(raw []byte) (Policy, error) {
 			return Policy{}, fmt.Errorf("unknown root field %q", root.Content[i].Value)
 		}
 	}
-	if schema == nil || schema.Kind != yaml.ScalarNode || schema.Tag != "!!int" || (schema.Value != "1" && schema.Value != "2" && schema.Value != "3" && schema.Value != "4") {
-		return Policy{}, errors.New("schema-version must be 1, 2, 3, or 4")
+	if schema == nil || schema.Kind != yaml.ScalarNode || schema.Tag != "!!int" || (schema.Value != "1" && schema.Value != "2" && schema.Value != "3" && schema.Value != "4" && schema.Value != "5") {
+		return Policy{}, errors.New("schema-version must be 1, 2, 3, 4, or 5")
 	}
 	version := schema.Value[0] - '0'
 	if block == nil || block.Kind != yaml.MappingNode {
@@ -187,6 +187,9 @@ func Parse(raw []byte) (Policy, error) {
 		}
 	}
 	if version >= 3 && !modulesSeen {
+		if version == 5 {
+			return Policy{}, errors.New("schema-version 5 requires board-policy.modules")
+		}
 		return Policy{}, errors.New("schema-version 3 and 4 require board-policy.modules")
 	}
 	if taskBoard != nil {
@@ -197,6 +200,23 @@ func Parse(raw []byte) (Policy, error) {
 		}
 		decl.ZoneSkillsDeclared = declared
 		decl.ZoneSkills = skills
+	}
+	if version == 5 {
+		if fileRoles == nil {
+			return Policy{}, errors.New("schema-version 5 requires file-roles")
+		}
+		roles, err := parseFileRolesV5(fileRoles)
+		if err != nil {
+			return Policy{}, err
+		}
+		policy, err := NewV5(decl, roles)
+		if err != nil {
+			return Policy{}, err
+		}
+		if _, err := policy.Canonical(); err != nil {
+			return Policy{}, err
+		}
+		return policy, nil
 	}
 	if fileRoles != nil {
 		if version < 4 {

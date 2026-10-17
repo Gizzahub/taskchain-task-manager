@@ -165,7 +165,7 @@ func findCardsInWithPolicy(root, tasksDir string, excludeArchive bool, policy *b
 			return nil
 		}
 		if policy != nil && policy.FileRolesEnabled() {
-			if _, declared := policy.FileRole(filepath.ToSlash(relToTasks)); declared {
+			if policy.HasFileRole(filepath.ToSlash(relToTasks)) {
 				return nil
 			}
 		}

@@ -12,7 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// FileRoleKind is the limited set of non-card files a schema 4 policy may
+// FileRoleKind is the limited set of non-card files a schema 4 or 5 policy may
 // explicitly classify. It is reader metadata only; it grants no write or
 // cleanup authority.
 type FileRoleKind string

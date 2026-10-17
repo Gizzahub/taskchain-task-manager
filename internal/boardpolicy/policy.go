@@ -40,6 +40,7 @@ type Policy struct {
 	taskBoardDeclared bool
 	zoneSkills        map[string]string
 	fileRoles         map[string]FileRole
+	fileRolesV5       map[string]FileRoleV5
 }
 
 func Default() Policy {
@@ -195,6 +196,25 @@ func New(d Declaration) (Policy, error) {
 	}, nil
 }
 
+// NewV5 constructs the explicit schema 5 role declaration. New deliberately
+// retains its schema 1–4 inference contract.
+func NewV5(d Declaration, roles []FileRoleV5) (Policy, error) {
+	if d.FileRolesDeclared || len(d.FileRoles) != 0 || d.Modules == nil {
+		return Policy{}, fmt.Errorf("schema 5 requires modules and cannot carry schema 4 file roles")
+	}
+	p, err := New(d)
+	if err != nil {
+		return Policy{}, err
+	}
+	rolesByPath, err := copyFileRolesV5(roles)
+	if err != nil {
+		return Policy{}, err
+	}
+	p.schemaVersion = 5
+	p.fileRolesV5 = rolesByPath
+	return p, nil
+}
+
 func relocationSource(zone string, workflow map[string]string, parked map[string]string) bool {
 	return workflow[zone] != "" || parkedHas(parked, zone) || isKindDir(zone)
 }
@@ -334,10 +354,18 @@ func (p Policy) ZoneSkills() map[string]string {
 	return out
 }
 
-// FileRolesEnabled reports whether schema-version 4 explicitly enabled
+// FileRolesEnabled reports whether schema-version 4 or 5 explicitly enabled
 // file-role classification. Earlier policy schemas intentionally have no
 // implicit allowed files.
-func (p Policy) FileRolesEnabled() bool { return p.fileRoles != nil }
+func (p Policy) FileRolesEnabled() bool { return p.fileRoles != nil || p.fileRolesV5 != nil }
+
+func (p Policy) HasFileRole(path string) bool {
+	if _, ok := p.fileRoles[path]; ok {
+		return true
+	}
+	_, ok := p.fileRolesV5[path]
+	return ok
+}
 
 // FileRole returns the declared role for one exact slash-relative path.
 // It returns false when file roles are not enabled or the path is undeclared.
@@ -353,6 +381,23 @@ func (p Policy) FileRoles() []FileRole {
 	}
 	out := make([]FileRole, 0, len(p.fileRoles))
 	for _, role := range p.fileRoles {
+		out = append(out, role)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out
+}
+
+func (p Policy) FileRoleV5(path string) (FileRoleV5, bool) {
+	role, ok := p.fileRolesV5[path]
+	return role, ok
+}
+
+func (p Policy) FileRolesV5() []FileRoleV5 {
+	if p.fileRolesV5 == nil {
+		return nil
+	}
+	out := make([]FileRoleV5, 0, len(p.fileRolesV5))
+	for _, role := range p.fileRolesV5 {
 		out = append(out, role)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })

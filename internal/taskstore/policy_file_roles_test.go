@@ -8,7 +8,14 @@ import (
 )
 
 func TestReaderOnlyFileRolesCannotActivateOrRevise(t *testing.T) {
-	raw := []byte("schema-version: 4\nboard-policy:\n  modules: []\n  file-roles:\n    enabled: true\n    projections: []\n    guidance: []\n    templates: []\n")
+	for _, version := range []string{"4", "5"} {
+		t.Run(version, func(t *testing.T) { testReaderOnlyFileRoles(t, version) })
+	}
+}
+
+func testReaderOnlyFileRoles(t *testing.T, version string) {
+	t.Helper()
+	raw := []byte("schema-version: " + version + "\nboard-policy:\n  modules: []\n  file-roles:\n    enabled: true\n    projections: []\n    guidance: []\n    templates: []\n")
 	for _, resume := range []bool{false, true} {
 		for _, shared := range []bool{false, true} {
 			dir := t.TempDir()

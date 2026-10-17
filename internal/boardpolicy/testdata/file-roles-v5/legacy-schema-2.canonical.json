@@ -1,0 +1,1 @@
+{"schema-version":2,"board-policy":{"zones":[],"zone-status":{},"transitions":[{"from":"blocked","to":["doing","todo"]},{"from":"doing","to":["blocked","review","todo"]},{"from":"done","to":["todo"]},{"from":"review","to":["doing","done"]},{"from":"todo","to":["doing"]}],"relocations":[],"kind-status":{}}}

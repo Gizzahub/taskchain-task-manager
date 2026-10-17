@@ -13,6 +13,11 @@ type canonicalRoot struct {
 	BoardPolicy   canonicalBlock      `json:"board-policy"`
 	TaskBoard     *canonicalTaskBoard `json:"task-board,omitempty"`
 }
+type canonicalRootV5 struct {
+	SchemaVersion int                 `json:"schema-version"`
+	BoardPolicy   canonicalBlockV5    `json:"board-policy"`
+	TaskBoard     *canonicalTaskBoard `json:"task-board,omitempty"`
+}
 
 type canonicalFileRoles struct {
 	Enabled     bool                      `json:"enabled"`
@@ -26,6 +31,24 @@ type canonicalProjectionRole struct {
 	Owner    string `json:"owner"`
 	Revision string `json:"revision"`
 	Marker   string `json:"marker"`
+}
+type canonicalFileRolesV5 struct {
+	Enabled     bool                        `json:"enabled"`
+	Projections []canonicalProjectionRoleV5 `json:"projections"`
+	Guidance    []canonicalContentRoleV5    `json:"guidance"`
+	Templates   []canonicalContentRoleV5    `json:"templates"`
+}
+type canonicalProjectionRoleV5 struct {
+	Path           string `json:"path"`
+	Owner          string `json:"owner"`
+	SourceRevision string `json:"source-revision"`
+	Format         string `json:"format"`
+}
+type canonicalContentRoleV5 struct {
+	Path           string `json:"path"`
+	Owner          string `json:"owner"`
+	SourceRevision string `json:"source-revision"`
+	ContentSHA256  string `json:"content-sha256"`
 }
 
 type canonicalTaskBoard struct {
@@ -43,6 +66,15 @@ type canonicalBlock struct {
 	KindStatus  *map[string]string     `json:"kind-status,omitempty"`
 	Modules     *[]string              `json:"modules,omitempty"`
 	FileRoles   *canonicalFileRoles    `json:"file-roles,omitempty"`
+}
+type canonicalBlockV5 struct {
+	Zones       []string               `json:"zones"`
+	ZoneStatus  map[string]string      `json:"zone-status"`
+	Transitions []canonicalTransition  `json:"transitions"`
+	Relocations *[]canonicalTransition `json:"relocations,omitempty"`
+	KindStatus  *map[string]string     `json:"kind-status,omitempty"`
+	Modules     *[]string              `json:"modules,omitempty"`
+	FileRoles   *canonicalFileRolesV5  `json:"file-roles"`
 }
 
 func (p Policy) Canonical() ([]byte, error) {
@@ -109,9 +141,9 @@ func (p Policy) Canonical() ([]byte, error) {
 		sort.Strings(modules)
 		block.Modules = &modules
 	}
-	root := canonicalRoot{SchemaVersion: version, BoardPolicy: block}
+	taskBoard := (*canonicalTaskBoard)(nil)
 	if p.taskBoardDeclared {
-		taskBoard := &canonicalTaskBoard{}
+		taskBoard = &canonicalTaskBoard{}
 		if p.zoneSkills != nil {
 			skills := make(map[string]string, len(p.zoneSkills))
 			for zone, skill := range p.zoneSkills {
@@ -119,9 +151,8 @@ func (p Policy) Canonical() ([]byte, error) {
 			}
 			taskBoard.ZoneSkills = &skills
 		}
-		root.TaskBoard = taskBoard
 	}
-	if version >= 4 {
+	if version == 4 {
 		roles := p.FileRoles()
 		fileRoles := &canonicalFileRoles{Enabled: true, Projections: []canonicalProjectionRole{}, Guidance: []string{}, Templates: []string{}}
 		for _, role := range roles {
@@ -136,6 +167,30 @@ func (p Policy) Canonical() ([]byte, error) {
 		}
 		block.FileRoles = fileRoles
 	}
+	if version == 5 {
+		roles := p.FileRolesV5()
+		fileRoles := &canonicalFileRolesV5{Enabled: true, Projections: []canonicalProjectionRoleV5{}, Guidance: []canonicalContentRoleV5{}, Templates: []canonicalContentRoleV5{}}
+		for _, role := range roles {
+			switch role.Kind {
+			case FileRoleProjection:
+				fileRoles.Projections = append(fileRoles.Projections, canonicalProjectionRoleV5{role.Path, role.Owner, role.SourceRevision, role.Format})
+			case FileRoleGuidance:
+				fileRoles.Guidance = append(fileRoles.Guidance, canonicalContentRoleV5{role.Path, role.Owner, role.SourceRevision, role.ContentSHA256})
+			case FileRoleTemplate:
+				fileRoles.Templates = append(fileRoles.Templates, canonicalContentRoleV5{role.Path, role.Owner, role.SourceRevision, role.ContentSHA256})
+			}
+		}
+		root := canonicalRootV5{SchemaVersion: version, BoardPolicy: canonicalBlockV5{Zones: block.Zones, ZoneStatus: block.ZoneStatus, Transitions: block.Transitions, Relocations: block.Relocations, KindStatus: block.KindStatus, Modules: block.Modules, FileRoles: fileRoles}, TaskBoard: taskBoard}
+		raw, err := json.Marshal(root)
+		if err != nil {
+			return nil, err
+		}
+		if len(raw) > maxPolicyBytes {
+			return nil, errors.New("canonical board-policy exceeds 64 KiB")
+		}
+		return raw, nil
+	}
+	root := canonicalRoot{SchemaVersion: version, BoardPolicy: block, TaskBoard: taskBoard}
 	root.BoardPolicy = block
 	raw, err := json.Marshal(root)
 	if err != nil {

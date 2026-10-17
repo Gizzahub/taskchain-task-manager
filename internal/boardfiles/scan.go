@@ -73,6 +73,8 @@ func ScanRoot(r *os.Root, policy boardpolicy.Policy) (Result, error) {
 
 	result := Result{Enabled: true, Findings: []Finding{}}
 	seen := map[string]bool{}
+	v5 := policy.FileRolesV5() != nil
+	var live []string
 	err := fs.WalkDir(r.FS(), ".", func(rel string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return fmt.Errorf("read %s: %w", rel, walkErr)
@@ -102,6 +104,9 @@ func ScanRoot(r *os.Root, policy boardpolicy.Policy) (Result, error) {
 			result.Findings = append(result.Findings, Finding{Path: rel, Detail: "directory has no declared task-board file role"})
 			return filepath.SkipDir
 		}
+		if v5 && policy.HasFileRole(rel) {
+			return nil // Content is checked only after the complete structural pass.
+		}
 		if role, ok := policy.FileRole(rel); ok {
 			issue, issueErr := declaredRoleIssue(r, rel, role)
 			if issueErr != nil {
@@ -121,6 +126,13 @@ func ScanRoot(r *os.Root, policy boardpolicy.Policy) (Result, error) {
 		}
 		if cardPath(rel, policy) {
 			if strings.EqualFold(filepath.Ext(rel), ".md") {
+				if v5 && !storage(strings.Split(rel, "/")[0]) {
+					if issue := projectionPathIssue(rel); issue != "" {
+						result.Findings = append(result.Findings, Finding{Path: rel, Detail: issue})
+					} else {
+						live = append(live, rel)
+					}
+				}
 				return nil
 			}
 			result.Findings = append(result.Findings, Finding{Path: rel, Detail: "card locations permit Markdown cards only"})
@@ -135,6 +147,25 @@ func ScanRoot(r *os.Root, policy boardpolicy.Policy) (Result, error) {
 	for _, role := range policy.FileRoles() {
 		if !seen[role.Path] {
 			result.Findings = append(result.Findings, Finding{Path: role.Path, Detail: "declared file role is missing"})
+		}
+	}
+	for _, role := range policy.FileRolesV5() {
+		if !seen[role.Path] {
+			result.Findings = append(result.Findings, Finding{Path: role.Path, Detail: "declared file role is missing"})
+		}
+	}
+	// Unknown directories are pruned during traversal. Never compare a
+	// projection with the incomplete inventory of a structurally invalid tree.
+	if v5 && len(result.Findings) == 0 {
+		sort.Strings(live)
+		for _, role := range policy.FileRolesV5() {
+			issue, err := declaredRoleV5Issue(r, role, live)
+			if err != nil {
+				return Result{}, err
+			}
+			if issue != "" {
+				result.Findings = append(result.Findings, Finding{Path: role.Path, Detail: issue})
+			}
 		}
 	}
 	sort.Slice(result.Findings, func(i, j int) bool {

@@ -1,0 +1,20 @@
+schema-version: 5
+board-policy:
+  modules: []
+  file-roles:
+    enabled: true
+    projections:
+      - path: README.md
+        owner: task-indexer
+        source-revision: v7
+        format: live-card-paths-v1
+    guidance:
+      - path: AGENTS.md
+        owner: task-guide
+        source-revision: v7
+        content-sha256: bdd46033e46f010d83272a618cc8e69d4d5731b2d542dfbf3559cca58562bb36
+    templates:
+      - path: TEMPLATE.md
+        owner: task-template
+        source-revision: v7
+        content-sha256: 091383d792d4bda1a2cb221af44f61767fc067ff77624f296195996439c72707
