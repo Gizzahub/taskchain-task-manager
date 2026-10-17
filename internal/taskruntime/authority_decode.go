@@ -64,7 +64,7 @@ func decodeCanonicalAuthority(data []byte) (canonicalAuthorityDeclaration, error
 	if writer == nil || writer.Kind != yaml.ScalarNode || writer.Tag != "!!str" || (writer.Value != "ce" && writer.Value != "task-manager" && writer.Value != "none") {
 		return invalid("authority writer")
 	}
-	if generation == nil || generation.Kind != yaml.ScalarNode || generation.Tag != "!!str" || !canonicalAuthorityGeneration.MatchString(generation.Value) {
+	if generation == nil || generation.Kind != yaml.ScalarNode || generation.Tag != "!!str" || (generation.Style != yaml.SingleQuotedStyle && generation.Style != yaml.DoubleQuotedStyle) || !canonicalAuthorityGeneration.MatchString(generation.Value) {
 		return invalid("authority generation")
 	}
 	roots := keys["worktree-roots"]
@@ -99,7 +99,7 @@ func decodeCanonicalAuthority(data []byte) (canonicalAuthorityDeclaration, error
 }
 
 func canonicalScalar(n *yaml.Node, tag, value string) bool {
-	return n != nil && n.Kind == yaml.ScalarNode && n.Tag == tag && n.Value == value
+	return n != nil && n.Kind == yaml.ScalarNode && n.Style == 0 && n.Tag == tag && n.Value == value
 }
 
 func canonicalMapping(n *yaml.Node, allowed ...string) (map[string]*yaml.Node, bool) {

@@ -85,9 +85,10 @@ lifecycle-authority:
 kind rules. All other fields are required and non-null. Root keys, nested keys
 and host identities must be strings; mappings reject duplicate keys. Aliases,
 anchors, merge keys, multiple documents and unknown fields are rejected. Schema
-and authority versions must be exact integer spellings `6` and `1`. Writer is
-exactly `ce`, `task-manager` or `none`; generation is a YAML string of exactly
-32 lowercase hexadecimal characters. Numeric-looking generations must be quoted.
+and authority versions must be untagged plain integer spellings `6` and `1`. Writer is
+exactly `ce`, `task-manager` or `none`; generation is a single-quoted or double-quoted
+YAML string of exactly 32 lowercase hexadecimal characters. Explicit tags, plain
+scalars and literal/folded block presentations are rejected for generation.
 Repository and host identities use canonical lowercase kebab-case. Host roots
 must be clean absolute non-root paths ending in the repository ID. This syntax
 check is not runtime worktree-placement authorization. Provider is exactly
