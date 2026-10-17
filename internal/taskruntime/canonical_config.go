@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -25,6 +26,19 @@ type canonicalAuthorityObservation struct {
 }
 
 type canonicalReadHook func(string) error
+
+// canonicalConfigHandle owns the protected descriptor for the duration of a
+// synchronous callback. It is deliberately process-local and cannot be
+// reconstructed from the observation fields.
+type canonicalConfigHandle struct {
+	repository  canonicalRepository
+	raw         []byte
+	declaration canonicalAuthorityDeclaration
+	config      *os.File
+	parent      *os.File
+}
+
+type canonicalConfigCallback func(canonicalConfigHandle) error
 
 func canonicalReadPoint(hook canonicalReadHook, point string) error {
 	if hook != nil {
@@ -76,4 +90,37 @@ func (s *Service) readCanonicalAuthorityWith(ctx context.Context, hook canonical
 		return zero, fmt.Errorf("%w: %w", errCanonicalUnavailable, err)
 	}
 	return canonicalAuthorityObservation{repo, data, decl}, nil
+}
+
+// withCanonicalConfig keeps the validated config and its owner-private parent
+// descriptor open while callback runs. The callback is synchronous by
+// contract; no durable grant or legacy transition is produced here.
+func (s *Service) withCanonicalConfig(ctx context.Context, hook canonicalReadHook, callback canonicalConfigCallback) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	abs, err := filepath.Abs(s.root)
+	if err != nil {
+		return fmt.Errorf("%w: caller path", errCanonicalUnavailable)
+	}
+	physical, err := filepath.EvalSymlinks(abs)
+	if err != nil || physical != abs {
+		return fmt.Errorf("%w: noncanonical caller path", errCanonicalUnavailable)
+	}
+	repo, err := s.canonicalRepository(ctx)
+	if err != nil {
+		return fmt.Errorf("%w: %w", errCanonicalUnavailable, err)
+	}
+	return withCanonicalConfigPath(repo.primary.root, hook, func(config *os.File, parent *os.File, raw []byte) error {
+		decl, err := decodeCanonicalAuthority(raw)
+		if err != nil {
+			if legacy, legacyErr := decodeRuntimeConfig(raw); legacyErr == nil && legacy.SchemaVersion <= 3 {
+				return errAuthorityLegacy
+			}
+			return err
+		}
+		if err := repo.revalidate(ctx, s); err != nil {
+			return fmt.Errorf("%w: %w", errCanonicalUnavailable, err)
+		}
+		return callback(canonicalConfigHandle{repository: repo, raw: append([]byte(nil), raw...), declaration: decl, config: config, parent: parent})
+	})
 }

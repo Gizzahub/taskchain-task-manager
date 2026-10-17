@@ -17,6 +17,14 @@ func (s *Service) config() (Config, error) {
 	if err != nil {
 		return cfg, fmt.Errorf("read %s: %w", ConfigFile, err)
 	}
+	return decodeRuntimeConfig(b)
+}
+
+// decodeRuntimeConfig preserves the legacy parser independently of where its
+// bytes were read. Inactive canonical classification reuses it without reading
+// a caller-local config or changing the live CLI's resolution rules.
+func decodeRuntimeConfig(b []byte) (Config, error) {
+	var cfg Config
 	var keys map[string]yaml.Node
 	if err := yaml.Unmarshal(b, &keys); err != nil {
 		return cfg, fmt.Errorf("decode %s: %w", ConfigFile, err)

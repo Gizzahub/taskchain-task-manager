@@ -22,6 +22,118 @@ const (
 
 var errMutationLockExists = errors.New("task runtime mutation lock exists")
 
+var (
+	errAuthorityLeaseExpired = errors.New("authority lease is no longer valid")
+	errAuthorityWriter       = errors.New("canonical authority writer is not eligible")
+	errAuthorityLegacy       = errors.New("legacy runtime configuration has no authority lease")
+)
+
+type ownedMutationLock struct {
+	store    stateStore
+	path     string
+	data     []byte
+	info     os.FileInfo
+	released bool
+	hook     canonicalReadHook
+}
+
+func (l *ownedMutationLock) release() error {
+	if l == nil || l.released {
+		return nil
+	}
+	current, err := l.store.fsReadFile(l.path)
+	if l.hook != nil {
+		err = errors.Join(err, l.hook("release-read"))
+	}
+	if err != nil {
+		return fmt.Errorf("read owned mutation lock for release: %w", err)
+	}
+	st, err := os.Lstat(l.path)
+	if l.hook != nil {
+		err = errors.Join(err, l.hook("release-stat"))
+	}
+	if err != nil || st.Mode()&os.ModeSymlink != 0 || !st.Mode().IsRegular() {
+		return fmt.Errorf("stat owned mutation lock for release: %w", err)
+	}
+	if !os.SameFile(l.info, st) || !bytes.Equal(current, l.data) {
+		return fmt.Errorf("refusing to remove replaced mutation lock")
+	}
+	if err := l.store.fsRemove(l.path); err != nil {
+		return fmt.Errorf("remove owned mutation lock: %w", err)
+	}
+	// Removal has happened even when durability or an injected operation result
+	// is unknown. Do not permit this handle to be reused as a held lock.
+	l.released = true
+	removeErr := canonicalReadPoint(l.hook, "release-remove")
+	syncErr := errors.Join(l.store.fsSyncDir(), canonicalReadPoint(l.hook, "release-dir-sync"))
+	if err := errors.Join(removeErr, syncErr); err != nil {
+		return fmt.Errorf("release mutation lock durability: %w", err)
+	}
+	return nil
+}
+
+func (s stateStore) lockOwned() (*ownedMutationLock, error) {
+	return s.lockOwnedHook(nil)
+}
+
+func (s stateStore) lockOwnedHook(hook canonicalReadHook) (*ownedMutationLock, error) {
+	path := s.lockPath()
+	if err := s.init(); err != nil {
+		return nil, err
+	}
+	f, err := s.fsOpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil && os.IsExist(err) {
+		if reclaimErr := s.reclaimDeadLock(); reclaimErr != nil {
+			return nil, reclaimErr
+		}
+		f, err = s.fsOpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	}
+	if err != nil {
+		if os.IsExist(err) {
+			return nil, fmt.Errorf("%w: %s", errMutationLockExists, path)
+		}
+		return nil, err
+	}
+	createdInfo, statErr := f.Stat()
+	if statErr != nil {
+		// Without a descriptor identity, the pathname cannot safely be removed.
+		return nil, errors.Join(fmt.Errorf("stat owned mutation lock (lock retained): %w", statErr), f.Close())
+	}
+	removeOwn := func() error {
+		current, err := os.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("inspect acquisition cleanup: %w", err)
+		}
+		if !current.Mode().IsRegular() || !os.SameFile(createdInfo, current) {
+			return fmt.Errorf("refusing to remove replaced mutation lock during acquisition cleanup")
+		}
+		if err := s.fsRemove(path); err != nil {
+			return fmt.Errorf("remove acquisition lock: %w", err)
+		}
+		return s.fsSyncDir()
+	}
+	cleanup := func(cause error) (*ownedMutationLock, error) {
+		return nil, errors.Join(cause, f.Close(), removeOwn())
+	}
+	data := []byte(fmt.Sprintf("pid=%d host=%s created=%s\n", os.Getpid(), lockHost(), time.Now().UTC().Format(time.RFC3339)))
+	if _, err := f.Write(data); err != nil {
+		return cleanup(fmt.Errorf("write mutation lock metadata: %w", err))
+	}
+	if err := canonicalReadPoint(hook, "lock-write"); err != nil {
+		return cleanup(err)
+	}
+	if err := errors.Join(f.Sync(), canonicalReadPoint(hook, "lock-sync")); err != nil {
+		return cleanup(fmt.Errorf("sync mutation lock: %w", err))
+	}
+	if err := errors.Join(f.Close(), canonicalReadPoint(hook, "lock-close")); err != nil {
+		return nil, errors.Join(fmt.Errorf("close mutation lock: %w", err), removeOwn())
+	}
+	if err := errors.Join(s.fsSyncDir(), canonicalReadPoint(hook, "lock-dir-sync")); err != nil {
+		return nil, errors.Join(fmt.Errorf("sync mutation lock directory: %w", err), removeOwn())
+	}
+	return &ownedMutationLock{store: s, path: path, data: data, info: createdInfo, hook: hook}, nil
+}
+
 func (s stateStore) lockPath() string { return filepath.Join(s.dir, "mutation.lock") }
 
 func (s stateStore) guardPath() string { return s.lockPath() + ".reclaim" }

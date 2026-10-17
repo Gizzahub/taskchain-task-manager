@@ -3,6 +3,7 @@
 package taskruntime
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -13,7 +14,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func readCanonicalConfig(root string, hook canonicalReadHook) (data []byte, err error) {
+func readCanonicalConfig(root string, hook canonicalReadHook) ([]byte, error) {
+	return readCanonicalConfigUsing(root, hook, nil)
+}
+
+func readCanonicalConfigUsing(root string, hook canonicalReadHook, callback func(*os.File, *os.File, []byte) error) (data []byte, err error) {
 	var files []*os.File
 	defer func() {
 		for i := len(files) - 1; i >= 0; i-- {
@@ -68,7 +73,31 @@ func readCanonicalConfig(root string, hook canonicalReadHook) (data []byte, err 
 	if unix.Fstat(int(file.Fd()), &after) != nil || !canonicalStableFile(before, after) || int64(len(data)) != after.Size {
 		return nil, fmt.Errorf("%w: file metadata changed", errCanonicalUnavailable)
 	}
+	if callback != nil {
+		if err := callback(file, first[len(first)-2], data); err != nil {
+			return nil, err
+		}
+	}
 	return data, nil
+}
+
+func recheckCanonicalConfigPath(root string, pinned *os.File, raw []byte) error {
+	return withCanonicalConfigPath(root, nil, func(current, _ *os.File, data []byte) error {
+		pinnedStat, pinnedErr := pinned.Stat()
+		currentStat, currentErr := current.Stat()
+		if pinnedErr != nil || currentErr != nil || !os.SameFile(pinnedStat, currentStat) {
+			return fmt.Errorf("%w: canonical descriptor identity changed", errCanonicalUnavailable)
+		}
+		if !bytes.Equal(raw, data) {
+			return fmt.Errorf("%w: canonical bytes changed", errCanonicalUnavailable)
+		}
+		return nil
+	})
+}
+
+func withCanonicalConfigPath(root string, hook canonicalReadHook, callback func(*os.File, *os.File, []byte) error) error {
+	_, err := readCanonicalConfigUsing(root, hook, callback)
+	return err
 }
 
 func canonicalStableFile(a, b unix.Stat_t) bool {
