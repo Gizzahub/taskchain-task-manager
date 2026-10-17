@@ -7,7 +7,10 @@ remain unchanged. It does not read config bytes, validate ACLs or grant authorit
 The resolver queries Git's top-level, Git directory, common directory and NUL
 worktree inventory. It selects exactly one non-bare primary whose Git directory
 is the common directory, independent of directory name, branch or inventory order.
-Separate Git directories are supported. Missing, prunable, inconsistent or bare
+Ordinary primary and linked checkouts are supported by this inactive resolver.
+Separate Git metadata is unavailable when Git's inventory reports the metadata
+directory instead of the actual primary checkout. The resolver never guesses a
+primary from the common directory's parent. Missing, prunable, inconsistent or bare
 entries, query errors and multiple primary identities are unavailable. Redirecting
 Git environment variables and ambiguous newline paths are rejected.
 

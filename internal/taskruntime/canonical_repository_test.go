@@ -2,7 +2,6 @@ package taskruntime
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,31 +51,27 @@ func (r canonicalQueryRunner) Run(ctx context.Context, req CommandRequest) (Comm
 }
 
 func TestCanonicalRepositoryPrimaryAndLinked(t *testing.T) {
-	for _, separate := range []bool{false, true} {
-		t.Run(fmt.Sprint("separate=", separate), func(t *testing.T) {
-			primary, linked := canonicalTestRepo(t, separate)
-			for _, root := range []string{primary, linked} {
-				s := NewService(root, NewExecutor())
-				got, err := s.canonicalRepository(context.Background())
-				if err != nil || got.primary.root != primary || got.caller.root != root || got.configPath() != filepath.Join(primary, ConfigFile) {
-					t.Fatalf("root %s: %+v %v", root, got, err)
-				}
-				if _, err := os.Stat(filepath.Join(got.primary.commonDir, "ce")); !os.IsNotExist(err) {
-					t.Fatalf("resolver wrote lifecycle state or cannot prove absence: %v", err)
-				}
-			}
-			// Inventory order and branch naming are not primary authority.
-			runner := canonicalQueryRunner{mutate: func(req CommandRequest, res *CommandResult) {
-				if len(req.Args) > 0 && req.Args[0] == "worktree" {
-					records := strings.Split(strings.TrimSuffix(res.Stdout, "\x00\x00"), "\x00\x00")
-					res.Stdout = records[1] + "\x00\x00" + records[0] + "\x00\x00"
-				}
-			}}
-			got, err := NewService(linked, runner).canonicalRepository(context.Background())
-			if err != nil || got.primary.root != primary {
-				t.Fatalf("reversed inventory: %+v %v", got, err)
-			}
-		})
+	primary, linked := canonicalTestRepo(t, false)
+	for _, root := range []string{primary, linked} {
+		s := NewService(root, NewExecutor())
+		got, err := s.canonicalRepository(context.Background())
+		if err != nil || got.primary.root != primary || got.caller.root != root || got.configPath() != filepath.Join(primary, ConfigFile) {
+			t.Fatalf("root %s: %+v %v", root, got, err)
+		}
+		if _, err := os.Stat(filepath.Join(got.primary.commonDir, "ce")); !os.IsNotExist(err) {
+			t.Fatalf("resolver wrote lifecycle state or cannot prove absence: %v", err)
+		}
+	}
+	// Inventory order and branch naming are not primary authority.
+	runner := canonicalQueryRunner{mutate: func(req CommandRequest, res *CommandResult) {
+		if len(req.Args) > 0 && req.Args[0] == "worktree" {
+			records := strings.Split(strings.TrimSuffix(res.Stdout, "\x00\x00"), "\x00\x00")
+			res.Stdout = records[1] + "\x00\x00" + records[0] + "\x00\x00"
+		}
+	}}
+	got, err := NewService(linked, runner).canonicalRepository(context.Background())
+	if err != nil || got.primary.root != primary {
+		t.Fatalf("reversed inventory: %+v %v", got, err)
 	}
 }
 
@@ -125,6 +120,16 @@ func TestCanonicalRepositoryRejectsShadow(t *testing.T) {
 
 func TestCanonicalRepositoryRejectsUnavailable(t *testing.T) {
 	primary, linked := canonicalTestRepo(t, false)
+	t.Run("separate-metadata-without-primary-inventory", func(t *testing.T) {
+		separate, _ := canonicalTestRepo(t, true)
+		inventory := canonicalTestGit(t, separate, "worktree", "list", "--porcelain")
+		if strings.Contains(inventory, "worktree "+separate+"\n") {
+			t.Fatal("fixture no longer reproduces Git's missing separate primary; reassess supported topology")
+		}
+		if _, err := NewService(separate, NewExecutor()).canonicalRepository(context.Background()); err == nil {
+			t.Fatal("guessed a primary absent from native inventory")
+		}
+	})
 	t.Run("bare", func(t *testing.T) {
 		bare := filepath.Join(t.TempDir(), "bare")
 		canonicalTestGit(t, primary, "clone", "--quiet", "--bare", primary, bare)
