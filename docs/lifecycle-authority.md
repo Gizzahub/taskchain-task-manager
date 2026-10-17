@@ -117,6 +117,17 @@ detects replacement of either the config pathname or mutation lock. Config and
 parent directory `Sync` errors, callback errors and owned-lock release errors
 remain visible. A replaced lock pathname is never removed.
 
+Owned release uses an exclusive atomic rename into a random operation-private
+name in the same existing lock directory, then verifies the original inode and
+bytes before removing that staging entry. A mismatching file is restored without
+overwriting another owner, or retained with its exact residual path in the error.
+The `.mutation.lock.release-*` names are transient lock retirement, not a new
+lock domain or metadata format. Future activation must treat any retained entry
+as unresolved; this inactive delivery does not add a cleanup command. Platforms
+or filesystems without the required exclusive rename refuse and retain the lock.
+This protocol protects cooperating callers competing at `mutation.lock`; it does
+not authenticate against a hostile same-UID process modifying private staging.
+
 This boundary has no CLI, provider, ledger, publisher, new lock domain or
 legacy transition. Existing service mutators do not call it, so delivery of
 this code does not activate authority or change normal runtime behavior.

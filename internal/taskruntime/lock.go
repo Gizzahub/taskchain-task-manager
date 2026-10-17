@@ -58,8 +58,8 @@ func (l *ownedMutationLock) release() error {
 	if !os.SameFile(l.info, st) || !bytes.Equal(current, l.data) {
 		return fmt.Errorf("refusing to remove replaced mutation lock")
 	}
-	if err := l.store.fsRemove(l.path); err != nil {
-		return fmt.Errorf("remove owned mutation lock: %w", err)
+	if err := retireOwnedMutationLock(l.path, l.info, l.data, l.store.fsRemove, l.store.fsSyncDir, l.hook); err != nil {
+		return fmt.Errorf("retire owned mutation lock: %w", err)
 	}
 	// Removal has happened even when durability or an injected operation result
 	// is unknown. Do not permit this handle to be reused as a held lock.
@@ -100,15 +100,8 @@ func (s stateStore) lockOwnedHook(hook canonicalReadHook) (*ownedMutationLock, e
 		return nil, errors.Join(fmt.Errorf("stat owned mutation lock (lock retained): %w", statErr), f.Close())
 	}
 	removeOwn := func() error {
-		current, err := os.Lstat(path)
-		if err != nil {
-			return fmt.Errorf("inspect acquisition cleanup: %w", err)
-		}
-		if !current.Mode().IsRegular() || !os.SameFile(createdInfo, current) {
-			return fmt.Errorf("refusing to remove replaced mutation lock during acquisition cleanup")
-		}
-		if err := s.fsRemove(path); err != nil {
-			return fmt.Errorf("remove acquisition lock: %w", err)
+		if err := retireOwnedMutationLock(path, createdInfo, nil, s.fsRemove, s.fsSyncDir, hook); err != nil {
+			return err
 		}
 		return s.fsSyncDir()
 	}

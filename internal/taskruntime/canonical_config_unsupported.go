@@ -17,3 +17,7 @@ func withCanonicalConfigPath(string, canonicalReadHook, func(*os.File, *os.File,
 func recheckCanonicalConfigPath(string, *os.File, []byte) error {
 	return fmt.Errorf("%w: native descriptor ACL support requires Darwin with cgo", errCanonicalUnavailable)
 }
+
+func retireOwnedMutationLock(string, os.FileInfo, []byte, func(string) error, func() error, canonicalReadHook) error {
+	return fmt.Errorf("%w: atomic no-replace lock retirement requires Darwin with cgo; lock retained", errCanonicalUnavailable)
+}
