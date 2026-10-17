@@ -62,7 +62,31 @@ CLI는 raw 정책 파일의 존재를 활성화로 해석하지 않는다. Journ
 journal 수동 편집으로 연결을 시험하지 않는다. 합성 테스트의 내부 fixture는 운영 채택
 절차를 대신하지 않는다.
 
-임시 참조 등록·cleanup, plan 라우팅 Skill, AGENTS 배포, 기존 보드 adoption preview와
-실제 writer 전환은 후속 범위다. Scanner는 파일을 생성·이동·삭제하거나 보드 권한을
-활성화하지 않는다. 최종 활성화는 완성된 provenance·drift 계약과 모든 소비자 검증 뒤
-기존 authority·digest CAS·lock·pending recovery 절차로 제공해야 한다.
+## 계획·Batch 문서의 역할 경계
+
+미완료 실행의 계획·현재 상태·의존성·수용 기준·재개 지점은 채택한 보드의
+`tasks/plan/` 또는 기존 plan/task 카드가 소유한다. 새 계획을 만들기 전에 같은
+목표를 가진 기존 plan/task를 찾아 갱신하며, 계획 요청만으로 새 카드나 문서를
+자동 생성하지 않는다. 계획을 명시적으로 기록할 때도 카드의 소유자·수명·검증
+절차를 따른다.
+
+지속되는 제품 방향·설계·결정은 소유 저장소의 결정 문서에 둔다. Intent·Batch·
+Iteration context는 당시의 선택·범위·평가를 보존하는 불변 스냅샷이며, 현재
+실행 상태나 재개 권한을 부여하는 live task source가 아니다. Batch에 실행 항목을
+기록해야 한다면 관련 plan/task ID와 정확한 context revision을 참조하고, 현재
+상태는 카드에서 읽는다.
+
+분석·브리핑·임시 조사는 요청된 결과 형식으로 반환하며, 별도 저장을 명시적으로
+요청하지 않은 한 task, plan, Batch 문서를 만들지 않는다. 사용자가 예외적인 저장
+위치나 수명을 승인한 경우에는 승인 범위와 이유를 해당 정본에 남긴다.
+
+이 경계는 문서의 즉시 이동·삭제를 뜻하지 않는다. 이 계약을 명시적으로 채택하지
+않은 board와 context는 기존 계약과 writer 동작을 유지하며, legacy 기록을 자동으로
+이동·삭제·재분류하지 않는다. 채택 뒤의 이전·정리·retention은 별도 owner 승인과
+preview, 복구 가능한 writer 절차를 거치며 자동 migration이나 자동 deletion은
+제공하지 않는다.
+
+임시 참조 등록·cleanup, AGENTS 배포, 기존 보드 adoption preview와 실제 writer 전환은
+여전히 별도 범위다. Scanner는 파일을 생성·이동·삭제하거나 보드 권한을 활성화하지
+않는다. 최종 활성화는 완성된 provenance·drift 계약과 모든 소비자 검증 뒤 기존
+authority·digest CAS·lock·pending recovery 절차로 제공해야 한다.

@@ -33,6 +33,21 @@ Use the exact purpose names and branch prefixes. `scratch`, `scratchpad`, `tmp`,
 and `wip` are not purpose names or branch aliases. Existing records without a
 purpose are legacy `delivery` executions; preserve their recorded data.
 
+Before starting or resuming delivery work, use the adopted board's existing
+plan/task card as the source for unfinished scope, dependencies, acceptance
+criteria, and the resume point. Reuse or update that card instead of creating a
+new Batch or a parallel plan for the same work. An Intent, Batch, or Iteration
+context is an immutable record of the selection and observation at that time;
+it does not grant current task authority or replace the card's live status.
+
+Planning or briefing alone does not create a task, plan, or Batch. Create or
+update one when the caller explicitly requests a durable work record, or when
+an existing card or workflow already authorizes that update and the adopted
+board's writer contract permits it. A user-approved exception may choose
+another location or lifetime, but it does not implicitly adopt a schema, expand
+writer permission, migrate records, or delete existing data; record its scope
+and reason in the owning source.
+
 Start with the explicit purpose, for example:
 
 ```sh

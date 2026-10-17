@@ -27,6 +27,17 @@ Successful JSON uses top-level `outputVersion: 1`; an error has a nonzero exit
 code and no success JSON. Treat the two commands as different concurrency
 contracts, not interchangeable ways to count cards.
 
+Use workspace lookup to locate an existing plan/task card before resuming or
+recording unfinished execution work. The returned card is the live board view;
+an Intent, Batch, or Iteration context is a historical selection/observation
+record and must be queried by its exact kind, ID, and revision when context is
+needed. Do not infer current status from a Batch document or create a duplicate
+plan merely because a context record exists. A report or analysis request is
+read-only. When a durable card or plan update is explicitly requested or
+already authorized by an existing card/workflow, resolve the card here and
+hand the update to the adopted board's writer; this lookup skill never gains
+mutation ownership from that request.
+
 For a reproducible, synthetic example, resolve this skill's installed directory
 and read [assets/workspace/README.md](assets/workspace/README.md). Copy that
 asset directory to a temporary workspace before initializing its two Git repos;
