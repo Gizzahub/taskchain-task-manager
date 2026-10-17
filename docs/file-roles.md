@@ -62,6 +62,31 @@ CLI는 raw 정책 파일의 존재를 활성화로 해석하지 않는다. Journ
 journal 수동 편집으로 연결을 시험하지 않는다. 합성 테스트의 내부 fixture는 운영 채택
 절차를 대신하지 않는다.
 
+## Cards-only snapshot foundation
+
+비활성 internal snapshot assessor가 명시 선택한 합성 입력의 카드 전용 구조를 판정한다.
+새 policy schema·활성화 신호·CLI 모드가 아니며 기존 schema 1–5 reader와 명령은 보존한다.
+카드 경로·디렉토리와 정확한 root `README.md`를 허용하고 예약 비카드 이름·증거/참조/결정
+디렉토리·엔진 상태는 제외하지 않고 보고한다. Manual은 경로 overlay일 뿐 상태·actor·
+receipt admission을 구현한 것이 아니다.
+
+`NewCardsOnlySnapshot`은 caller가 제공한 path/mode/tracked/bytes pair를 복사한다.
+Source label과 입력의 일관성·완전성은 caller 주장이다. 복사는 이후 입력 변경과 snapshot을
+분리할 뿐 Git 상태나 안정된 물리 filesystem을 capture·인증하지 않는다. 중복·이탈·비UTF-8/
+control 경로·모순 ancestor/mode·빈 tree 디렉토리는 입력 unavailable로 거부한다. Symlink/
+special은 카드가 될 수 없다. Missing은 bytes 없는 tracked regular worktree leaf만 나타내며
+projection 비교를 막는다.
+
+Tracked worktree README projection은 supplied tracked 카드 경로와 supplied worktree README
+bytes를 비교한다. Residue README는 supplied physical 카드 목록과 비교하고 advisory로 남는다.
+Index/ref는 각 source로 제공된 entries/bytes만 사용한다. 기존 marker 문법과 size limit을
+공유한다. Legacy `.ce`는 진단 하나로 접지만 실제 비순회 capture는 제공하지 않는다.
+
+같은 internal finding을 lint 구조 error/residue warning 또는 validate warning으로 변환한다.
+이름 지정 검사는 pruned ancestor finding도 포함한다. 현재 CLI caller가 없고 board ready 판정을
+보장하지 않는다. 실제 Git/물리 capture·공개 채택 wire·전체 CLI/writer 연결·활성화·cleanup·
+migration은 이 foundation의 지원 범위 밖이다.
+
 ## 계획·Batch 문서의 역할 경계
 
 미완료 실행의 계획·현재 상태·의존성·수용 기준·재개 지점은 채택한 보드의

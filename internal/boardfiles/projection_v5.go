@@ -17,6 +17,7 @@ import (
 )
 
 const projectionPrefix = "<!-- task-manager:projection-"
+const maxProjectionBytes = 1 << 20
 
 func projectionPathIssue(rel string) string {
 	if !utf8.ValidString(rel) || !fs.ValidPath(rel) || rel == "." ||
@@ -70,7 +71,7 @@ func projectionIssue(data []byte, role boardpolicy.FileRoleV5, live []string) st
 func declaredRoleV5Issue(r *os.Root, role boardpolicy.FileRoleV5, live []string) (string, error) {
 	limit := int64(64 << 10)
 	if role.Kind == boardpolicy.FileRoleProjection {
-		limit = 1 << 20
+		limit = maxProjectionBytes
 	}
 	data, issue, err := readDeclaredFile(r, role.Path, limit)
 	if err != nil {
