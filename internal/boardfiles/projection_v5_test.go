@@ -77,11 +77,11 @@ func TestV5ProjectionInventoryAndMembershipDrift(t *testing.T) {
 	for _, change := range []string{"none", "add", "delete", "move"} {
 		t.Run(change, func(t *testing.T) {
 			root := t.TempDir()
-			paths := []string{"todo/001-root.md", "backend/todo/auth/002-module.md", "backend/plan/design/003-plan.md", "done/004-done.md", "issue/005-issue.md", "backend/todo/auth/006-a- b.md"}
+			paths := []string{"todo/001-root.md", "backend/todo/auth/002-module.md", "backend/plan/design/003-plan.md", "done/004-done.md", "issue/005-issue.md", "backend/todo/auth/006-a- b.md", "todo/archive.md"}
 			for _, p := range paths {
 				write(t, root, "tasks/"+p, "body, title, status and ID are deliberately not parsed")
 			}
-			for _, p := range []string{"archive/2026-10/007-old.md", "_archive/done/008-old.md", "evidence/proof.md", "backend/todo/evidence/proof.md", ".ce/data/card.md", ".task-manager-context/intents/x/1.json"} {
+			for _, p := range []string{"archive/2026-10/007-old.md", "_archive/done/008-old.md", "backend/todo/archive/009-old.md", "backend/plan/design/_archive/010-old.md", "evidence/proof.md", "backend/todo/evidence/proof.md", ".ce/data/card.md", ".task-manager-context/intents/x/1.json"} {
 				write(t, root, "tasks/"+p, "excluded")
 			}
 			role := v5Projection()

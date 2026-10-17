@@ -126,7 +126,7 @@ func ScanRoot(r *os.Root, policy boardpolicy.Policy) (Result, error) {
 		}
 		if cardPath(rel, policy) {
 			if strings.EqualFold(filepath.Ext(rel), ".md") {
-				if v5 && !storage(strings.Split(rel, "/")[0]) {
+				if v5 && !storageDirectoryPath(rel) {
 					if issue := projectionPathIssue(rel); issue != "" {
 						result.Findings = append(result.Findings, Finding{Path: rel, Detail: issue})
 					} else {
@@ -226,6 +226,18 @@ func knownZone(name string, policy boardpolicy.Policy) bool {
 }
 
 func storage(name string) bool { return name == "archive" || name == "_archive" }
+
+// Storage keeps its existing meaning at every directory depth. A filename
+// such as archive.md remains a live candidate.
+func storageDirectoryPath(rel string) bool {
+	parts := strings.Split(rel, "/")
+	for _, part := range parts[:len(parts)-1] {
+		if storage(part) {
+			return true
+		}
+	}
+	return false
+}
 
 func storagePartition(name string, policy boardpolicy.Policy) bool {
 	if knownZone(name, policy) {
