@@ -252,11 +252,14 @@ func createWithStep(dir string, req CreateRequest, step func(string) error) (ent
 	if err != nil {
 		return Entry{}, err
 	}
+	policy, err := policyForBoard(r)
+	if err != nil {
+		return Entry{}, err
+	}
+	if err := admitBoardFiles(r, policy); err != nil {
+		return Entry{}, err
+	}
 	if req.Module != "" || req.Category != "" {
-		policy, err := policyForBoard(r)
-		if err != nil {
-			return Entry{}, err
-		}
 		prepared, err = scopeCreatedCard(prepared, req, policy)
 		if err != nil {
 			return Entry{}, err
@@ -572,6 +575,9 @@ func validateRootLayoutWithPolicy(r *os.Root, policy boardpolicy.Policy) error {
 		name := entry.Name()
 		if entry.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("symlink task entry rejected: %s", name)
+		}
+		if entry.Type().IsRegular() && policy.HasFileRole(name) {
+			continue
 		}
 		if strings.HasPrefix(name, ".") || (!entry.IsDir() && cardpath.IsDocumentation(name)) || (entry.IsDir() && cardpath.IsExcludedDirectory(name)) {
 			continue

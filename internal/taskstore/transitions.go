@@ -114,6 +114,9 @@ func executeTransition(dir string, req TransitionRequest, recoverOnly bool, step
 	if err := validateTransitionForPolicy(req, policy); err != nil {
 		return result, err
 	}
+	if err := admitBoardFiles(r, policy); err != nil {
+		return result, err
+	}
 	entries, err := listLocked(r)
 	if err != nil {
 		return result, err
