@@ -31,6 +31,10 @@ type SnapshotEntry struct {
 	Mode    fs.FileMode
 	Tracked bool
 	Data    []byte
+	// DescendantTracked is caller-supplied Git metadata for an opaque physical
+	// directory such as .ce. It never means that this directory itself was an
+	// indexed leaf. It is intentionally distinct from indexLeaf.
+	DescendantTracked bool
 	// Missing is only a tracked worktree regular leaf absent on disk. It
 	// blocks projection comparison and is not a card or physical directory.
 	Missing   bool
@@ -65,6 +69,9 @@ func NewCardsOnlySnapshot(source SnapshotSource, entries []SnapshotEntry) (Cards
 		if entry.Mode.IsDir() && len(entry.Data) != 0 {
 			return CardsOnlySnapshot{}, fmt.Errorf("directory has snapshot bytes: %q", entry.Path)
 		}
+		if entry.DescendantTracked && (!entry.Mode.IsDir() || (path.Base(entry.Path) != ".ce" && path.Base(entry.Path) != ".git")) {
+			return CardsOnlySnapshot{}, fmt.Errorf("descendant tracking requires opaque metadata directory: %q", entry.Path)
+		}
 		switch entry.Mode.Type() {
 		case 0, fs.ModeDir, fs.ModeSymlink, fs.ModeNamedPipe, fs.ModeSocket, fs.ModeDevice, fs.ModeDevice | fs.ModeCharDevice, fs.ModeIrregular:
 		default:
@@ -77,7 +84,7 @@ func NewCardsOnlySnapshot(source SnapshotSource, entries []SnapshotEntry) (Cards
 		entry.indexLeaf = source == SnapshotWorktree && entry.Tracked
 		entry.Data = bytes.Clone(entry.Data)
 		if entry.Mode.IsDir() {
-			entry.Tracked = source == SnapshotNonGit || entry.indexLeaf
+			entry.Tracked = source == SnapshotNonGit || entry.indexLeaf || entry.DescendantTracked
 		} else if source != SnapshotWorktree {
 			entry.Tracked = true
 		}

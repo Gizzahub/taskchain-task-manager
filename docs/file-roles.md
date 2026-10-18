@@ -87,6 +87,28 @@ Index/ref는 각 source로 제공된 entries/bytes만 사용한다. 기존 marke
 보장하지 않는다. 실제 Git/물리 capture·공개 채택 wire·전체 CLI/writer 연결·활성화·cleanup·
 migration은 이 foundation의 지원 범위 밖이다.
 
+## Inactive cards-only capture
+
+명시 internal reader는 ref를 tree OID로 고정하고, index는 stage0 mode·blob OID·경로와
+flags 목록의 SHA-256으로 식별한다. Worktree는 index A → 고정한 디렉토리의 두 관측 →
+index B 순서로 읽는다. 목록·내용·파일 identity의 관측된 변경은 전체 오류다. Index digest는
+worktree 전체 digest나 index tree OID가 아니다. Git 객체를 만들거나 index를 쓰지 않는다.
+
+이 수집은 원자적 스냅샷·동시 변경의 완전한 탐지·writer admission 증거를 보장하지 않는다.
+이름·mode·출처를 임의로 전달하는 기존 constructor와 구분되며, 아직 CLI caller는 없다.
+Git 환경 override, conflict·intent-to-add·skip-worktree·gitlink·미지원 mode는 거부한다.
+Git tree/index의 빈 inventory는 물리 보드 디렉토리 존재의 증명이 아니다.
+
+Unix 물리 수집은 구성요소와 파일을 no-follow로 열며 symlink/special 내용을 읽지 않는다.
+`.ce/`와 보드 내부 `.git/` 디렉토리는 metadata 하나로 접고 열거나 순회하지 않는다. Git descendant metadata는
+그 parent의 추적 등급으로 결속한다. Tracked regular 삭제만 Missing으로 나타내며 tracked
+symlink 삭제는 unavailable이다. 미지원 OS의 physical 수집도 unavailable이다.
+
+파일 payload1MiB, 전체 payload64MiB, inferred directory 포함100000 entry, path64KiB를
+넘으면 전체 오류다. Retained path 총합16MiB, Git listing 단계별16MiB와 stderr64KiB는 별도 한도이며 process 전체
+64MiB를 보장하지 않는다. Ignored와 untracked 파일은 모두 physical residue 대상이다.
+정책 선택 wire·CLI/gate/writer 연결·보드 채택·활성화·정리·설치는 여전히 별도 범위다.
+
 ## 계획·Batch 문서의 역할 경계
 
 미완료 실행의 계획·현재 상태·의존성·수용 기준·재개 지점은 채택한 보드의
