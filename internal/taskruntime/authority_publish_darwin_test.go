@@ -28,7 +28,7 @@ func publicationInput(t *testing.T, root string, raw []byte) (*Service, authorit
 	}
 	target := []byte(strings.Replace(strings.Replace(canonicalTestProfile, "writer: none", "writer: task-manager", 1), "0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210", 1))
 	in := authorityPublicationInput{repo, append([]byte(nil), raw...), d.Authority, target, "fedcba9876543210fedcba9876543210"}
-	c := &authorityTransitionController{repository: repo, target: append([]byte(nil), target...), artifactIdentity: "synthetic-artifact", approved: true, frozen: true, drained: true,
+	c := &authorityTransitionController{repository: repo, expectedRaw: append([]byte(nil), raw...), expectedAuthority: d.Authority, target: append([]byte(nil), target...), artifactIdentity: "synthetic-artifact", approved: true, frozen: true, drained: true,
 		quiescence: func(context.Context) (authorityQuiescence, error) {
 			return authorityQuiescence{true, true, true, true}, nil
 		}}
@@ -53,6 +53,34 @@ func TestAuthorityPublicationCAS(t *testing.T) {
 		t.Fatalf("lock retained: %v", err)
 	}
 	_ = primary
+}
+
+func TestAuthorityPublicationScopeSourceBinding(t *testing.T) {
+	primary, _, path := canonicalConfigFixture(t)
+	s, in, scope := publicationInput(t, primary, []byte(canonicalTestProfile))
+	// Approval for A->T must not become approval for B->T even when the
+	// caller supplies a correct CAS expectation for the changed current B.
+	b := []byte(strings.Replace(canonicalTestProfile, "writer: none", "writer: ce", 1))
+	if err := os.WriteFile(path, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	d, err := decodeCanonicalAuthority(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.expectedRaw = b
+	in.expectedAuthority = d.Authority
+	r, err := s.publishCanonicalAuthority(context.Background(), in, scope)
+	if !errors.Is(err, errAuthorityPublicationRefused) || r.status != "refused" {
+		t.Fatalf("rebound approval: %+v %v", r, err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(got, b) {
+		t.Fatal("source B lost", err)
+	}
+	if _, err := os.Stat(filepath.Join(in.repository.primary.commonDir, RuntimeStateDir)); !os.IsNotExist(err) {
+		t.Fatalf("scope refusal created runtime state: %v", err)
+	}
 }
 
 func TestAuthorityPublicationRetry(t *testing.T) {

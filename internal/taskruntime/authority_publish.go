@@ -30,12 +30,14 @@ type ownerTransitionScope struct {
 }
 
 type authorityTransitionController struct {
-	repository       canonicalRepository
-	target           []byte
-	artifactIdentity string
-	approved         bool
-	frozen           bool
-	drained          bool
+	repository        canonicalRepository
+	expectedRaw       []byte
+	expectedAuthority canonicalLifecycleAuthority
+	target            []byte
+	artifactIdentity  string
+	approved          bool
+	frozen            bool
+	drained           bool
 	// External callers, board pending/protection and legacy cleanup belong to
 	// their owners. Missing knowledge must refuse, never imply quiescence.
 	quiescence func(context.Context) (authorityQuiescence, error)
@@ -54,7 +56,7 @@ func (scope *ownerTransitionScope) validate(ctx context.Context, s *Service, in 
 		return errAuthorityPublicationRefused
 	}
 	c := scope.controller
-	if !c.approved || c.artifactIdentity == "" || !bytes.Equal(c.target, in.targetRaw) ||
+	if !c.approved || c.artifactIdentity == "" || !bytes.Equal(c.expectedRaw, in.expectedRaw) || c.expectedAuthority != in.expectedAuthority || !bytes.Equal(c.target, in.targetRaw) ||
 		!sameRepositoryIdentity(c.repository.primary, in.repository.primary) ||
 		!sameRepositoryIdentity(c.repository.caller, in.repository.caller) ||
 		!bytes.Equal(c.repository.inventory, in.repository.inventory) {
