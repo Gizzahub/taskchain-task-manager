@@ -241,6 +241,62 @@ func TestAuthorityPublicationReplacement(t *testing.T) {
 	}
 }
 
+func TestAuthorityPublicationPostRenameIdentity(t *testing.T) {
+	primary, _, path := canonicalConfigFixture(t)
+	s, in, scope := publicationInput(t, primary, []byte(canonicalTestProfile))
+	r, err := s.publishCanonicalAuthorityHook(context.Background(), in, scope, func(p string) error {
+		if p == "publication-renamed" {
+			if err := os.Rename(path, path+".original-published"); err != nil {
+				return err
+			}
+			return os.WriteFile(path, in.targetRaw, 0600)
+		}
+		return nil
+	})
+	if err == nil || r.status != "publication-unverified" || len(r.observation.raw) != 0 {
+		t.Fatalf("different inode granted: %+v %v", r, err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(got, in.targetRaw) {
+		t.Fatal("replacement lost", err)
+	}
+}
+
+func TestAuthorityPublicationCleanupPreservesReplacement(t *testing.T) {
+	primary, _, path := canonicalConfigFixture(t)
+	s, in, scope := publicationInput(t, primary, []byte(canonicalTestProfile))
+	var replaced string
+	r, err := s.publishCanonicalAuthorityHook(context.Background(), in, scope, func(p string) error {
+		if p == "publication-temp-sync" {
+			return errors.New("before publication")
+		}
+		if p == "publication-before-cleanup" {
+			entries, err := os.ReadDir(filepath.Dir(path))
+			if err != nil {
+				return err
+			}
+			for _, e := range entries {
+				if strings.HasPrefix(e.Name(), ".task-runtime.publish-") {
+					replaced = filepath.Join(filepath.Dir(path), e.Name())
+					if err := os.Rename(replaced, replaced+".owned"); err != nil {
+						return err
+					}
+					return os.WriteFile(replaced, []byte("foreign"), 0600)
+				}
+			}
+			return errors.New("temp missing")
+		}
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "temp retained") || r.status != "failed-before-publish" {
+		t.Fatalf("cleanup: %+v %v", r, err)
+	}
+	got, err := os.ReadFile(replaced)
+	if err != nil || string(got) != "foreign" {
+		t.Fatal("foreign temp removed", err)
+	}
+}
+
 func TestAuthorityPublicationConcurrent(t *testing.T) {
 	primary, _, _ := canonicalConfigFixture(t)
 	s, in, scope := publicationInput(t, primary, []byte(canonicalTestProfile))
