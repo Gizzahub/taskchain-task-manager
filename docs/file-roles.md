@@ -109,6 +109,18 @@ symlink 삭제는 unavailable이다. 미지원 OS의 physical 수집도 unavaila
 64MiB를 보장하지 않는다. Ignored와 untracked 파일은 모두 physical residue 대상이다.
 정책 선택 wire·CLI/gate/writer 연결·보드 채택·활성화·정리·설치는 여전히 별도 범위다.
 
+물리 reader는 읽는 regular 파일의 pathname no-follow identity를 열린 FD와 읽기 전후 직접 대조한다.
+순회하는 디렉토리는 반복 worklist에서 목록 읽기 전후 고정 root 기준으로 다시 열며, 각 조상을 관측 identity와
+대조하므로 열린 디렉토리 FD는 깊이에 비례해 늘지 않는다. Opaque `.ce/.git`은 기존대로 열지 않고
+no-follow pathname metadata만 관측한다. 재열기 비용은 디렉토리 깊이의
+합에 비례하며 깊은 트리의 CPU 비용을 상수로 보장하지 않는다. 기존 경로·entry·metadata 한도는
+유지하고 새 깊이 제한은 추가하지 않는다. 공유 부모 metadata는 중복 순회를 줄여 처리한다.
+
+취소는 root 구성요소·디렉토리 배치·파일 read 전후·metadata 처리에서 확인한다.
+이미 시작된 OS read와 정렬 자체를 즉시 중단한다는 보장은 없다. 취소·identity 불일치는
+부분 snapshot 없이 오류로 반환하며 열린 FD를 회수한다. 이 보강도 일시적 ABA 전체 탐지나
+원자성·mutation 권한을 보장하지 않는다.
+
 ## 계획·Batch 문서의 역할 경계
 
 미완료 실행의 계획·현재 상태·의존성·수용 기준·재개 지점은 채택한 보드의

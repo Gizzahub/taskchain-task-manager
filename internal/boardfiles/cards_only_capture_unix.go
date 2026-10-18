@@ -7,7 +7,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -40,11 +39,11 @@ func captureCardsOnlyPhysicalPlatform(ctx context.Context, repo, board string, t
 	if err := validPhysicalBoard(board); err != nil {
 		return snapshot, err
 	}
-	index, err := captureTracked(tracked)
+	index, err := captureTracked(ctx, tracked)
 	if err != nil {
 		return snapshot, err
 	}
-	root, verify, err := openCaptureDirectory(repo, board)
+	root, verify, err := openCaptureDirectory(ctx, repo, board)
 	if err != nil {
 		return snapshot, err
 	}
@@ -71,18 +70,28 @@ func captureCardsOnlyPhysicalPlatform(ctx context.Context, repo, board string, t
 	}
 	entries := make([]SnapshotEntry, 0, len(first.entries))
 	for _, entry := range first.entries {
+		if err := ctx.Err(); err != nil {
+			return snapshot, err
+		}
 		entries = append(entries, entry)
 	}
-	return NewCardsOnlySnapshot(SnapshotWorktree, entries)
+	if err := ctx.Err(); err != nil {
+		return snapshot, err
+	}
+	snapshot, err = newCardsOnlySnapshot(ctx, SnapshotWorktree, entries)
+	return snapshot, errors.Join(err, ctx.Err())
 }
 
-func captureTracked(entries []SnapshotEntry) (map[string]SnapshotEntry, error) {
+func captureTracked(ctx context.Context, entries []SnapshotEntry) (map[string]SnapshotEntry, error) {
 	if len(entries) > cardsOnlyCaptureEntryLimit {
 		return nil, fmt.Errorf("physical board exceeds entry limit")
 	}
 	tracked := make(map[string]SnapshotEntry, len(entries))
 	pathBytes := 0
 	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if entry.Path == "" || !fs.ValidPath(entry.Path) || entry.Path == "." || strings.Contains(entry.Path, "\\") ||
 			!utf8.ValidString(entry.Path) || strings.ContainsFunc(entry.Path, unicode.IsControl) {
 			return nil, fmt.Errorf("invalid tracked path %q", entry.Path)
@@ -100,7 +109,7 @@ func captureTracked(entries []SnapshotEntry) (map[string]SnapshotEntry, error) {
 		entry.Tracked, entry.Data, entry.Missing, entry.DescendantTracked = true, nil, false, false
 		tracked[entry.Path] = entry
 	}
-	if err := newCapturePathBudget(tracked).err; err != nil {
+	if err := newCapturePathBudget(ctx, tracked).err; err != nil {
 		return nil, err
 	}
 	return tracked, nil
@@ -112,11 +121,21 @@ type capturePathBudget struct {
 	err   error
 }
 
-func newCapturePathBudget(tracked map[string]SnapshotEntry) capturePathBudget {
+func newCapturePathBudget(ctx context.Context, tracked map[string]SnapshotEntry) capturePathBudget {
 	b := capturePathBudget{paths: make(map[string]struct{})}
 	for rel := range tracked {
 		for parent := rel; parent != "."; parent = path.Dir(parent) {
+			if err := ctx.Err(); err != nil {
+				b.err = err
+				return b
+			}
+			if _, found := b.paths[parent]; found {
+				break
+			}
 			b.add(parent)
+			if b.err != nil {
+				return b
+			}
 		}
 	}
 	return b
@@ -136,7 +155,10 @@ func (b *capturePathBudget) add(rel string) {
 	}
 }
 
-func openCaptureDirectory(repo, board string) (*os.File, func() error, error) {
+func openCaptureDirectory(ctx context.Context, repo, board string) (*os.File, func() error, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 	repoPath, err := filepath.Abs(repo)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve repository path: %w", err)
@@ -156,6 +178,9 @@ func openCaptureDirectory(repo, board string) (*os.File, func() error, error) {
 	infos = append(infos, rootInfo)
 	current := root
 	for _, component := range components {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, errors.Join(err, current.Close())
+		}
 		next, err := openNoFollowDirectory(int(current.Fd()), component)
 		if err != nil {
 			return nil, nil, errors.Join(fmt.Errorf("open board component without following links: %w", err), current.Close())
@@ -177,6 +202,9 @@ func openCaptureDirectory(repo, board string) (*os.File, func() error, error) {
 		}
 		defer func() { err = errors.Join(err, check.Close()) }()
 		for i, component := range components {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			next, openErr := openNoFollowDirectory(int(check.Fd()), component)
 			if openErr != nil {
 				return fmt.Errorf("board component changed during capture: %w", openErr)
@@ -211,12 +239,14 @@ func openNoFollowDirectory(parentFD int, name string) (*os.File, error) {
 
 func observeCapture(ctx context.Context, root *os.File, tracked map[string]SnapshotEntry, expected *physicalObservation) (physicalObservation, error) {
 	o := physicalObservation{entries: make(map[string]SnapshotEntry), info: make(map[string]fs.FileInfo), identity: make(map[string]captureIdentity)}
-	budget := newCapturePathBudget(tracked)
+	budget := newCapturePathBudget(ctx, tracked)
 	if budget.err != nil {
 		return o, budget.err
 	}
-	descendants := trackedDescendants(tracked)
-	total := 0
+	descendants, err := trackedDescendants(ctx, tracked)
+	if err != nil {
+		return o, err
+	}
 	add := func(entry SnapshotEntry, info fs.FileInfo, identity captureIdentity) error {
 		budget.add(entry.Path)
 		if budget.err != nil {
@@ -251,106 +281,13 @@ func observeCapture(ctx context.Context, root *os.File, tracked map[string]Snaps
 		o.identity[entry.Path] = identity
 		return nil
 	}
-	var walk func(*os.File, string) error
-	walk = func(dir *os.File, prefix string) error {
-		if _, err := dir.Seek(0, io.SeekStart); err != nil {
-			return fmt.Errorf("rewind physical directory: %w", err)
-		}
-		before, err := dir.Stat()
-		if err != nil {
-			return err
-		}
-		for {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			batch, readErr := dir.ReadDir(256)
-			for _, child := range batch {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				name := child.Name()
-				rel := name
-				if prefix != "" {
-					rel = prefix + "/" + name
-				}
-				if len(rel) > 64<<10 || !fs.ValidPath(rel) || strings.Contains(rel, "\\") ||
-					!utf8.ValidString(rel) || strings.ContainsFunc(rel, unicode.IsControl) {
-					return fmt.Errorf("unsafe physical board path %q", rel)
-				}
-				identity, err := captureEntryIdentity(int(dir.Fd()), name)
-				if err != nil {
-					return fmt.Errorf("stat physical entry %s: %w", rel, err)
-				}
-				_, exactTracked := tracked[rel]
-				entry := SnapshotEntry{Path: rel, Mode: child.Type(), Tracked: exactTracked}
-				if child.IsDir() {
-					opaque := opaqueCaptureDirectory(name)
-					entry.DescendantTracked = opaque && descendants[rel]
-					if opaque {
-						if err := add(entry, nil, identity); err != nil {
-							return err
-						}
-						continue
-					}
-					childDir, err := openNoFollowDirectory(int(dir.Fd()), name)
-					if err != nil {
-						return fmt.Errorf("open physical directory without following links: %s: %w", rel, err)
-					}
-					opened, statErr := childDir.Stat()
-					if statErr != nil {
-						return errors.Join(fmt.Errorf("stat physical directory: %s", rel), statErr, childDir.Close())
-					}
-					entry.Mode = opened.Mode()
-					if err := add(entry, opened, identity); err != nil {
-						childDir.Close()
-						return err
-					}
-					err = walk(childDir, rel)
-					err = errors.Join(err, childDir.Close())
-					if err != nil {
-						return err
-					}
-				} else {
-					entry.Tracked = entry.Tracked || descendants[rel]
-					if entry.Mode.IsRegular() {
-						data, info, err := readCaptureFile(dir, name, identity)
-						if err != nil {
-							return fmt.Errorf("read physical file %s: %w", rel, err)
-						}
-						total += len(data)
-						if total > cardsOnlyCaptureTotalLimit {
-							return fmt.Errorf("physical board exceeds total byte limit")
-						}
-						entry.Data = data
-						entry.Mode = info.Mode()
-						if err := add(entry, info, identity); err != nil {
-							return err
-						}
-						continue
-					}
-					if err := add(entry, nil, identity); err != nil {
-						return err
-					}
-				}
-			}
-			if readErr == io.EOF {
-				break
-			}
-			if readErr != nil {
-				return readErr
-			}
-		}
-		after, err := dir.Stat()
-		if err != nil || !os.SameFile(before, after) || !sameDeclaredState(before, after) {
-			return errors.Join(fmt.Errorf("physical directory changed during listing"), err)
-		}
-		return nil
-	}
-	if err := walk(root, ""); err != nil {
+	if err := walkCapture(ctx, root, tracked, descendants, add); err != nil {
 		return o, err
 	}
 	for rel, indexed := range tracked {
+		if err := ctx.Err(); err != nil {
+			return o, err
+		}
 		if _, found := o.entries[rel]; found || underOpaqueOrNonDirectory(o.entries, rel) {
 			continue
 		}
@@ -369,14 +306,23 @@ func observeCapture(ctx context.Context, root *os.File, tracked map[string]Snaps
 
 func opaqueCaptureDirectory(name string) bool { return name == ".ce" || name == ".git" }
 
-func trackedDescendants(tracked map[string]SnapshotEntry) map[string]bool {
+func trackedDescendants(ctx context.Context, tracked map[string]SnapshotEntry) (map[string]bool, error) {
 	descendants := make(map[string]bool)
 	for rel := range tracked {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		for parent := path.Dir(rel); parent != "."; parent = path.Dir(parent) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if descendants[parent] {
+				break
+			}
 			descendants[parent] = true
 		}
 	}
-	return descendants
+	return descendants, nil
 }
 
 func underOpaqueOrNonDirectory(entries map[string]SnapshotEntry, rel string) bool {
@@ -388,40 +334,11 @@ func underOpaqueOrNonDirectory(entries map[string]SnapshotEntry, rel string) boo
 	return false
 }
 
-func readCaptureFile(dir *os.File, name string, before captureIdentity) ([]byte, fs.FileInfo, error) {
-	fd, err := unix.Openat(int(dir.Fd()), name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return nil, nil, err
-	}
-	file := os.NewFile(uintptr(fd), name)
-	opened, err := file.Stat()
-	if err != nil || !opened.Mode().IsRegular() {
-		return nil, nil, errors.Join(err, file.Close(), fmt.Errorf("file is not regular"))
-	}
-	data, readErr := io.ReadAll(io.LimitReader(file, cardsOnlyCaptureFileLimit+1))
-	after, statErr := file.Stat()
-	afterIdentity, identityErr := captureEntryIdentity(int(dir.Fd()), name)
-	closeErr := file.Close()
-	if err := errors.Join(readErr, statErr, identityErr, closeErr); err != nil {
-		return nil, nil, err
-	}
-	if !after.Mode().IsRegular() || !os.SameFile(opened, after) || !sameDeclaredState(opened, after) || before != afterIdentity {
-		return nil, nil, fmt.Errorf("file changed while reading")
-	}
-	if len(data) > cardsOnlyCaptureFileLimit {
-		return nil, nil, fmt.Errorf("file exceeds %d bytes", cardsOnlyCaptureFileLimit)
-	}
-	return data, opened, nil
-}
-
 func captureEntryIdentity(parentFD int, name string) (captureIdentity, error) {
 	var stat unix.Stat_t
 	err := unix.Fstatat(parentFD, name, &stat, unix.AT_SYMLINK_NOFOLLOW)
 	if err != nil {
 		return captureIdentity{}, err
 	}
-	return captureIdentity{
-		dev: uint64(stat.Dev), ino: uint64(stat.Ino), mode: uint32(stat.Mode), size: stat.Size,
-		msec: stat.Mtim.Sec, mnsec: stat.Mtim.Nsec, csec: stat.Ctim.Sec, cnsec: stat.Ctim.Nsec,
-	}, nil
+	return captureStatIdentity(stat), nil
 }

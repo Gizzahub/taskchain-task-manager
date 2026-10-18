@@ -2,6 +2,7 @@ package boardfiles
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/fs"
 	"path"
@@ -52,11 +53,21 @@ type CardsOnlySnapshot struct {
 }
 
 func NewCardsOnlySnapshot(source SnapshotSource, entries []SnapshotEntry) (CardsOnlySnapshot, error) {
+	return newCardsOnlySnapshot(context.Background(), source, entries)
+}
+
+func newCardsOnlySnapshot(ctx context.Context, source SnapshotSource, entries []SnapshotEntry) (CardsOnlySnapshot, error) {
+	if err := ctx.Err(); err != nil {
+		return CardsOnlySnapshot{}, err
+	}
 	if source < SnapshotWorktree || source > SnapshotNonGit {
 		return CardsOnlySnapshot{}, fmt.Errorf("unknown snapshot source")
 	}
 	s := CardsOnlySnapshot{source: source, entries: make(map[string]SnapshotEntry)}
 	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return CardsOnlySnapshot{}, err
+		}
 		if entry.Path == "" || entry.Path == "." || path.IsAbs(entry.Path) ||
 			path.Clean(entry.Path) != entry.Path || strings.ContainsAny(entry.Path, "\\\x00") ||
 			entry.Path == ".." || strings.HasPrefix(entry.Path, "../") ||
@@ -91,25 +102,45 @@ func NewCardsOnlySnapshot(source SnapshotSource, entries []SnapshotEntry) (Cards
 		s.entries[entry.Path] = entry
 	}
 	for _, entry := range entries {
-		leaf := s.entries[entry.Path]
 		for parent := path.Dir(entry.Path); parent != "."; parent = path.Dir(parent) {
+			if err := ctx.Err(); err != nil {
+				return CardsOnlySnapshot{}, err
+			}
 			dir, found := s.entries[parent]
 			if found && !dir.Mode.IsDir() {
 				return CardsOnlySnapshot{}, fmt.Errorf("non-directory snapshot ancestor %q", parent)
 			}
-			if !found {
-				dir = SnapshotEntry{Path: parent, Mode: fs.ModeDir, inferred: true}
+			if found {
+				// Explicit directories are validated by their own input entry;
+				// inferred directories already have their ancestor chain.
+				break
 			}
-			dir.Tracked = dir.Tracked || leaf.Tracked || source == SnapshotNonGit
-			s.entries[parent] = dir
+			s.entries[parent] = SnapshotEntry{Path: parent, Mode: fs.ModeDir, inferred: true}
 		}
 	}
-	for rel, entry := range s.entries {
-		if (source == SnapshotIndex || source == SnapshotRef) && entry.Mode.IsDir() && !entry.Tracked {
-			return CardsOnlySnapshot{}, fmt.Errorf("tree snapshot cannot contain empty directory %q", rel)
+	for rel := range s.entries {
+		if err := ctx.Err(); err != nil {
+			return CardsOnlySnapshot{}, err
 		}
 		s.paths = append(s.paths, rel)
 	}
 	sort.Strings(s.paths)
+	// Descendants sort after parents. Propagate once per edge instead of
+	// revisiting the whole ancestor chain for every sibling.
+	for i := len(s.paths) - 1; i >= 0; i-- {
+		if err := ctx.Err(); err != nil {
+			return CardsOnlySnapshot{}, err
+		}
+		rel := s.paths[i]
+		entry := s.entries[rel]
+		if (source == SnapshotIndex || source == SnapshotRef) && entry.Mode.IsDir() && !entry.Tracked {
+			return CardsOnlySnapshot{}, fmt.Errorf("tree snapshot cannot contain empty directory %q", rel)
+		}
+		if parent := path.Dir(rel); parent != "." {
+			dir := s.entries[parent]
+			dir.Tracked = dir.Tracked || entry.Tracked || source == SnapshotNonGit
+			s.entries[parent] = dir
+		}
+	}
 	return s, nil
 }
