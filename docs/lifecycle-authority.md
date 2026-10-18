@@ -132,6 +132,50 @@ This boundary has no CLI, provider, ledger, publisher, new lock domain or
 legacy transition. Existing service mutators do not call it, so delivery of
 this code does not activate authority or change normal runtime behavior.
 
+## Inactive owner-scoped publication
+
+The internal `publishCanonicalAuthority` operation has no production scope
+constructor, CLI, installer or ordinary mutator caller. Only tests mint a
+synthetic controller on a new temporary repository. Publication is not activation
+or a grant for a subsequent mutation. Support remains Darwin with cgo; other
+platforms refuse at the protected descriptor boundary.
+
+An owner scope binds the exact canonical repository/inventory, approved target
+bytes and source/artifact identity. A new transition requires an externally owned
+launch freeze and completed drain before acquiring the existing mutation lock.
+Under that lock, the controller must positively confirm known/drained callers,
+clear board pending/protection state and clear cleanup/legacy operations. Missing
+knowledge refuses; filesystem names are not guessed into an owner verdict. The
+runtime independently refuses nonterminal executions, unresolved receipts and
+every latest FINISHING claim regardless of process liveness. There is no waiting,
+TTL reclamation or forced drain under this lock. Production acceptance must supply
+the separately reviewed owner controller and complete caller coverage.
+
+Publication compares the expected repository, complete original bytes and
+authority tuple. Protected legacy schema 2/3 with explicit `no-fetch` alone can
+bootstrap; schema 4/5 or malformed schema 6 never become legacy-absent. Targets
+use strict schema 6 and a fresh 128-bit random generation per normal revision;
+the owner must generate and retain the same target bytes/generation for retries.
+A changed normal revision cannot reuse its previous generation.
+
+Before old-value CAS or new-transition quiescence, an exact current target can
+be synced and rechecked as `already-published`. A confirmation-only scope cannot
+publish a different target or bypass approval/repository safety. New publication
+uses a unique no-follow, exclusive 0600 temporary file under the pinned `.ce`
+descriptor, validates owner/ACL/link identity, syncs it and atomically renames it.
+The old target and canonical path are rechecked immediately before rename. After
+rename, protected reopen must find the same inode, exact target bytes/tuple and
+safe ancestors, then sync/recheck file and directory.
+
+Before-rename errors preserve the original (`failed-before-publish`). After
+rename, sync errors are durability-unknown and failed validation/close/release
+is publication-unverified; no success observation is returned. No automatic
+rollback, writer fallback, journal, outcome store, receipt or provider call is
+added. Only an identity-matching owned temporary file is removed; replacements
+are retained with their residual name. The controller retains freeze ownership
+on failure and must report/recover its phase; this operation never unfreezes it.
+Cooperating callers are the threat model, not hostile same-UID authentication.
+
 The descriptor/security query follows the public filesec APIs; Apple's
 [ACL wrapper](https://github.com/apple-oss-distributions/Libc/blob/main/posix1e/acl_file.c)
 conflates missing ACL properties with a null ACL result. The protected reader
