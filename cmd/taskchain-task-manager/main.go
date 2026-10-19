@@ -73,6 +73,9 @@ func run(args []string, out, errOut io.Writer) int {
 	if len(args) > 0 && args[0] == "inspect-worktrees" {
 		return runInspectWorktrees(args, out, errOut)
 	}
+	if len(args) > 0 && args[0] == "assess-cards-only" {
+		return runAssessCardsOnly(args, out, errOut)
+	}
 	if len(args) > 0 && args[0] == "import-ids" {
 		return runImportIDs(args, out, errOut)
 	}
@@ -110,6 +113,7 @@ func run(args []string, out, errOut io.Writer) int {
 		fmt.Fprintln(out, "       taskchain-task-manager", workspaceContextUsage)
 		fmt.Fprintln(out, "       taskchain-task-manager enable-shared --dir <board> --all-worktrees [--resume] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager inspect-worktrees --repo <root> --board <path> --json")
+		fmt.Fprintln(out, "       taskchain-task-manager assess-cards-only --repo ROOT --board PATH --candidate-policy FILE --source worktree|index|ref [--ref REV] --json")
 		fmt.Fprintln(out, "       taskchain-task-manager <init|list|ready|queue> --dir <board> --json")
 		fmt.Fprintln(out, "       taskchain-task-manager "+taskUsage)
 		fmt.Fprintln(out, "       taskchain-task-manager import-ids --repo <root> --board <path> (--preview | --dir <target> [--adopt]) --json")

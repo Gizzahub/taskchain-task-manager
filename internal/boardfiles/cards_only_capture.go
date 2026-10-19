@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"path"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -31,14 +32,28 @@ func captureCardsOnlyPhysicalWithHook(ctx context.Context, repo, board string, t
 }
 
 func validPhysicalBoard(board string) error {
-	if len(board) > 64<<10 || !fs.ValidPath(board) || board == "." || strings.Contains(board, "\\") ||
-		!utf8.ValidString(board) || strings.ContainsFunc(board, unicode.IsControl) {
+	return ValidateBoardPath(board)
+}
+
+// ValidateBoardPath is the common lexical gate for physical, Git and diagnostic
+// board selection. It does not inspect a repository or establish authority.
+func ValidateBoardPath(board string) error {
+	if err := ValidateCaptureRelativePath(board); err != nil {
 		return fmt.Errorf("unsafe physical board path")
 	}
 	for _, component := range strings.Split(board, "/") {
 		if strings.EqualFold(component, ".git") {
 			return fmt.Errorf("Git metadata is not a board")
 		}
+	}
+	return nil
+}
+
+// ValidateCaptureRelativePath validates a single canonical inventory path.
+func ValidateCaptureRelativePath(name string) error {
+	if !fs.ValidPath(name) || name == "." || path.Clean(name) != name || strings.Contains(name, "\\") ||
+		!utf8.ValidString(name) || strings.ContainsFunc(name, unicode.IsControl) || len(name) > 64<<10 {
+		return fmt.Errorf("unsafe capture path %q", name)
 	}
 	return nil
 }

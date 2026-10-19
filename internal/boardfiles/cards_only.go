@@ -1,6 +1,7 @@
 package boardfiles
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"sort"
@@ -34,6 +35,21 @@ const cardsOnlyContract = "docs/file-roles.md#cards-only-snapshot-foundation"
 // Policy supplies topology and optional README projection metadata; existing
 // schema semantics and the legacy scanner remain unchanged.
 func AssessCardsOnlySnapshot(s CardsOnlySnapshot, policy boardpolicy.Policy) ([]SnapshotFinding, error) {
+	return assessCardsOnlySnapshot(context.Background(), s, policy, false)
+}
+
+// AssessCompleteCardsOnlyInventory is an internal classification primitive, not
+// proof of completeness. Its sole production caller is taskflow.CandidateCapture,
+// whose opaque seal establishes successful complete capture. Caller-supplied
+// snapshots must continue to use AssessCardsOnlySnapshot.
+func AssessCompleteCardsOnlyInventory(ctx context.Context, s CardsOnlySnapshot, policy boardpolicy.Policy) ([]SnapshotFinding, error) {
+	return assessCardsOnlySnapshot(ctx, s, policy, true)
+}
+
+func assessCardsOnlySnapshot(ctx context.Context, s CardsOnlySnapshot, policy boardpolicy.Policy, complete bool) ([]SnapshotFinding, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if s.entries == nil || !policy.Workflow(policy.ReadyZone()) {
 		return nil, fmt.Errorf("cards-only assessment requires a constructed snapshot and policy")
 	}
@@ -60,8 +76,15 @@ func AssessCardsOnlySnapshot(s CardsOnlySnapshot, policy boardpolicy.Policy) ([]
 		blockedTracked = blockedTracked || severity == SnapshotIssueError
 	}
 	for _, rel := range s.paths {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		entry := s.entries[rel]
-		if belowPruned(rel, pruned) {
+		prune, err := belowPruned(ctx, rel, pruned)
+		if err != nil {
+			return nil, err
+		}
+		if prune {
 			continue
 		}
 		issue := ""
@@ -114,17 +137,40 @@ func AssessCardsOnlySnapshot(s CardsOnlySnapshot, policy boardpolicy.Policy) ([]
 		}
 	}
 	for _, rel := range dirs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		entry := s.entries[rel]
 		if !hasCard[rel] && !occupied[rel] && !(s.source == SnapshotWorktree && entry.inferred) {
 			add(s.entries[rel], "directory contains no card candidates", true)
+		}
+	}
+	// Missing declared projection is a structural finding only for a complete
+	// capture. Report it even when another tracked finding blocks comparison.
+	if complete {
+		for _, role := range policy.FileRolesV5() {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if _, found := s.entries[role.Path]; !found {
+				findings = append(findings, SnapshotFinding{Path: role.Path, Severity: SnapshotIssueError,
+					Detail: "declared README projection is absent from the complete snapshot", Contract: cardsOnlyContract,
+					Action: "Review the declared projection and explicitly provide its generated content."})
+			}
 		}
 	}
 	// Never compare a projection with an incomplete or structurally invalid
 	// supplied inventory. This is not proof that the caller supplied all paths.
 	if !blockedTracked {
 		for _, role := range policy.FileRolesV5() {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			entry, found := s.entries[role.Path]
 			if !found {
+				if complete {
+					continue
+				}
 				return nil, fmt.Errorf("declared README projection lacks a snapshot entry; represent tracked worktree deletion explicitly")
 			}
 			if !entry.Tracked && len(findings) != 0 {
@@ -142,16 +188,22 @@ func AssessCardsOnlySnapshot(s CardsOnlySnapshot, policy boardpolicy.Policy) ([]
 		}
 	}
 	sortSnapshotFindings(findings)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return findings, nil
 }
 
-func belowPruned(rel string, pruned map[string]bool) bool {
+func belowPruned(ctx context.Context, rel string, pruned map[string]bool) (bool, error) {
 	for parent := path.Dir(rel); parent != "."; parent = path.Dir(parent) {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
 		if pruned[parent] {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 func sortSnapshotFindings(findings []SnapshotFinding) {
@@ -164,6 +216,12 @@ func sortSnapshotFindings(findings []SnapshotFinding) {
 }
 
 func cardsOnlyPolicyIssue(policy boardpolicy.Policy) error {
+	return ValidateCardsOnlyPolicy(policy)
+}
+
+// ValidateCardsOnlyPolicy is the shared semantic check used before capture and
+// during assessment. Codec support alone never selects or adopts this profile.
+func ValidateCardsOnlyPolicy(policy boardpolicy.Policy) error {
 	if _, err := policy.Canonical(); err != nil {
 		return err
 	}

@@ -9,8 +9,6 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardfiles"
 )
@@ -331,22 +329,11 @@ func captureBlobs(ctx context.Context, root string, leaves []captureLeaf) ([]boa
 }
 
 func captureBoardPath(name string) error {
-	if err := captureRelativePath(name); err != nil {
-		return err
-	}
-	for _, p := range strings.Split(name, "/") {
-		if strings.EqualFold(p, ".git") {
-			return fmt.Errorf("Git metadata is not a board path")
-		}
-	}
-	return nil
+	return boardfiles.ValidateBoardPath(name)
 }
 
 func captureRelativePath(name string) error {
-	if !fs.ValidPath(name) || name == "." || path.Clean(name) != name || strings.Contains(name, "\\") || !utf8.ValidString(name) || strings.ContainsFunc(name, unicode.IsControl) || len(name) > 64<<10 {
-		return fmt.Errorf("unsafe capture path %q", name)
-	}
-	return nil
+	return boardfiles.ValidateCaptureRelativePath(name)
 }
 func captureMode(mode string) fs.FileMode {
 	if mode == "120000" {

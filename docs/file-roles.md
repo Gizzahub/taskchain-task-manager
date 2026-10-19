@@ -121,6 +121,42 @@ no-follow pathname metadata만 관측한다. 재열기 비용은 디렉토리 �
 부분 snapshot 없이 오류로 반환하며 열린 FD를 회수한다. 이 보강도 일시적 ABA 전체 탐지나
 원자성·mutation 권한을 보장하지 않는다.
 
+## 명시 후보의 읽기 전용 진단
+
+`assess-cards-only`는 외부 후보 정책과 선택한 단일 Git 출처를 비교한다.
+모든 입력은 명시해야 하며 기본 정책·현재 active authority로 돌아가지 않는다.
+
+```text
+taskchain-task-manager assess-cards-only --repo ROOT --board PATH
+  --candidate-policy FILE --source worktree|index|ref [--ref REV] --json
+```
+
+ROOT는 실제 Git worktree 루트, PATH는 비루트 repository-relative 보드 경로다.
+상대 ROOT/FILE은 호출 cwd 기준이며 FILE은 index/ref blob이 아닌 현재 파일시스템의
+prospective 입력이다. Source가 ref일 때만 REV를 지정한다. 각 옵션은 정확히 한 번,
+`--json`은 값 없는 단독 flag로 쓴다. 단독 `--help`는 사용법을 출력한다.
+
+후보 파일은 경로의 symlink·특수 파일·identity 교체를 거부하고 최대64KiB로 읽는다.
+안전한 후보 읽기가 지원되지 않는 OS는 Git-only 출처에서도 unavailable이다.
+후보가 보드 안에 있으면 해당 출처의 일반 entry로 검사하며 파일명 면제를 주지 않는다.
+완전한 inventory에서 선언된 README projection이 없으면 구조 finding으로 보고한다.
+
+JSON의 `outputVersion`은1, `mode`는 `candidate-diagnostic`, `authorityChecked`는
+항상 false다. Candidate에는 원본/정규화 정책 SHA-256과 codec schema를 구별해 담고,
+snapshot에는 ref의 treeOID 또는 index/worktree의 indexDigest를 담는다.
+`clean`은 제한된 구조 진단의 finding이 없다는 뜻이다. 카드 내용·의존성·manual 수명,
+현재 authority 정상성·채택 가능성·readiness·writer 권한을 증명하지 않는다.
+
+- Exit0: clean. Exit1: findings; residue만 있어도1이다.
+- Exit2: 후보·수집·판정 불가 또는 취소. 정상 문법의 실패는 unavailable JSON이며
+  부분 findings를 반환하지 않는다. 문법 오류는 stdout 없이 stderr에 사용법을 출력한다.
+- Stdout 쓰기 실패는 exit2이며 부분 JSON이 남을 수 있다. 종료 코드와 출력 완전성을
+  함께 확인해야 한다. 후보 원문·절대 입력 경로는 오류 출력에 반사하지 않는다.
+
+이 명령은 active authority 읽기·Store 생성·lease·ID 예약·journal 복구·파일 변경을
+호출하지 않는다. 기존 lint/validate/gate의 정책·출력·종료 코드는 유지하며, 이 진단 결과를
+정식 adoption preview나 gate evidence로 대신 사용할 수 없다.
+
 ## 계획·Batch 문서의 역할 경계
 
 미완료 실행의 계획·현재 상태·의존성·수용 기준·재개 지점은 채택한 보드의
