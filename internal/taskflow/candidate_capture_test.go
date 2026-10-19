@@ -60,3 +60,31 @@ func TestCandidateCaptureCompleteProjectionAndOpaqueSeal(t *testing.T) {
 		t.Fatalf("cancellation lost: %v", err)
 	}
 }
+
+func TestCandidateCapturePinnedRefSurvivesRefMovement(t *testing.T) {
+	root := captureTestRepo(t)
+	ctx := context.Background()
+	before := captureTestGit(t, root, "rev-parse", "HEAD^{tree}")
+	captured, err := CaptureCandidateSnapshot(ctx, root, "tasks", "ref", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	captureTestWrite(t, root, "tasks/INDEX.md", "new tracked violation")
+	captureTestGit(t, root, "add", "tasks")
+	captureTestGit(t, root, "commit", "-qm", "move ref after capture")
+	if tree, index := captured.Provenance(); tree != before || index != "" {
+		t.Fatalf("captured provenance followed moved ref: %q %q", tree, index)
+	}
+	findings, err := captured.Assess(ctx, boardpolicy.Default())
+	if err != nil || len(findings) != 0 {
+		t.Fatalf("captured bytes followed moved ref: %+v %v", findings, err)
+	}
+	current, err := CaptureCandidateSnapshot(ctx, root, "tasks", "ref", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	findings, err = current.Assess(ctx, boardpolicy.Default())
+	if err != nil || len(findings) != 1 || findings[0].Path != "INDEX.md" {
+		t.Fatalf("fresh capture did not observe moved ref: %+v %v", findings, err)
+	}
+}
