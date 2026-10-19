@@ -64,8 +64,8 @@ journal 수동 편집으로 연결을 시험하지 않는다. 합성 테스트�
 
 ## Cards-only snapshot foundation
 
-비활성 internal snapshot assessor가 명시 선택한 합성 입력의 카드 전용 구조를 판정한다.
-새 policy schema·활성화 신호·CLI 모드가 아니며 기존 schema 1–5 reader와 명령은 보존한다.
+Internal snapshot assessor가 명시 선택한 입력의 카드 전용 구조를 판정한다.
+새 policy schema·활성화 신호를 만들지 않으며 기존 schema 1–5 reader와 명령은 보존한다.
 카드 경로·디렉토리와 정확한 root `README.md`를 허용하고 예약 비카드 이름·증거/참조/결정
 디렉토리·엔진 상태는 제외하지 않고 보고한다. Manual은 경로 overlay일 뿐 상태·actor·
 receipt admission을 구현한 것이 아니다.
@@ -83,9 +83,9 @@ Index/ref는 각 source로 제공된 entries/bytes만 사용한다. 기존 marke
 공유한다. Legacy `.ce`는 진단 하나로 접지만 실제 비순회 capture는 제공하지 않는다.
 
 같은 internal finding을 lint 구조 error/residue warning 또는 validate warning으로 변환한다.
-이름 지정 검사는 pruned ancestor finding도 포함한다. 현재 CLI caller가 없고 board ready 판정을
-보장하지 않는다. 실제 Git/물리 capture·공개 채택 wire·전체 CLI/writer 연결·활성화·cleanup·
-migration은 이 foundation의 지원 범위 밖이다.
+이름 지정 검사는 pruned ancestor finding도 포함한다. 아래 격리 후보 진단 CLI가 capture와
+assessment를 호출하지만 board ready 판정을 보장하지 않는다. 공개 채택 wire·기존 CLI/gate/
+writer 연결·활성화·cleanup·migration은 이 foundation의 지원 범위 밖이다.
 
 ## Inactive cards-only capture
 
@@ -95,7 +95,8 @@ index B 순서로 읽는다. 목록·내용·파일 identity의 관측된 변경
 worktree 전체 digest나 index tree OID가 아니다. Git 객체를 만들거나 index를 쓰지 않는다.
 
 이 수집은 원자적 스냅샷·동시 변경의 완전한 탐지·writer admission 증거를 보장하지 않는다.
-이름·mode·출처를 임의로 전달하는 기존 constructor와 구분되며, 아직 CLI caller는 없다.
+이름·mode·출처를 임의로 전달하는 기존 constructor와 구분된다. 아래 격리 후보 진단 CLI가
+호출하며 authority·gate·writer·adoption caller는 아니다.
 Git 환경 override, conflict·intent-to-add·skip-worktree·gitlink·미지원 mode는 거부한다.
 Git tree/index의 빈 inventory는 물리 보드 디렉토리 존재의 증명이 아니다.
 
@@ -107,7 +108,7 @@ symlink 삭제는 unavailable이다. 미지원 OS의 physical 수집도 unavaila
 파일 payload1MiB, 전체 payload64MiB, inferred directory 포함100000 entry, path64KiB를
 넘으면 전체 오류다. Retained path 총합16MiB, Git listing 단계별16MiB와 stderr64KiB는 별도 한도이며 process 전체
 64MiB를 보장하지 않는다. Ignored와 untracked 파일은 모두 physical residue 대상이다.
-정책 선택 wire·CLI/gate/writer 연결·보드 채택·활성화·정리·설치는 여전히 별도 범위다.
+Active 정책 선택 wire·기존 CLI/gate/writer 연결·보드 채택·활성화·정리·설치는 여전히 별도 범위다.
 
 물리 reader는 읽는 regular 파일의 pathname no-follow identity를 열린 FD와 읽기 전후 직접 대조한다.
 순회하는 디렉토리는 반복 worklist에서 목록 읽기 전후 고정 root 기준으로 다시 열며, 각 조상을 관측 identity와
