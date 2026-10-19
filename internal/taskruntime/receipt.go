@@ -209,7 +209,28 @@ func isIntegrateRun(args []string, target string) bool {
 	if len(rest) >= 2 && rest[0] == integrationTargetFlag && rest[1] == target {
 		rest = rest[2:]
 	}
-	return len(rest) == 0 || (len(rest) == 1 && rest[0] == integrationNoFetchFlag)
+	seen := map[string]bool{}
+	for len(rest) > 0 {
+		flag := rest[0]
+		if seen[flag] {
+			return false
+		}
+		seen[flag] = true
+		rest = rest[1:]
+		switch flag {
+		case integrationNoFetchFlag:
+		case "--expect-source", "--expect-target":
+			if len(rest) == 0 || !validOID(rest[0]) {
+				return false
+			}
+			rest = rest[1:]
+		default:
+			return false
+		}
+	}
+	// Bare finish now captures both heads too. Keep legacy receipts readable,
+	// but never accept an incomplete pair or an unknown invocation shape.
+	return seen["--expect-source"] == seen["--expect-target"]
 }
 
 func containsExecutionGeneration(executions []Execution, captured Execution) bool {

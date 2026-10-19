@@ -91,6 +91,70 @@ func TestFinishRunExit3KeepsPartialCleanupReason(t *testing.T) {
 	}
 }
 
+// Exercise the real RunBound argument builder even for a bare finish. A legacy
+// fake Provider.Run alone cannot detect changes in the persisted argv shape.
+type guardedFinishProvider struct{ *fakeProvider }
+
+func (p guardedFinishProvider) RunBound(ctx context.Context, dir, target string, noFetch bool, taskSHA, targetSHA string, b *requestBinding) (CommandResult, error) {
+	return (gzGitProvider{runner: scriptRunner{fn: func(ctx context.Context, req CommandRequest) (CommandResult, error) {
+		result, err := p.Run(ctx, dir, target, noFetch)
+		result.Args = req.Args
+		return result, err
+	}}}).RunBound(ctx, dir, target, noFetch, taskSHA, targetSHA, b)
+}
+
+func TestFinishGuardedExit3NeverRepeatsIntegration(t *testing.T) {
+	w := newEndWorld(t)
+	w.provider.runCode = 3
+	svc := w.service()
+	svc.provider = guardedFinishProvider{w.provider}
+	first, code := svc.Finish(context.Background(), w.execution.Task)
+	if code != 3 || first.Receipt == nil || !isPartialCleanupReceipt(w.execution, *first.Receipt) {
+		t.Fatalf("guarded exit3 lost: code%d receipt%+v", code, first.Receipt)
+	}
+	status := svc.Status(context.Background(), w.execution.Task)
+	if status.FinishReady {
+		t.Fatal("partial cleanup incorrectly advertises finish ready")
+	}
+	if _, code := svc.Finish(context.Background(), w.execution.Task); code == 0 || w.provider.runs != 1 {
+		t.Fatalf("integration repeated: code%d calls%d", code, w.provider.runs)
+	}
+	if _, code := svc.Discard(context.Background(), w.execution.Task, "must preserve pushed partial", ""); code == 0 {
+		t.Fatal("discard accepted pushed partial cleanup")
+	}
+	recovered, code := svc.Recover(context.Background(), w.execution.Task)
+	if code != 0 || recovered.Status != StatusDone || w.provider.runs != 1 {
+		t.Fatalf("recovery code%d result%+v calls%d", code, recovered, w.provider.runs)
+	}
+}
+
+func TestGuardedIntegrateRunShape(t *testing.T) {
+	base := []string{"integrate", "run", "--target", "origin/master"}
+	for _, tc := range []struct {
+		name string
+		tail []string
+		want bool
+	}{
+		{"legacy", nil, true},
+		{"legacy no-fetch", []string{"--no-fetch"}, true},
+		{"captured pair", []string{"--expect-source", oidTask, "--expect-target", oidBase}, true},
+		{"no-fetch pair", []string{"--no-fetch", "--expect-source", oidTask, "--expect-target", oidBase}, true},
+		{"missing pair", []string{"--expect-source", oidTask}, false},
+		{"missing value", []string{"--expect-source"}, false},
+		{"invalid oid", []string{"--expect-source", "bad", "--expect-target", oidBase}, false},
+		{"duplicate", []string{"--no-fetch", "--no-fetch"}, false},
+		{"unknown", []string{"--other"}, false},
+		{"wrong target", []string{"--target", "origin/other"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := append(append([]string{}, base...), tc.tail...)
+			if got := isIntegrateRun(args, "origin/master"); got != tc.want {
+				t.Fatalf("args%v got%v want%v", args, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestFinishSuccessAndAlreadyDone(t *testing.T) {
 	w := newEndWorld(t)
 	w.provider.onRun = func() { _ = os.RemoveAll(w.worktree) }
