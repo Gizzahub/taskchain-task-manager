@@ -123,30 +123,35 @@ type ProviderReport struct {
 // Receipt is one line of receipts.jsonl. The four booleans and the identity
 // fields are always serialized; the rest use omitempty.
 type Receipt struct {
-	ExecutionStartedAt  *time.Time          `json:"executionStartedAt,omitempty"`
-	ExecutionType       string              `json:"executionType,omitempty"`
-	Purpose             Purpose             `json:"purpose,omitempty"`
-	Source              string              `json:"source,omitempty"`
-	Task                string              `json:"task"`
-	Operation           string              `json:"operation"`
-	Status              string              `json:"status"`
-	Owner               Owner               `json:"owner"`
-	PerformedBy         *Owner              `json:"performedBy,omitempty"`
-	Branch              string              `json:"branch"`
-	Worktree            string              `json:"worktree"`
-	Reason              string              `json:"reason,omitempty"`
-	CreatedAt           time.Time           `json:"createdAt"`
-	SourceHead          string              `json:"sourceHead,omitempty"`
-	SourceHeadBefore    string              `json:"sourceHeadBefore,omitempty"`
-	BaseHead            string              `json:"baseHead,omitempty"`
-	TaskHead            string              `json:"taskHead,omitempty"`
-	SourcePushed        bool                `json:"sourcePushed"`
-	WorktreeRemoved     bool                `json:"worktreeRemoved"`
-	LocalBranchRemoved  bool                `json:"localBranchRemoved"`
-	RemoteBranchRemoved bool                `json:"remoteBranchRemoved"`
-	ToolVersion         string              `json:"tool_version,omitempty"`
-	ToolRevision        string              `json:"tool_revision,omitempty"`
-	Diagnostics         []CommandDiagnostic `json:"diagnostics,omitempty"`
+	RequestID            string              `json:"requestId,omitempty"`
+	NativeExecutionID    string              `json:"nativeExecutionId,omitempty"`
+	NativeGeneration     string              `json:"nativeGeneration,omitempty"`
+	RevalidationRequired bool                `json:"revalidationRequired,omitempty"`
+	RequestCancelled     bool                `json:"requestCancelled,omitempty"`
+	ExecutionStartedAt   *time.Time          `json:"executionStartedAt,omitempty"`
+	ExecutionType        string              `json:"executionType,omitempty"`
+	Purpose              Purpose             `json:"purpose,omitempty"`
+	Source               string              `json:"source,omitempty"`
+	Task                 string              `json:"task"`
+	Operation            string              `json:"operation"`
+	Status               string              `json:"status"`
+	Owner                Owner               `json:"owner"`
+	PerformedBy          *Owner              `json:"performedBy,omitempty"`
+	Branch               string              `json:"branch"`
+	Worktree             string              `json:"worktree"`
+	Reason               string              `json:"reason,omitempty"`
+	CreatedAt            time.Time           `json:"createdAt"`
+	SourceHead           string              `json:"sourceHead,omitempty"`
+	SourceHeadBefore     string              `json:"sourceHeadBefore,omitempty"`
+	BaseHead             string              `json:"baseHead,omitempty"`
+	TaskHead             string              `json:"taskHead,omitempty"`
+	SourcePushed         bool                `json:"sourcePushed"`
+	WorktreeRemoved      bool                `json:"worktreeRemoved"`
+	LocalBranchRemoved   bool                `json:"localBranchRemoved"`
+	RemoteBranchRemoved  bool                `json:"remoteBranchRemoved"`
+	ToolVersion          string              `json:"tool_version,omitempty"`
+	ToolRevision         string              `json:"tool_revision,omitempty"`
+	Diagnostics          []CommandDiagnostic `json:"diagnostics,omitempty"`
 	// FinishPID and FinishHost are present only on a FINISHING claim.  They are
 	// deliberately separate from Owner: owner is a stable logical task owner,
 	// while these identify the process which may still be running a provider.
@@ -158,22 +163,23 @@ type Receipt struct {
 // A nil AllowedActions slice serializes as null, which is the response
 // shape of a refusal that names no actions.
 type Response struct {
-	SchemaVersion  int                 `json:"schemaVersion"`
-	Status         string              `json:"status"`
-	ActiveCount    int                 `json:"activeCount"`
-	Task           string              `json:"task"`
-	AllowedActions []string            `json:"allowedActions"`
-	Reason         string              `json:"reason"`
-	NextAction     string              `json:"nextAction"`
-	FinishReady    bool                `json:"finishReady"`
-	Warnings       []string            `json:"warnings,omitempty"`
-	Lock           *LockInfo           `json:"lock,omitempty"`
-	Execution      *Execution          `json:"execution,omitempty"`
-	Executions     []Execution         `json:"executions,omitempty"`
-	States         []DerivedState      `json:"states,omitempty"`
-	Receipt        *Receipt            `json:"receipt,omitempty"`
-	Diagnostics    []CommandDiagnostic `json:"diagnostics,omitempty"`
-	Provider       *ProviderReport     `json:"provider,omitempty"`
+	providerAttempted bool                // internal: never infer invocation absence from a lost receipt CAS
+	SchemaVersion     int                 `json:"schemaVersion"`
+	Status            string              `json:"status"`
+	ActiveCount       int                 `json:"activeCount"`
+	Task              string              `json:"task"`
+	AllowedActions    []string            `json:"allowedActions"`
+	Reason            string              `json:"reason"`
+	NextAction        string              `json:"nextAction"`
+	FinishReady       bool                `json:"finishReady"`
+	Warnings          []string            `json:"warnings,omitempty"`
+	Lock              *LockInfo           `json:"lock,omitempty"`
+	Execution         *Execution          `json:"execution,omitempty"`
+	Executions        []Execution         `json:"executions,omitempty"`
+	States            []DerivedState      `json:"states,omitempty"`
+	Receipt           *Receipt            `json:"receipt,omitempty"`
+	Diagnostics       []CommandDiagnostic `json:"diagnostics,omitempty"`
+	Provider          *ProviderReport     `json:"provider,omitempty"`
 }
 
 // DerivedState is one execution after the read-only derivation.

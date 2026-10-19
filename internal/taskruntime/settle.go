@@ -61,6 +61,9 @@ func (s *Service) Settle(ctx context.Context, task string) (Response, int) {
 	if err != nil {
 		return response(StatusBlocked, task, "read task receipts: "+err.Error(), "inspect task runtime receipt evidence"), 1
 	}
+	if refused, blocked := requestDispositionRefusal(current, receipts[task]); blocked {
+		return refused, 1
+	}
 	if previous := receipts[task]; TerminalStatus(previous.Status) &&
 		(validTerminalAbortReceipt(current, previous) || (previous.Status == StatusDone && validateDoneReceipt(task, &current, &previous) == nil)) {
 		r := response(previous.Status, task, "task execution is already "+previous.Status+": "+previous.Reason, "no action required", "run-status")

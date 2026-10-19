@@ -27,6 +27,9 @@ func sameFinishClaim(current, claim Receipt) bool {
 // predate the execution it closes, so a zero CreatedAt binds only an
 // execution whose StartedAt is also zero.
 func receiptBindsExecution(execution Execution, receipt Receipt) bool {
+	if (receipt.RequestID != "" || receipt.ExecutionStartedAt != nil || receipt.ExecutionType != "" || receipt.Source != "") && (receipt.ExecutionStartedAt == nil || !receipt.ExecutionStartedAt.Equal(execution.StartedAt) || receipt.ExecutionType != execution.Type || receipt.Source != execution.Source) {
+		return false
+	}
 	if ValidatePurposeBranch(execution.Purpose, execution.Branch) != nil || ValidatePurposeBranch(receipt.Purpose, receipt.Branch) != nil {
 		return false
 	}
@@ -119,6 +122,9 @@ func validateIntegratedFinish(task string, execution *Execution, receipt *Receip
 	if receipt == nil {
 		return fmt.Errorf("receipt is missing")
 	}
+	if (receipt.RequestID != "" || receipt.ExecutionStartedAt != nil || receipt.ExecutionType != "" || receipt.Source != "") && !receiptBindsExecution(*execution, *receipt) {
+		return fmt.Errorf("receipt execution generation does not match")
+	}
 	if receipt.Task == "" {
 		return fmt.Errorf("receipt task is empty")
 	}
@@ -156,6 +162,9 @@ func validateDoneReceipt(task string, execution *Execution, receipt *Receipt) er
 		return err
 	}
 	if receipt != nil {
+		if (receipt.RequestID != "" || receipt.ExecutionStartedAt != nil || receipt.ExecutionType != "" || receipt.Source != "") && !receiptBindsExecution(*execution, *receipt) {
+			return fmt.Errorf("receipt execution generation does not match")
+		}
 		if EffectivePurpose(receipt.Purpose) != EffectivePurpose(execution.Purpose) {
 			return fmt.Errorf("receipt purpose does not match execution purpose")
 		}

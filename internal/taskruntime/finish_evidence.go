@@ -17,7 +17,14 @@ const defaultSourcePollInterval = 10 * time.Second
 var errRecoveryIncomplete = errors.New("task recovery is incomplete")
 
 func (s *Service) receipt(ctx context.Context, execution Execution, status, reason string, diagnostics []CommandDiagnostic, sourceHeadBefore, baseHead, taskHead string, noFetch bool) (Receipt, error) {
+	return s.receiptWithSourceProof(ctx, execution, status, reason, diagnostics, sourceHeadBefore, baseHead, taskHead, noFetch, "")
+}
+
+// freshSource is supplied only after an exact fetch and ancestry proof by the
+// request reconciler. Legacy callers retain their original tracking-ref checks.
+func (s *Service) receiptWithSourceProof(ctx context.Context, execution Execution, status, reason string, diagnostics []CommandDiagnostic, sourceHeadBefore, baseHead, taskHead string, noFetch bool, freshSource string) (Receipt, error) {
 	recorded := Receipt{
+		ExecutionStartedAt: &execution.StartedAt, ExecutionType: execution.Type, Source: execution.Source,
 		Task: execution.Task, Operation: "finish", Status: status, Purpose: EffectivePurpose(execution.Purpose), Owner: execution.Owner,
 		Branch: execution.Branch, Worktree: execution.Worktree, Reason: reason, CreatedAt: s.now().UTC(),
 		Diagnostics: diagnostics, SourceHeadBefore: sourceHeadBefore, BaseHead: baseHead, TaskHead: taskHead,
@@ -28,18 +35,35 @@ func (s *Service) receipt(ctx context.Context, execution Execution, status, reas
 		recorded.Diagnostics = append(recorded.Diagnostics, diagnostic(result))
 		return result, err
 	}
-	source, err := probe(s.root, "rev-parse", "--verify", sourceTrackingRef(execution.Source))
-	if err != nil || source.ExitCode != 0 {
-		return recorded, fmt.Errorf("verify source head")
-	}
-	recorded.SourceHead = strings.TrimSpace(source.Stdout)
-	pushed, err := sourceIsPushed(probe, s.root, execution.Source)
-	if err != nil {
-		return recorded, err
-	}
-	recorded.SourcePushed = pushed
-	if !recorded.SourcePushed {
-		return recorded, fmt.Errorf("source branch is not pushed")
+	var err error
+	if freshSource != "" {
+		if !validOID(freshSource) {
+			return recorded, fmt.Errorf("invalid fresh source proof")
+		}
+		recorded.SourceHead, recorded.SourcePushed = freshSource, true
+		inventory, inventoryErr := probe(s.root, "worktree", "list", "--porcelain", "-z")
+		if inventoryErr != nil || inventory.ExitCode != 0 {
+			return recorded, fmt.Errorf("verify worktree registration absence")
+		}
+		for _, field := range strings.Split(inventory.Stdout, "\x00") {
+			if field == "worktree "+execution.Worktree {
+				return recorded, fmt.Errorf("task worktree remains registered")
+			}
+		}
+	} else {
+		source, sourceErr := probe(s.root, "rev-parse", "--verify", sourceTrackingRef(execution.Source))
+		if sourceErr != nil || source.ExitCode != 0 {
+			return recorded, fmt.Errorf("verify source head")
+		}
+		recorded.SourceHead = strings.TrimSpace(source.Stdout)
+		pushed, err := sourceIsPushed(probe, s.root, execution.Source)
+		if err != nil {
+			return recorded, err
+		}
+		recorded.SourcePushed = pushed
+		if !recorded.SourcePushed {
+			return recorded, fmt.Errorf("source branch is not pushed")
+		}
 	}
 	_, err = os.Stat(execution.Worktree)
 	recorded.WorktreeRemoved = os.IsNotExist(err)

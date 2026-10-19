@@ -41,6 +41,9 @@ func (s *Service) Recover(ctx context.Context, task string, claimDead ...bool) (
 		return refused, 1
 	}
 	previous := receipts[task]
+	if previous.RequestID != "" && receiptBindsExecution(execution, previous) {
+		return response(StatusBlocked, task, "request-bound recovery requires integration resume", "resume the original integration request"), 1
+	}
 	if EffectivePurpose(execution.Purpose) != PurposeDelivery && previous.Status != StatusFinishing {
 		return response(StatusBlocked, task, "run-recover cannot record integration for a non-delivery execution", "preserve with a reasoned run-abort or use guarded run-discard", "run-status", "run-abort", "run-discard"), 1
 	}

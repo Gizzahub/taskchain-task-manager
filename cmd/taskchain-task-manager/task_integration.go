@@ -17,7 +17,7 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskruntime"
 )
 
-const integrationHelp = `Usage: taskchain-task-manager task integration <request|status|cancel> --queue-root ABSOLUTE_PATH [options]
+const integrationHelp = `Usage: taskchain-task-manager task integration <request|status|cancel|execute|resume> --queue-root ABSOLUTE_PATH [options]
 
 request options:
   --repo PATH --repo-id ID --task ID --idempotency-key KEY
@@ -26,11 +26,15 @@ status options:
   [--request-id ID] [--json]
 cancel options:
   --request-id ID --revision N [--json]
+execute/resume options:
+  --request-id ID --revision N [--json]
+  execute admits a queued request; resume reconciles a positively dead worker
+  without repeating integration. Running cancellation remains refused.
 `
 
 func taskIntegration(ctx context.Context, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: taskchain-task-manager task integration <request|status|cancel> --queue-root ABSOLUTE_PATH")
+		return fmt.Errorf("usage: taskchain-task-manager task integration <request|status|cancel|execute|resume> --queue-root ABSOLUTE_PATH")
 	}
 	if args[0] == "--help" || args[0] == "-h" {
 		fmt.Fprint(out, integrationHelp)
@@ -49,6 +53,45 @@ func taskIntegration(ctx context.Context, args []string, out io.Writer) error {
 		return fmt.Errorf("--queue-root must be an absolute path")
 	}
 	switch command {
+	case "execute", "resume":
+		if flags.requestID == "" || !flags.revisionSet {
+			return fmt.Errorf("%s requires --request-id and --revision", command)
+		}
+		store, err := integrationqueue.Open(filepath.Clean(flags.queueRoot))
+		if err != nil {
+			return fmt.Errorf("open integration queue: %w", err)
+		}
+		view, err := store.Get(flags.requestID)
+		if err != nil {
+			return err
+		}
+		svc := taskruntime.NewService(view.Request.Spec.RepositoryPath, taskruntime.NewExecutor())
+		claim, err := svc.NewRequestClaim(ctx, view.Request)
+		if err != nil {
+			return err
+		}
+		executor := integrationqueue.NewExecutor(store, svc, svc.RequestClaimLiveness)
+		var result integrationqueue.Outcome
+		if command == "execute" {
+			result, err = executor.Execute(ctx, flags.requestID, flags.revision, claim)
+		} else {
+			if view.Request.Claim == nil {
+				return fmt.Errorf("resume requires a recorded worker claim")
+			}
+			result, err = executor.Reconcile(ctx, flags.requestID, flags.revision, *view.Request.Claim, claim)
+		}
+		if err != nil && result.State == "" {
+			return err
+		}
+		operationErr := err
+		current, readErr := store.Get(flags.requestID)
+		var recorded *integrationqueue.Request
+		if readErr == nil {
+			recorded = &current.Request
+		} else {
+			operationErr = fmt.Errorf("observed outcome reread failed: %v; publication error: %v", readErr, operationErr)
+		}
+		return writeIntegrationExecutionResult(out, recorded, result, operationErr, flags.asJSON)
 	case "request":
 		spec, err := integrationRequest(ctx, flags)
 		if err != nil {
@@ -92,14 +135,54 @@ func taskIntegration(ctx context.Context, args []string, out io.Writer) error {
 		if err != nil {
 			return err
 		}
-		request, err := store.Cancel(flags.requestID, owner, flags.revision)
+		view, err := store.Get(flags.requestID)
 		if err != nil {
 			return err
 		}
+		request := view.Request
+		if request.State == integrationqueue.Cancelled {
+			if request.Spec.Owner != owner || request.Revision != flags.revision {
+				return fmt.Errorf("cancelled request owner or revision mismatch")
+			}
+		} else {
+			request, err = store.Cancel(flags.requestID, owner, flags.revision)
+			if err != nil {
+				return err
+			}
+		}
+		if err = taskruntime.NewService(request.Spec.RepositoryPath, taskruntime.NewExecutor()).CancelRequest(ctx, request); err != nil {
+			return fmt.Errorf("request cancelled but runtime disposition incomplete: %w", err)
+		}
 		return writeIntegrationResult(out, request, flags.asJSON)
 	default:
-		return fmt.Errorf("unknown integration command %s (valid: request, status, cancel)", command)
+		return fmt.Errorf("unknown integration command %s (valid: request, status, cancel, execute, resume)", command)
 	}
+}
+
+func writeIntegrationExecutionResult(out io.Writer, current *integrationqueue.Request, result integrationqueue.Outcome, operationErr error, asJSON bool) error {
+	code, reason := result.ExitCode, result.Reason
+	var observed *integrationqueue.Outcome
+	var diagnostic string
+	if operationErr != nil {
+		observed = &result
+		diagnostic = operationErr.Error()
+		reason += "; " + diagnostic
+		if code == 0 {
+			code = 3
+		}
+	}
+	if err := writeIntegrationResult(out, struct {
+		Request  *integrationqueue.Request `json:"request,omitempty"`
+		ExitCode int                       `json:"exitCode"`
+		Observed *integrationqueue.Outcome `json:"observedOutcome,omitempty"`
+		Error    string                    `json:"error,omitempty"`
+	}{current, code, observed, diagnostic}, asJSON); err != nil {
+		return err
+	}
+	if code != 0 {
+		return &runExitError{code: code, reason: reason}
+	}
+	return nil
 }
 
 type integrationFlags struct {

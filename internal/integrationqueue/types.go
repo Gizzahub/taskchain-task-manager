@@ -62,14 +62,15 @@ const (
 )
 
 type Request struct {
-	Spec      Spec      `json:"spec"`
-	State     State     `json:"state"`
-	Sequence  uint64    `json:"sequence"`
-	Revision  uint64    `json:"revision"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Claim     *Claim    `json:"claim,omitempty"`
-	LastError string    `json:"lastError,omitempty"`
+	Spec         Spec      `json:"spec"`
+	State        State     `json:"state"`
+	Sequence     uint64    `json:"sequence"`
+	Revision     uint64    `json:"revision"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+	Claim        *Claim    `json:"claim,omitempty"`
+	LastError    string    `json:"lastError,omitempty"`
+	LastExitCode int       `json:"lastExitCode,omitempty"`
 }
 type View struct {
 	Request             Request `json:"request"`

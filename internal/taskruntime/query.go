@@ -12,7 +12,7 @@ func (s *Service) Status(ctx context.Context, task string) Response {
 	return s.status(ctx, task, true)
 }
 
-func (s *Service) status(ctx context.Context, task string, observeLock bool) Response {
+func (s *Service) status(ctx context.Context, task string, observeLock bool, approvedRequest ...*requestBinding) Response {
 	store, err := s.store(ctx)
 	if err != nil {
 		return response(StatusBlocked, task, err.Error(), "run ce task run-doctor")
@@ -42,7 +42,14 @@ func (s *Service) status(ctx context.Context, task string, observeLock bool) Res
 	for i := range executions {
 		if executions[i].Task == task {
 			receipt := receipts[task]
-			result := stateResponse(s.verifiedExecutionState(ctx, executions[i], receipt, inventory, locked))
+			observed := receipt
+			// Only internal admission of a different explicitly approved request
+			// may supersede a proven pre-mutation refusal. Public status keeps
+			// showing the durable bound state; unknown outcomes never qualify.
+			if len(approvedRequest) > 0 && approvedRequest[0] != nil && receipt.Status == StatusBlocked && !receipt.RequestCancelled && receipt.RequestID != "" && receipt.RequestID != approvedRequest[0].spec.ID && receipt.RevalidationRequired && receiptBindsExecution(executions[i], receipt) {
+				observed = Receipt{}
+			}
+			result := stateResponse(s.verifiedExecutionState(ctx, executions[i], observed, inventory, locked))
 			if receipt.Task != "" {
 				result.Receipt = &receipt
 			}

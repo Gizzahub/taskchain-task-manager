@@ -65,6 +65,9 @@ func (s *Service) Close(ctx context.Context, task, reason string) (Response, int
 		return response(StatusBlocked, task, err.Error(), "inspect task receipts"), 1
 	}
 	previous := receipts[task]
+	if refused, blocked := requestDispositionRefusal(current, previous); blocked {
+		return refused, 1
+	}
 	if validTerminalReceipt(current, previous) {
 		r := response(previous.Status, task, "execution is already terminal", "no action required", "run-status")
 		r.Execution, r.Receipt = &current, &previous

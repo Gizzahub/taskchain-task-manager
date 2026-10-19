@@ -137,5 +137,12 @@ func (s *Service) verifiedExecutionState(ctx context.Context, execution Executio
 				Reason: "finish receipt does not prove this execution completed: " + err.Error(), NextAction: "inspect task runtime receipt evidence"}
 		}
 	}
+	if refused, blocked := requestDispositionRefusal(execution, receipt); blocked {
+		next := "resume original integration request " + receipt.RequestID
+		if receipt.RevalidationRequired {
+			next = "submit a newly approved request, or cancel proven pre-mutation refusal " + receipt.RequestID
+		}
+		return DerivedState{Execution: execution, Status: StatusBlocked, AllowedActions: []string{"run-status"}, Reason: refused.Reason, NextAction: next}
+	}
 	return s.deriveState(ctx, execution, receipt, inventory, locked)
 }

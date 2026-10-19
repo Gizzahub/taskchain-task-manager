@@ -39,6 +39,9 @@ func (s *Service) Abort(ctx context.Context, task, reason string) (Response, int
 		return refused, 1
 	}
 	previous := receipts[task]
+	if refused, blocked := requestDispositionRefusal(execution, previous); blocked {
+		return refused, 1
+	}
 	if previous.Status == StatusFinishing {
 		return response(StatusBlocked, task, "run-abort refuses an execution with a FINISHING claim", "wait for the finishing claimant or use run-status"), 1
 	}
@@ -64,6 +67,7 @@ func (s *Service) Abort(ctx context.Context, task, reason string) (Response, int
 		Task:    task, Operation: "abort", Status: StatusAborted,
 		Owner: execution.Owner, Branch: execution.Branch, Worktree: execution.Worktree,
 		Reason: abortReason(reason), CreatedAt: s.now().UTC(),
+		ExecutionStartedAt: &execution.StartedAt, ExecutionType: execution.Type, Source: execution.Source,
 	}
 	_, statErr := os.Stat(execution.Worktree)
 	receipt.WorktreeRemoved = os.IsNotExist(statErr)

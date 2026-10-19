@@ -15,6 +15,12 @@ import (
 // Interrupts cancel outcome-lock acquisition, not the integration already in
 // progress. The provider retains the caller's context, matching CE's contract.
 func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
+	return s.finish(ctx, task, nil)
+}
+
+func (s *Service) finish(ctx context.Context, task string, binding *requestBinding) (res Response, code int) {
+	providerAttempted := false
+	defer func() { res.providerAttempted = providerAttempted }()
 	finishCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	store, err := s.store(ctx)
@@ -37,7 +43,33 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 		}
 		task = selected
 	}
-	status := s.status(ctx, task, false)
+	if binding != nil {
+		executions, loadErr := store.load()
+		e, found := findExecution(executions, task)
+		if loadErr != nil || !found {
+			return response(StatusBlocked, task, "request execution unavailable", "inspect runtime ledger"), 2
+		}
+		if err := s.validateRequestBinding(ctx, store, e, *binding); err != nil {
+			return response(StatusBlocked, task, err.Error(), "inspect the integration request"), 2
+		}
+		for _, captured := range []struct{ dir, ref, sha string }{{e.Worktree, "HEAD", binding.spec.ExpectedTaskSHA}, {s.root, sourceTrackingRef(e.Source), binding.spec.ExpectedSourceSHA}} {
+			args := []string{"rev-parse", "--verify", captured.ref}
+			if captured.ref == "HEAD" {
+				args = []string{"rev-parse", "HEAD"}
+			}
+			head, headErr := s.command(ctx, captured.dir, "git", args...)
+			if headErr != nil || head.ExitCode != 0 {
+				return response(StatusBlocked, task, "captured head is unreadable", "inspect Git diagnostics"), 2
+			}
+			if strings.TrimSpace(head.Stdout) != captured.sha {
+				if err := s.recordRequestRevalidation(store, e, binding, []CommandDiagnostic{diagnostic(head)}); err != nil {
+					return response(StatusBlocked, task, "record request revalidation failed: "+err.Error(), "repair runtime storage"), 2
+				}
+				return response(StatusBlocked, task, "integration request requires revalidation: captured heads changed", "create a newly approved request"), 4
+			}
+		}
+	}
+	status := s.status(ctx, task, false, binding)
 	if status.Execution == nil {
 		return status, 1
 	}
@@ -56,6 +88,18 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 		return status, 1
 	}
 	execution := *status.Execution
+	priorReceipts, receiptErr := store.latestReceipts()
+	if receiptErr != nil {
+		return response(StatusBlocked, task, receiptErr.Error(), "inspect runtime receipts"), 1
+	}
+	if prior := priorReceipts[execution.Task]; prior.RequestID != "" && !prior.RequestCancelled && receiptBindsExecution(execution, prior) && (binding == nil || prior.Status != StatusBlocked || !prior.RevalidationRequired || prior.RequestID == binding.spec.ID) {
+		return response(StatusBlocked, task, "request-bound execution requires integration resume; provider must not be repeated", "resume the original integration request"), 1
+	}
+	if binding != nil {
+		if err := s.validateRequestBinding(ctx, store, execution, *binding); err != nil {
+			return response(StatusBlocked, task, err.Error(), "inspect the integration request"), 2
+		}
+	}
 	task = execution.Task
 	owner, err := s.owner(ctx)
 	if err != nil || !sameOwner(execution.Owner, owner) {
@@ -103,6 +147,12 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 	}
 	diagnostics = append(diagnostics, diagnostic(taskHeadResult), diagnostic(sourceHeadResult))
 	preTaskHead, preSourceHead := strings.TrimSpace(taskHeadResult.Stdout), strings.TrimSpace(sourceHeadResult.Stdout)
+	if binding != nil && (preTaskHead != binding.spec.ExpectedTaskSHA || preSourceHead != binding.spec.ExpectedSourceSHA) {
+		if err := s.recordRequestRevalidation(store, execution, binding, diagnostics); err != nil {
+			return response(StatusBlocked, task, "record request revalidation failed: "+err.Error(), "repair runtime storage"), 2
+		}
+		return response(StatusBlocked, task, "integration request captured heads changed", "create a newly approved request"), 4
+	}
 	baseHeadResult, baseHeadErr := s.command(ctx, execution.Worktree, "git", "merge-base", sourceTrackingRef(execution.Source), "HEAD")
 	diagnostics = append(diagnostics, diagnostic(baseHeadResult))
 	baseHead := strings.TrimSpace(baseHeadResult.Stdout)
@@ -114,6 +164,19 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 		return response(StatusBlocked, task, configErr.Error(), "configure "+ConfigFile), 1
 	}
 	provider := s.integrator()
+	if binding != nil {
+		capable, ok := provider.(requestCapableProvider)
+		if !ok {
+			return response(StatusBlocked, task, "provider has no request-bound capability", "use a compatible provider"), 2
+		}
+		probes, probeErr := capable.DiagnoseRequest(ctx, execution.Worktree)
+		diagnostics = append(diagnostics, probes...)
+		if probeErr != nil {
+			res := response(StatusBlocked, task, probeErr.Error(), "use a compatible provider")
+			res.Diagnostics = diagnostics
+			return res, 2
+		}
+	}
 	noFetch := cfg.IntegrationNetworkPolicy == NetworkNoFetch
 	if noFetch {
 		_, probeDiagnostics, probeErr := provider.DiagnoseNoFetch(ctx, execution.Worktree)
@@ -153,6 +216,7 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 		ExecutionStartedAt: &execution.StartedAt, ExecutionType: execution.Type, Source: execution.Source,
 		FinishPID: os.Getpid(), FinishHost: lockHost(), ToolVersion: toolVersion(), ToolRevision: toolRevision(),
 	}
+	bindRequestReceipt(&claim, binding)
 	if err := store.appendReceipt(claim); err != nil {
 		return response(StatusBlocked, task, "persist FINISHING claim failed: "+err.Error(), "repair task runtime storage and retry"), 1
 	}
@@ -199,7 +263,16 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 	}
 	// gz-git owns readiness, admission, integration, and cleanup in one run.
 	// A separate check would duplicate its gate and hold no useful protection.
-	result, runErr := provider.Run(ctx, execution.Worktree, integrationTarget(execution), noFetch)
+	var result CommandResult
+	var runErr error
+	providerAttempted = true
+	if bound, ok := provider.(boundIntegrationProvider); ok {
+		result, runErr = bound.RunBound(ctx, execution.Worktree, integrationTarget(execution), noFetch, preTaskHead, preSourceHead, binding)
+	} else if binding != nil {
+		result, runErr = CommandResult{NotStarted: true}, fmt.Errorf("provider has no request-bound run capability")
+	} else {
+		result, runErr = provider.Run(ctx, execution.Worktree, integrationTarget(execution), noFetch)
+	}
 	if runErr != nil && result.Error == "" {
 		result.Error = runErr.Error()
 	}
@@ -210,6 +283,7 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 		}
 		reason := "integration provider invocation failed: " + runErr.Error()
 		receipt, evidenceErr := s.receipt(ctx, execution, StatusBlocked, reason, diagnostics, preSourceHead, baseHead, preTaskHead, noFetch)
+		bindRequestReceipt(&receipt, binding)
 		if evidenceErr != nil {
 			reason += "; post-operation evidence failed: " + evidenceErr.Error()
 		}
@@ -228,6 +302,8 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 		next := "resolve gz-git diagnostics and retry"
 		if result.ExitCode == 3 {
 			reason = partialCleanupReason
+		} else if result.ExitCode == 4 {
+			reason, next = "integration requires revalidation", "create a newly approved request for the changed heads"
 		} else if exitCode < 1 || exitCode > 2 {
 			exitCode = 2
 		}
@@ -236,6 +312,8 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 			failing = failingCheckReason(1, result)
 		}
 		receipt, evidenceErr := s.receipt(ctx, execution, StatusBlocked, reason, diagnostics, preSourceHead, baseHead, preTaskHead, noFetch)
+		bindRequestReceipt(&receipt, binding)
+		receipt.RevalidationRequired = result.ExitCode == 4
 		if failing != "" {
 			reason, receipt.Reason = failing, failing
 		} else if evidenceErr != nil {
@@ -251,7 +329,22 @@ func (s *Service) Finish(ctx context.Context, task string) (Response, int) {
 	if blocked, code, ok := relock(0, false); !ok {
 		return blocked, code
 	}
+	if binding != nil {
+		pending := claim
+		pending.Status, pending.Reason = StatusBlocked, "provider completed; request native proof pending"
+		pending.FinishPID, pending.FinishHost = 0, ""
+		pending.Diagnostics = diagnostics
+		if err := store.appendReceipt(pending); err != nil {
+			res := response(StatusBlocked, task, "persist request provider outcome failed: "+err.Error(), "resume original integration request")
+			res.Diagnostics = diagnostics
+			return res, 3
+		}
+		res := response(StatusBlocked, task, pending.Reason, "verify original native receipt")
+		res.Receipt, res.Diagnostics = &pending, diagnostics
+		return res, 0
+	}
 	receipt, evidenceErr := s.receipt(ctx, execution, StatusDone, "integration and recovery completed", diagnostics, preSourceHead, baseHead, preTaskHead, noFetch)
+	bindRequestReceipt(&receipt, binding)
 	if evidenceErr != nil {
 		r := response(StatusBlocked, task, "integration completed but evidence verification failed: "+evidenceErr.Error(), "inspect source push and recovery state")
 		r.Receipt, r.Diagnostics = &receipt, receipt.Diagnostics

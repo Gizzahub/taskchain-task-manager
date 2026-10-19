@@ -28,7 +28,7 @@ func TestFinishExitCodes(t *testing.T) {
 		{name: "run exit 7 folds", check: 7, want: 2, reason: "integration did not complete", runs: 1},
 		{name: "run exit 1", run: 1, want: 1, reason: "integration did not complete", runs: 1},
 		{name: "run exit 2", run: 2, want: 2, reason: "integration did not complete", runs: 1},
-		{name: "run exit 4 folds", run: 4, want: 2, reason: "integration did not complete", runs: 1},
+		{name: "run exit 4 requires revalidation", run: 4, want: 4, reason: "integration requires revalidation", runs: 1},
 		{name: "provider error", checkErr: errors.New("tool missing"), want: 1, reason: "integration provider invocation failed: tool missing", runs: 1},
 	}
 	for _, tc := range cases {

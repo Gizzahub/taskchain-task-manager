@@ -381,13 +381,16 @@ func (s *Store) Admit(id string, rev uint64, claim Claim) (Request, error) {
 		return nil
 	})
 }
-func (s *Store) Mark(id string, rev uint64, expected *Claim, state State, lastError string) (Request, error) {
+func (s *Store) Mark(id string, rev uint64, expected *Claim, state State, lastError string, exitCode ...int) (Request, error) {
 	return s.mutate(id, rev, func(r *Request) error {
 		if r.State == Succeeded || r.State == Failed || r.State == Cancelled || r.Claim == nil || expected == nil || !sameClaim(*r.Claim, *expected) || !validState(state) || !allowedTransition(r.State, state) {
 			return errors.New("request state or claim transition is invalid")
 		}
 		r.State = state
 		r.LastError = lastError
+		if len(exitCode) > 0 {
+			r.LastExitCode = exitCode[0]
+		}
 		if state == Succeeded || state == Failed || state == Cancelled {
 			r.Claim = nil
 		}
@@ -400,6 +403,22 @@ func (s *Store) RecoverAdmitted(id string, caller Owner, rev uint64, expected Cl
 			return errors.New("request is not admitted")
 		}
 		if r.Spec.Owner != caller || !validClaim(claim, r.Spec) {
+			return errors.New("recovery owner or generation does not match request")
+		}
+		r.Claim = &claim
+		return nil
+	})
+}
+
+// RecoverRunning replaces a positively dead running claim without changing
+// the immutable request generation. The replacement is still checked by the
+// same claim validator used at admission.
+func (s *Store) RecoverRunning(id string, caller Owner, rev uint64, expected Claim, claim Claim, observation ClaimLiveness) (Request, error) {
+	return s.mutate(id, rev, func(r *Request) error {
+		if r.State != Running || observation != ClaimDead || r.Claim == nil || !sameClaim(*r.Claim, expected) {
+			return errors.New("request is not running or claim is no longer current")
+		}
+		if r.Spec.Owner != caller || !validClaim(claim, r.Spec) || !sameGeneration(claim.Generation, r.Spec.Generation) {
 			return errors.New("recovery owner or generation does not match request")
 		}
 		r.Claim = &claim
@@ -437,7 +456,7 @@ func allowedTransition(from, to State) bool {
 	case Admitted:
 		return to == Running || to == Failed || to == Cancelled || to == RevalidationRequired
 	case Running:
-		return to == Succeeded || to == Failed || to == RevalidationRequired
+		return to == Running || to == Succeeded || to == Failed || to == RevalidationRequired
 	}
 	return false
 }

@@ -42,6 +42,9 @@ func (s *Service) Discard(ctx context.Context, task, reason, takeOverFrom string
 	if refused, invalid := purposeMutationRefusal(execution); invalid {
 		return refused, 1
 	}
+	if refused, blocked := requestDispositionRefusal(execution, receipts[task]); blocked {
+		return refused, 1
+	}
 	if previous := receipts[task]; terminalAbortReceipt(previous) && previous.Operation == "discard" && receiptBindsExecution(execution, previous) {
 		r := response(StatusAborted, task, "task execution is already discarded: "+previous.Reason, "no action required", "run-status")
 		r.Execution, r.Receipt = &execution, &previous
@@ -312,5 +315,6 @@ func discardReceipt(execution Execution, status, reason string, performedBy *Own
 		Task:    execution.Task, Operation: "discard", Status: status, Owner: execution.Owner, PerformedBy: performedBy,
 		Branch: execution.Branch, Worktree: execution.Worktree, Reason: prefix + ": " + reason, CreatedAt: createdAt,
 		Diagnostics: diagnostics, ToolVersion: toolVersion(), ToolRevision: toolRevision(),
+		ExecutionStartedAt: &execution.StartedAt, ExecutionType: execution.Type, Source: execution.Source,
 	}
 }
