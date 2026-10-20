@@ -72,6 +72,23 @@ func TestAckTimesAreWholeSeconds(t *testing.T) {
 	wantErr(t, "issuedAt+1ns", sub.Validate(), "whole-second UTC")
 }
 
+// TestAckTimesRefuseMonotonicReading pins the t==t.Round(0) clause: with
+// time.Local set to UTC, time.Now keeps its monotonic reading while reporting
+// the UTC location, so whole seconds alone would accept it. Not parallel.
+func TestAckTimesRefuseMonotonicReading(t *testing.T) {
+	saved := time.Local
+	time.Local = time.UTC
+	t.Cleanup(func() { time.Local = saved })
+	now := time.Now()
+	now = now.Add(-time.Duration(now.Nanosecond()))
+	if now.Location() != time.UTC || now.Nanosecond() != 0 || now == now.Round(0) {
+		t.Fatal("fixture assumption: whole-second UTC time carrying a monotonic reading")
+	}
+	a := loadFixture(t).ack
+	a.IssuedAt, a.ExpiresAt = now, now.Add(time.Hour)
+	wantErr(t, "monotonic reading", a.Validate(), "whole-second UTC")
+}
+
 func TestAckRootRefusesControlCharacter(t *testing.T) {
 	f := loadFixture(t)
 	root := "/fixture/re\x01po"
