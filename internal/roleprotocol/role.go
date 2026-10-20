@@ -187,6 +187,12 @@ func ValidateRevision(source SourceTuple, targetAuthorityID string, target Role)
 	if err := source.Validate(); err != nil {
 		return fmt.Errorf("revision source: %w", err)
 	}
+	// Role fields are exported, so a caller can hand over an unvalidated
+	// value whose missing binding reads as an empty policy digest; validate
+	// the whole target first so the comparisons below cannot fail open.
+	if err := target.Validate(); err != nil {
+		return fmt.Errorf("revision target: %w", err)
+	}
 	if !isAuthorityID(targetAuthorityID) || targetAuthorityID == source.AuthorityID {
 		return errors.New("revision target authorityId must be a new lowercase hex32")
 	}

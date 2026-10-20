@@ -1,6 +1,7 @@
 package roleprotocol
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strings"
@@ -122,7 +123,7 @@ func (p *jsonParser) scalarOrComposite(depth int) (*node, error) {
 }
 
 func (p *jsonParser) literal(word string, out *node) (*node, error) {
-	if !strings.HasPrefix(string(p.raw[p.pos:]), word) {
+	if !bytes.HasPrefix(p.raw[p.pos:], []byte(word)) {
 		return nil, fmt.Errorf("invalid literal at byte %d", p.pos)
 	}
 	p.pos += len(word)

@@ -90,7 +90,7 @@ func TestParseJSONRefusals(t *testing.T) {
 		"trailing data":       `{} {}`,
 		"trailing garbage":    `1x`,
 		"duplicate key":       `{"a":1,"a":2}`,
-		"escaped duplicate":   `{"a":1,"a":2}`,
+		"escaped duplicate":   `{"a":1,"\u0061":2}`,
 		"lone high surrogate": `"\ud800"`,
 		"high then non-low":   `"\ud800A"`,
 		"lone low surrogate":  `"\udc00"`,

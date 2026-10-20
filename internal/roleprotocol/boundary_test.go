@@ -64,6 +64,16 @@ func TestPackageIsInactive(t *testing.T) {
 	}
 }
 
+// forbiddenCalls are the clock, timer and filesystem functions the allowed
+// imports still expose, keyed by import path so an aliased import cannot hide
+// them.
+var forbiddenCalls = map[string]map[string]bool{
+	"time": {"Now": true, "Since": true, "Until": true, "Sleep": true, "After": true, "Tick": true,
+		"NewTimer": true, "NewTicker": true, "AfterFunc": true},
+	"path/filepath": {"Abs": true, "EvalSymlinks": true, "Walk": true, "WalkDir": true, "Glob": true},
+	"io/fs":         {"ReadFile": true, "ReadDir": true, "WalkDir": true, "Stat": true, "Glob": true, "Sub": true},
+}
+
 // TestPackageIsPure keeps the package free of I/O, process, network and clock
 // access, so verification never becomes a side effect.
 func TestPackageIsPure(t *testing.T) {
@@ -86,23 +96,68 @@ func TestPackageIsPure(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, spec := range file.Imports {
-			if imported, _ := strconv.Unquote(spec.Path.Value); !allowed[imported] {
-				t.Errorf("%s imports %s", path, imported)
-			}
+		for _, call := range purityViolations(file, allowed) {
+			t.Errorf("%s %s", path, call)
 		}
-		ast.Inspect(file, func(n ast.Node) bool {
-			sel, ok := n.(*ast.SelectorExpr)
-			if !ok {
-				return true
-			}
-			if x, ok := sel.X.(*ast.Ident); ok && x.Name == "time" && (sel.Sel.Name == "Now" || sel.Sel.Name == "Since" || sel.Sel.Name == "Until") {
-				t.Errorf("%s reads the clock via time.%s", path, sel.Sel.Name)
-			}
-			if x, ok := sel.X.(*ast.Ident); ok && x.Name == "filepath" && (sel.Sel.Name == "Abs" || sel.Sel.Name == "EvalSymlinks" || sel.Sel.Name == "Walk" || sel.Sel.Name == "WalkDir" || sel.Sel.Name == "Glob") {
-				t.Errorf("%s touches the filesystem via filepath.%s", path, sel.Sel.Name)
-			}
+	}
+}
+
+// purityViolations resolves each selector's package by import path, not by
+// its local name, and refuses dot and blank imports that would hide calls.
+func purityViolations(file *ast.File, allowed map[string]bool) []string {
+	var out []string
+	local := map[string]string{}
+	for _, spec := range file.Imports {
+		imported, _ := strconv.Unquote(spec.Path.Value)
+		if !allowed[imported] {
+			out = append(out, "imports "+imported)
+		}
+		name := imported[strings.LastIndex(imported, "/")+1:]
+		if spec.Name != nil {
+			name = spec.Name.Name
+		}
+		if name == "." || name == "_" {
+			out = append(out, "imports "+imported+" as "+name)
+		}
+		local[name] = imported
+	}
+	ast.Inspect(file, func(n ast.Node) bool {
+		sel, ok := n.(*ast.SelectorExpr)
+		if !ok {
 			return true
-		})
+		}
+		// A local value that shadows an import name is flagged too; that
+		// fails closed and the package declares none.
+		if x, ok := sel.X.(*ast.Ident); ok && forbiddenCalls[local[x.Name]][sel.Sel.Name] {
+			out = append(out, "calls "+local[x.Name]+"."+sel.Sel.Name)
+		}
+		return true
+	})
+	return out
+}
+
+func TestPurityCheckResolvesImports(t *testing.T) {
+	src := `package p
+import (
+	clock "time"
+	iofs "io/fs"
+	"path/filepath"
+)
+func f() {
+	clock.Sleep(1)
+	_ = clock.After
+	_, _ = iofs.ReadFile(nil, "x")
+	_, _ = filepath.Abs("x")
+	var t clock.Time
+	_ = t.After(t)
+}`
+	file, err := parser.ParseFile(token.NewFileSet(), "p.go", src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := purityViolations(file, map[string]bool{"time": true, "io/fs": true, "path/filepath": true})
+	want := []string{"calls time.Sleep", "calls time.After", "calls io/fs.ReadFile", "calls path/filepath.Abs"}
+	if strings.Join(got, ";") != strings.Join(want, ";") {
+		t.Fatalf("violations %q, want %q", got, want)
 	}
 }

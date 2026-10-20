@@ -11,12 +11,17 @@ import (
 
 func (f fixture) transportJSON(t *testing.T, selection []byte, ack json.RawMessage) []byte {
 	t.Helper()
+	return f.transportRaw(t, selection, f.v.Support.Input, ack)
+}
+
+func (f fixture) transportRaw(t *testing.T, selection, support, ack []byte) []byte {
+	t.Helper()
 	a := decodeMap(t, ack)
 	source, _ := json.Marshal(a["source"])
 	original, _ := json.Marshal(a["original"])
 	return []byte(fmt.Sprintf(`{"version":1,"source":%s,"original":%s,"policy":%q,"selection":%q,"support":%s,"ack":%s}`,
 		source, original, base64.StdEncoding.EncodeToString(f.policy), base64.StdEncoding.EncodeToString(selection),
-		f.v.Support.Input, ack))
+		support, ack))
 }
 
 func TestTransport(t *testing.T) {

@@ -153,8 +153,8 @@ func (a Ack) Validate() error {
 	if a.Operator == "" || len(a.Operator) > maxOperatorBytes || !utf8.ValidString(a.Operator) || hasControl(a.Operator) {
 		return fmt.Errorf("ack.operator must be 1..%d bytes without control characters", maxOperatorBytes)
 	}
-	if a.IssuedAt.Location() != time.UTC || a.ExpiresAt.Location() != time.UTC {
-		return errors.New("ack times must be UTC")
+	if !wholeSecondUTC(a.IssuedAt) || !wholeSecondUTC(a.ExpiresAt) {
+		return errors.New("ack times must be whole-second UTC without a monotonic reading")
 	}
 	if !a.ExpiresAt.After(a.IssuedAt) || a.ExpiresAt.Sub(a.IssuedAt) > maxAckLifetime {
 		return errors.New("ack lifetime must be positive and at most 24h")
@@ -187,6 +187,19 @@ func (a Ack) Validate() error {
 	return nil
 }
 
+// wholeSecondUTC requires t to be exactly what the wire spelling encodes. The
+// digest keeps whole seconds only, so a sub-second ExpiresAt would let
+// CheckWindow pass up to a second after the encoded expiry. Round(0) strips a
+// monotonic reading and nothing else; comparing the struct with == (not
+// Equal) is deliberate, because it is the representation that must match.
+func wholeSecondUTC(t time.Time) bool {
+	return t.Location() == time.UTC && t.Nanosecond() == 0 && t == t.Round(0)
+}
+
+// validRoot uses host path semantics on purpose: §14.3 makes root the
+// normalized absolute Git root the existing owner already validated, and that
+// owner checks Plan.root with path/filepath; BoardRoot joins the same way. v1
+// sources are local worktrees, so the ack never crosses hosts.
 func validRoot(root string) error {
 	if !utf8.ValidString(root) || hasControl(root) || !filepath.IsAbs(root) || filepath.Clean(root) != root {
 		return errors.New("ack.root must be a normalized absolute path")
@@ -217,6 +230,9 @@ func hasControl(s string) bool {
 func (a Ack) CheckWindow(now time.Time) error {
 	if now.IsZero() {
 		return ErrUnavailable
+	}
+	if !wholeSecondUTC(a.IssuedAt) || !wholeSecondUTC(a.ExpiresAt) {
+		return errors.New("ack window is not the encoded whole-second UTC window")
 	}
 	if now.Before(a.IssuedAt) || !now.Before(a.ExpiresAt) {
 		return errors.New("ack is outside its validity window")
