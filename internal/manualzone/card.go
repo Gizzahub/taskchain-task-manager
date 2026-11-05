@@ -67,14 +67,22 @@ func ParseCard(content string) (CardFields, error) {
 
 func frontmatter(content string) ([]byte, bool) {
 	// CRLF is only a parse view. Digests and stamps stay on the original bytes.
+	// The closer is an entire line equal to "---", the same line the stamper
+	// accepts. A prefix such as "---hidden" stays inside the block.
 	normalized := strings.ReplaceAll(content, "\r\n", "\n")
-	if !strings.HasPrefix(normalized, "---\n") {
+	lines := strings.Split(normalized, "\n")
+	if len(lines) == 0 || lines[0] != "---" {
 		return nil, false
 	}
-	rest := normalized[len("---\n"):]
-	end := strings.Index(rest, "\n---")
-	if end < 0 {
+	closing := -1
+	for i := 1; i < len(lines); i++ {
+		if lines[i] == "---" {
+			closing = i
+			break
+		}
+	}
+	if closing < 0 {
 		return nil, false
 	}
-	return []byte(rest[:end]), true
+	return []byte(strings.Join(lines[1:closing], "\n")), true
 }

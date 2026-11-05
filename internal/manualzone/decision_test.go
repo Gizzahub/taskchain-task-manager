@@ -2,6 +2,16 @@ package manualzone
 
 import "testing"
 
+func TestParseCardDoesNotStopAtAFalseFence(t *testing.T) {
+	const early = "receipts/TASK-001/manual-0123456789abcdef0123456789abcdef.json"
+	const late = "receipts/TASK-001/manual-ffffffffffffffffffffffffffffffff.json"
+	card := "---\nid: TASK-001\nexpected-receipt: {path: " + early + ", facts: early}\n---hidden\nexpected-receipt: {path: " + late + ", facts: late}\n---\nbody\n"
+	fields, err := ParseCard(card)
+	if err == nil && fields.ReceiptPath != late {
+		t.Fatalf("admission receipt %q, want refusal or %q", fields.ReceiptPath, late)
+	}
+}
+
 func TestDecodeReceiptRejectsDuplicateKeys(t *testing.T) {
 	if _, err := DecodeReceipt([]byte(`{"version":1,"version":1}`)); err == nil {
 		t.Fatal("duplicate key was accepted")

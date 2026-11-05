@@ -141,25 +141,13 @@ func resumeFromPreMoveBaseline(repoRoot, rel, destRel, destFull, sourceFull, ent
 		}
 		return "", err
 	}
-	// Restore only the exact pre-move bytes. A same-value CRLF status line is
-	// still the stamp: the stamper rewrites "status: manual\r\n" to
-	// "status: manual\n" without changing the canonical digest.
+	// Restore only the exact pre-move bytes. Publish only the stamper's status
+	// rewrite, or that rewrite plus the outbound retarget. The CRLF status
+	// rewrite is those stamper bytes. A digest-equal edit is not a stamp.
 	if dest == baseline {
 		return restoreUnpublishedEntry(repoRoot, destFull, sourceFull, entryAbs, key)
 	}
-	destDigest, err := CanonicalReviewDigest(dest)
-	if err != nil {
-		return "", err
-	}
-	stampedDigest, err := CanonicalReviewDigest(stamped)
-	if err != nil {
-		return "", err
-	}
-	settledDigest, err := CanonicalReviewDigest(settled)
-	if err != nil {
-		return "", err
-	}
-	if destDigest != stampedDigest && destDigest != settledDigest {
+	if dest != stamped && dest != settled {
 		return "", errors.New("destination card does not match the entry subject")
 	}
 	return finishBaselineEntry(repoRoot, rel, destRel, destFull, entryAbs, key, profile, authority, settled)
@@ -221,15 +209,20 @@ func finishBaselineEntry(repoRoot, rel, destRel, destFull, entryAbs, key string,
 		}
 		return "", err
 	}
-	got, err := CanonicalReviewDigest(string(onDisk))
-	want, wantErr := CanonicalReviewDigest(settled)
-	if err != nil || wantErr != nil || got != want {
+	if string(onDisk) != settled {
 		if undo != nil {
 			undo()
 		}
 		return "", errors.New("destination card does not match the entry subject")
 	}
-	fields, err := manualzone.ParseCard(strings.ReplaceAll(string(onDisk), "\r\n", "\n"))
+	got, err := CanonicalReviewDigest(settled)
+	if err != nil {
+		if undo != nil {
+			undo()
+		}
+		return "", err
+	}
+	fields, err := manualzone.ParseCard(strings.ReplaceAll(settled, "\r\n", "\n"))
 	if err != nil {
 		if undo != nil {
 			undo()
