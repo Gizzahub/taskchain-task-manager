@@ -124,10 +124,17 @@ type ReexecReport struct {
 // run either. Storage directories are skipped: a frozen record's bindings are
 // history, not a claim this gate can falsify.
 func ReexecCheckedBindings(ctx context.Context, tasksDir, workDir string) (ReexecReport, error) {
+	return reexecCheckedBindings(ctx, tasksDir, workDir, false)
+}
+
+func reexecCheckedBindings(ctx context.Context, tasksDir, workDir string, skipReceipts bool) (ReexecReport, error) {
 	var report ReexecReport
 	err := filepath.WalkDir(tasksDir, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		if rel, relErr := filepath.Rel(tasksDir, path); relErr == nil && skipReceipts && entry.IsDir() && skipReceiptTree(rel) {
+			return filepath.SkipDir
 		}
 		if entry.IsDir() {
 			switch entry.Name() {

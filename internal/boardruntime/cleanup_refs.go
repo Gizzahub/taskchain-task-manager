@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/Gizzahub/taskchain-task-manager/internal/receiptpath"
 )
 
 type referenceFile struct {
@@ -19,12 +21,27 @@ type referenceFile struct {
 }
 
 func ownedArtifacts(root, tasksDir, id, cardPath string) ([]string, []string, error) {
-	if _, err := parseCanonical(id); err != nil {
-		return nil, nil, fmt.Errorf("id is not canonical")
-	}
 	roots := []string{
 		filepath.ToSlash(filepath.Join(tasksDir, "receipts", id)),
 		filepath.ToSlash(filepath.Join("docs", "task-reviews", id)),
+	}
+	return collectOwned(root, tasksDir, id, cardPath, roots)
+}
+
+func ownedForProfile(root, tasksDir, id, cardPath string, profile receiptpath.Profile) ([]string, []string, error) {
+	if !profile.Selected() {
+		return ownedArtifacts(root, tasksDir, id, cardPath)
+	}
+	roots, err := receiptpath.OwnershipDirs(profile, tasksDir, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	return collectOwned(root, tasksDir, id, cardPath, roots)
+}
+
+func collectOwned(root, tasksDir, id, cardPath string, roots []string) ([]string, []string, error) {
+	if _, err := parseCanonical(id); err != nil {
+		return nil, nil, fmt.Errorf("id is not canonical")
 	}
 	var files, dirs []string
 	for _, rel := range roots {

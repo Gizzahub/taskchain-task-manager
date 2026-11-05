@@ -2,12 +2,14 @@ package boardruntime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 
+	"github.com/Gizzahub/taskchain-task-manager/internal/receiptpath"
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskflow"
 )
 
@@ -16,6 +18,21 @@ import (
 // Errors before that deletion restore the original paths. Later errors use
 // the "cleanup committed;" prefix. The git index is not updated.
 func ApplyCleanupGroup(ctx context.Context, root, source string, expected CleanupEntry) error {
+	return applyCleanupGroup(ctx, root, source, expected, func() ([]CleanupEntry, error) {
+		return CleanupCandidates(ctx, root, source)
+	})
+}
+
+func ApplyCleanupGroupWithProfile(ctx context.Context, root, source string, profile receiptpath.Profile, expected CleanupEntry) error {
+	if !profile.Selected() {
+		return errors.New("receipt profile is not selected")
+	}
+	return applyCleanupGroup(ctx, root, source, expected, func() ([]CleanupEntry, error) {
+		return CleanupCandidatesWithProfile(ctx, root, source, profile)
+	})
+}
+
+func applyCleanupGroup(ctx context.Context, root, source string, expected CleanupEntry, list func() ([]CleanupEntry, error)) error {
 	lock := filepath.Join(root, ".ce-task-cleanup.lock")
 	if err := os.Mkdir(lock, 0o700); err != nil {
 		return fmt.Errorf("cleanup lock unavailable: %w", err)
@@ -24,7 +41,7 @@ func ApplyCleanupGroup(ctx context.Context, root, source string, expected Cleanu
 	if err := sourceUnchanged(ctx, root, source, expected.SourceOID); err != nil {
 		return err
 	}
-	current, err := CleanupCandidates(ctx, root, source)
+	current, err := list()
 	if err != nil {
 		return err
 	}

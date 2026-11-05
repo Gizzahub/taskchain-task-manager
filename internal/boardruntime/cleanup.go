@@ -12,6 +12,7 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/cardid"
 	"github.com/Gizzahub/taskchain-task-manager/internal/githistory"
+	"github.com/Gizzahub/taskchain-task-manager/internal/receiptpath"
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskflow"
 	"github.com/Gizzahub/taskchain-task-manager/internal/taskruntime"
 )
@@ -31,6 +32,10 @@ type CleanupEntry struct {
 // CleanupCandidates lists finalized cards and every reason one cannot be removed.
 // It does not mutate the tree and does not take the mutation lock.
 func CleanupCandidates(ctx context.Context, root, source string) ([]CleanupEntry, error) {
+	return cleanupCandidates(ctx, root, source, receiptpath.Profile{})
+}
+
+func cleanupCandidates(ctx context.Context, root, source string, profile receiptpath.Profile) ([]CleanupEntry, error) {
 	if err := gitEnv(); err != nil {
 		return nil, err
 	}
@@ -41,7 +46,12 @@ func CleanupCandidates(ctx context.Context, root, source string) ([]CleanupEntry
 	if err != nil {
 		return nil, fmt.Errorf("read cleanup source: %w", err)
 	}
-	cards, err := taskflow.FindCards(root, false)
+	var cards []*taskflow.Card
+	if profile.Selected() {
+		cards, err = taskflow.FindCardsAdopted(root, false, profile)
+	} else {
+		cards, err = taskflow.FindCards(root, false)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +75,8 @@ func CleanupCandidates(ctx context.Context, root, source string) ([]CleanupEntry
 				haveFloor[id.Prefix] = true
 			}
 		}
-		if !finalizedCard(card) {
+		include, skipReview := adoptionClass(profile, card)
+		if !include {
 			continue
 		}
 		entry := CleanupEntry{SourceOID: oid, Path: path, ID: card.ID}
@@ -77,7 +88,7 @@ func CleanupCandidates(ctx context.Context, root, source string) ([]CleanupEntry
 		} else {
 			seen[card.ID] = len(entries)
 		}
-		if !reviewed(card) {
+		if !skipReview && !reviewed(card) {
 			entry.Blocked = append(entry.Blocked, "quality-review is not pass, conditional, or waived with evidence")
 		}
 		if !tracked[path] {
@@ -99,12 +110,23 @@ func CleanupCandidates(ctx context.Context, root, source string) ([]CleanupEntry
 				entries[i].Blocked = append(entries[i].Blocked, err.Error())
 			}
 		}
-		files, dirs, artErr := ownedArtifacts(root, tasksDir, entries[i].ID, entries[i].Path)
+		var files, dirs []string
+		var artErr error
+		if profile.Selected() {
+			files, dirs, artErr = ownedForProfile(root, tasksDir, entries[i].ID, entries[i].Path, profile)
+		} else {
+			files, dirs, artErr = ownedArtifacts(root, tasksDir, entries[i].ID, entries[i].Path)
+		}
 		if artErr != nil {
 			entries[i].Blocked = append(entries[i].Blocked, artErr.Error())
 		}
 		entries[i].ArtifactDirs = dirs
 		entries[i].Artifacts = files
+		if profile.Selected() {
+			if generation, active := receiptpath.ActiveManual(files); active {
+				entries[i].Blocked = append(entries[i].Blocked, "active manual generation "+generation)
+			}
+		}
 		for _, artifact := range files {
 			if !tracked[artifact] {
 				entries[i].Blocked = append(entries[i].Blocked, "owned artifact is not tracked: "+artifact)
@@ -140,6 +162,9 @@ func CleanupCandidates(ctx context.Context, root, source string) ([]CleanupEntry
 			}
 		}
 		entries[i].Removable = len(entries[i].Blocked) == 0
+	}
+	if profile.Selected() {
+		entries = bindAdoptedDependencies(ctx, root, tasksDir, oid, cards, entries)
 	}
 	return entries, nil
 }

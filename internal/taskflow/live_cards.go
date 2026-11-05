@@ -12,6 +12,10 @@ import (
 // failure fails the caller: state actions and promote refuse a board they
 // could only see part of.
 func LoadLiveCards(root string) ([]*Card, error) {
+	return loadLiveCards(root, false)
+}
+
+func loadLiveCards(root string, skipReceipts bool) ([]*Card, error) {
 	if err := readableTasksDir(root); err != nil {
 		return nil, err
 	}
@@ -30,6 +34,9 @@ func LoadLiveCards(root string) ([]*Card, error) {
 		if d.IsDir() {
 			if p == tasksPath {
 				return nil
+			}
+			if skipReceipts && skipReceiptTree(filepath.ToSlash(relToTasks)) {
+				return filepath.SkipDir
 			}
 			if name == ".ce" || name == "evidence" {
 				return filepath.SkipDir

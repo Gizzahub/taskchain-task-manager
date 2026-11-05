@@ -1,6 +1,7 @@
 package taskflow
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardpolicy"
 	"github.com/Gizzahub/taskchain-task-manager/internal/boardstate"
+	"github.com/Gizzahub/taskchain-task-manager/internal/receiptpath"
 	"gopkg.in/yaml.v3"
 )
 
@@ -117,7 +119,7 @@ func FindCards(root string, excludeArchive bool) ([]*Card, error) {
 // FindCardsIn walks the board rooted at tasksDir — the directory TASKS_DIR
 // redirects the walk at — with the same card exclusions as FindCards.
 func FindCardsIn(root, tasksDir string, excludeArchive bool) ([]*Card, error) {
-	return findCardsInWithPolicy(root, tasksDir, excludeArchive, nil)
+	return findCardsInWithPolicy(root, tasksDir, excludeArchive, nil, false)
 }
 
 // FindCardsWithPolicy walks cards using an already authority-bound policy.
@@ -125,10 +127,19 @@ func FindCardsIn(root, tasksDir string, excludeArchive bool) ([]*Card, error) {
 // declared role is never parsed as a card. Callers resolve the policy through
 // ActiveBoardPolicy; this function deliberately accepts no raw policy bytes.
 func FindCardsWithPolicy(root string, excludeArchive bool, policy boardpolicy.Policy) ([]*Card, error) {
-	return findCardsInWithPolicy(root, tasksDirName(), excludeArchive, &policy)
+	return findCardsInWithPolicy(root, tasksDirName(), excludeArchive, &policy, false)
 }
 
-func findCardsInWithPolicy(root, tasksDir string, excludeArchive bool, policy *boardpolicy.Policy) ([]*Card, error) {
+// FindCardsAdopted walks the board and does not bind in-board receipt files
+// as cards. An unselected profile is refused rather than read as the legacy walk.
+func FindCardsAdopted(root string, excludeArchive bool, profile receiptpath.Profile) ([]*Card, error) {
+	if !profile.Selected() {
+		return nil, errors.New("receipt profile is not selected")
+	}
+	return findCardsInWithPolicy(root, tasksDirName(), excludeArchive, nil, true)
+}
+
+func findCardsInWithPolicy(root, tasksDir string, excludeArchive bool, policy *boardpolicy.Policy, skipReceipts bool) ([]*Card, error) {
 	tasksPath := filepath.Join(root, tasksDir)
 	var cards []*Card
 	err := filepath.WalkDir(tasksPath, func(p string, d fs.DirEntry, err error) error {
@@ -149,6 +160,9 @@ func findCardsInWithPolicy(root, tasksDir string, excludeArchive bool, policy *b
 		if d.IsDir() {
 			if p == tasksPath {
 				return nil
+			}
+			if skipReceipts && skipReceiptTree(filepath.ToSlash(relToTasks)) {
+				return filepath.SkipDir
 			}
 			if policy != nil && policy.FileRolesEnabled() && boardstate.IsDirectory(filepath.ToSlash(relToTasks)) {
 				return filepath.SkipDir

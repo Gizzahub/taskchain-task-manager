@@ -70,7 +70,9 @@ Internal snapshot assessor가 명시 선택한 입력의 카드 전용 구조를
 디렉토리·엔진 상태는 제외하지 않고 보고한다. 이 snapshot foundation은 manual을 경로
 overlay로만 보고, 여기서 상태·actor·receipt admission을 하지 않는다. 명시적 section-11
 profile을 받은 `internal/manualzone` 판정과 `EnterManual`, `ExitManual`, `ReissueManual`만
-그 진입·출구·사람 재발급을 수행한다. 공개 선택 wire, 명령 활성화, 공통 lock bridge,
+그 진입·출구·사람 재발급을 수행한다. 같은 profile의 영수증 경로와 cleanup 소유는
+`internal/receiptpath`가 정한다. 9절 base의 새 영수증은 `receipts/<ID>/`이고 10절 base는
+`docs/task-reviews/<ID>/`이다. 미선택 cleanup은 기존 소유 루트를 유지한다. 공개 선택 wire, 명령 활성화, 공통 lock bridge,
 미채택 `MoveCard` 어휘는 바꾸지 않으며 미선택 profile은 파일을 쓰지 않는다.
 
 `NewCardsOnlySnapshot`은 caller가 제공한 path/mode/tracked/bytes pair를 복사한다.
