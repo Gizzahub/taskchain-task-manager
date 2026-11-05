@@ -1,6 +1,7 @@
 package taskflow
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -185,6 +186,81 @@ func archiveDirParts(parts []string) []string {
 	}
 	dir := append([]string{}, parts[:len(parts)-1]...)
 	return append(dir, StorageWriteDir)
+}
+
+// inboundLinkEdits lists documents whose links would change, without writing.
+// A read failure is returned so the caller can refuse before it publishes.
+func inboundLinkEdits(root, oldTasksRel, newTasksRel string) ([]string, error) {
+	oldRepoRel := path.Join(tasksDirName(), oldTasksRel)
+	newRepoRel := path.Join(tasksDirName(), newTasksRel)
+	var hits []string
+	for _, doc := range treeMarkdown(root) {
+		docRepoRel := path.Join(tasksDirName(), doc)
+		if docRepoRel == newRepoRel || IsStorageDir(path.Dir(doc)) {
+			continue
+		}
+		full := filepath.Join(root, tasksDirName(), filepath.FromSlash(doc))
+		contentBytes, err := os.ReadFile(full)
+		if err != nil {
+			return nil, err
+		}
+		docDir := path.Join(tasksDirName(), path.Dir(doc))
+		_, lines := retargetLinksIn(string(contentBytes), docDir, oldRepoRel, relPathFrom(docDir, newRepoRel))
+		if len(lines) > 0 {
+			hits = append(hits, docRepoRel)
+		}
+	}
+	return hits, nil
+}
+
+// refuseManualLinkEdits reports whether publishing this move would rewrite a
+// different card that is already in manual.
+func refuseManualLinkEdits(root, oldTasksRel, newTasksRel string) error {
+	oldRepoRel := path.Join(tasksDirName(), oldTasksRel)
+	hits, err := inboundLinkEdits(root, oldTasksRel, newTasksRel)
+	if err != nil {
+		return fmt.Errorf("manual link preview: %w", err)
+	}
+	prefix := tasksDirName() + "/manual/"
+	for _, hit := range hits {
+		if strings.HasPrefix(hit, prefix) && hit != oldRepoRel {
+			return errors.New("refusing to rewrite a link inside another manual card")
+		}
+	}
+	return nil
+}
+
+// commitManualLinks publishes the link edits for one manual entry or exit.
+// A link inside a different manual card refuses the call before any write.
+// When a later write stops, the inbound edits already published are restored.
+func commitManualLinks(root, oldTasksRel, newTasksRel string) (func(), error) {
+	if err := refuseManualLinkEdits(root, oldTasksRel, newTasksRel); err != nil {
+		return nil, err
+	}
+	hits, err := inboundLinkEdits(root, oldTasksRel, newTasksRel)
+	if err != nil {
+		return nil, err
+	}
+	originals := make(map[string][]byte, len(hits))
+	for _, hit := range hits {
+		full := filepath.Join(root, filepath.FromSlash(hit))
+		content, err := os.ReadFile(full)
+		if err != nil {
+			return nil, err
+		}
+		originals[full] = content
+	}
+	undo := func() {
+		for full, content := range originals {
+			_ = writePreservingMode(full, content)
+		}
+	}
+	links := reconcileCardLinks(root, oldTasksRel, newTasksRel)
+	if links.Skipped != "" {
+		undo()
+		return nil, fmt.Errorf("manual link rewrite stopped at %s", links.Skipped)
+	}
+	return undo, nil
 }
 
 // reconcileCardLinks rewrites links on both sides of a move. Outbound: the

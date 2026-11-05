@@ -2,6 +2,7 @@ package taskflow
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,9 +23,23 @@ func stampFrontmatterFields(path string, pairs [][2]string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("read card for frontmatter stamp: %w", err)
 	}
+	rewritten, ok := stampFrontmatterContent(content, pairs)
+	if !ok || bytes.Equal(rewritten, content) {
+		return false, nil
+	}
+	if err := writePreservingMode(path, rewritten); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// stampFrontmatterContent applies the same frontmatter edits as
+// stampFrontmatterFields and reports whether the content has a closed block.
+// A missing fence is not reported as a successful stamp of the original bytes.
+func stampFrontmatterContent(content []byte, pairs [][2]string) ([]byte, bool) {
 	lines := bytes.SplitAfter(content, []byte("\n"))
 	if len(lines) == 0 || strings.TrimRight(string(lines[0]), "\r\n") != "---" {
-		return false, nil
+		return nil, false
 	}
 	// The closing fence is found before anything is written, in a pass of its
 	// own: in a file whose block never closes, a single pass would rewrite a
@@ -37,7 +52,7 @@ func stampFrontmatterFields(path string, pairs [][2]string) (bool, error) {
 		}
 	}
 	if closing < 0 {
-		return false, nil
+		return nil, false
 	}
 	for _, pair := range pairs {
 		key, value := pair[0], pair[1]
@@ -63,14 +78,53 @@ func stampFrontmatterFields(path string, pairs [][2]string) (bool, error) {
 		lines = updated
 		closing++
 	}
-	rewritten := bytes.Join(lines, nil)
+	return bytes.Join(lines, nil), true
+}
+
+// stampRequiredFrontmatter writes the pairs and refuses a card whose fence the
+// stamper cannot see, or whose block does not contain the required lines
+// afterwards. A missing fence is not treated as an already-correct stamp.
+func stampRequiredFrontmatter(path string, pairs [][2]string) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read card for frontmatter stamp: %w", err)
+	}
+	rewritten, ok := stampFrontmatterContent(content, pairs)
+	if !ok || !frontmatterHasPairs(rewritten, pairs) {
+		return errors.New("card frontmatter has no closing fence")
+	}
 	if bytes.Equal(rewritten, content) {
-		return false, nil
+		return nil
 	}
-	if err := writePreservingMode(path, rewritten); err != nil {
-		return false, err
+	return writePreservingMode(path, rewritten)
+}
+
+func frontmatterHasPairs(content []byte, pairs [][2]string) bool {
+	lines := bytes.SplitAfter(content, []byte("\n"))
+	closing := -1
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimRight(string(lines[i]), "\r\n") == "---" {
+			closing = i
+			break
+		}
 	}
-	return true, nil
+	if closing < 0 {
+		return false
+	}
+	for _, pair := range pairs {
+		want := pair[0] + ": " + pair[1]
+		found := false
+		for i := 1; i < closing; i++ {
+			if strings.TrimRight(string(lines[i]), "\r\n") == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 func writePreservingMode(path string, content []byte) error {

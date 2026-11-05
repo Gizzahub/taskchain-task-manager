@@ -67,8 +67,11 @@ journal 수동 편집으로 연결을 시험하지 않는다. 합성 테스트�
 Internal snapshot assessor가 명시 선택한 입력의 카드 전용 구조를 판정한다.
 새 policy schema·활성화 신호를 만들지 않으며 기존 schema 1–5 reader와 명령은 보존한다.
 카드 경로·디렉토리와 정확한 root `README.md`를 허용하고 예약 비카드 이름·증거/참조/결정
-디렉토리·엔진 상태는 제외하지 않고 보고한다. Manual은 경로 overlay일 뿐 상태·actor·
-receipt admission을 구현한 것이 아니다.
+디렉토리·엔진 상태는 제외하지 않고 보고한다. 이 snapshot foundation은 manual을 경로
+overlay로만 보고, 여기서 상태·actor·receipt admission을 하지 않는다. 명시적 section-11
+profile을 받은 `internal/manualzone` 판정과 `EnterManual`, `ExitManual`, `ReissueManual`만
+그 진입·출구·사람 재발급을 수행한다. 공개 선택 wire, 명령 활성화, 공통 lock bridge,
+미채택 `MoveCard` 어휘는 바꾸지 않으며 미선택 profile은 파일을 쓰지 않는다.
 
 `NewCardsOnlySnapshot`은 caller가 제공한 path/mode/tracked/bytes pair를 복사한다.
 Source label과 입력의 일관성·완전성은 caller 주장이다. 복사는 이후 입력 변경과 snapshot을

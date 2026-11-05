@@ -164,6 +164,12 @@ func (s *Service) resolveHost(ctx context.Context, local localIdentity) (string,
 	}
 }
 
+// ResolveOwner applies the run-command identity rules to one checkout.
+func ResolveOwner(ctx context.Context, root string) (Owner, error) {
+	owner, _, err := NewService(root, NewExecutor()).resolveOwner(ctx)
+	return owner, err
+}
+
 func (s *Service) resolveOwner(ctx context.Context) (Owner, []string, error) {
 	local, err := loadLocalIdentity()
 	if err != nil {
