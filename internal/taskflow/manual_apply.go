@@ -26,7 +26,7 @@ func EnterManual(repoRoot, cardRel string, profile manualzone.Profile, state man
 	full := filepath.Join(repoRoot, tasksDirName(), filepath.FromSlash(rel))
 	content, err := readContainedRegular(repoRoot, full)
 	if os.IsNotExist(err) {
-		return resumeManualEntry(repoRoot, rel, profile, state, authority)
+		return resumeManualEntry(repoRoot, rel, fromZone, profile, state, authority)
 	}
 	if err != nil {
 		return "", err
@@ -224,21 +224,65 @@ func manualSource(cardRel string) (string, string, error) {
 	if len(parts) < 2 {
 		return "", "", errors.New("manual card has no zone")
 	}
-	zone := parts[0]
-	switch zone {
-	case "todo", "doing", "blocked", "manual":
-		return rel, zone, nil
-	default:
-		if st, ok := StatusFromDir(zone); ok {
-			return rel, st.Dir(), nil
-		}
-		return "", "", fmt.Errorf("manual entry from %q is refused", zone)
+	_, zone, ok := manualPathZone(parts)
+	if !ok {
+		return "", "", fmt.Errorf("manual entry from %q is refused", parts[0])
 	}
+	return rel, zone, nil
+}
+
+// manualPathZone locates the lifecycle zone in a tasks-relative path.
+// Workflow directories follow ZoneSegment. A segment named manual is a zone
+// only at the top level or directly under a module, and stays out of
+// StatusFromDir so other zone callers are unchanged.
+func manualPathZone(parts []string) (int, string, bool) {
+	if len(parts) < 2 {
+		return -1, "", false
+	}
+	for i := 0; i < len(parts)-1; i++ {
+		if st, ok := StatusFromDir(parts[i]); ok {
+			return i, st.Dir(), true
+		}
+		if parts[i] == "manual" && manualZoneIndex(i, parts) {
+			return i, "manual", true
+		}
+	}
+	return -1, "", false
+}
+
+func manualZoneIndex(i int, parts []string) bool {
+	if i == 0 {
+		return true
+	}
+	if i != 1 {
+		return false
+	}
+	head := parts[0]
+	if head == "manual" || IsKindDir(head) || IsStorageDir(head) {
+		return false
+	}
+	if _, ok := StatusFromDir(head); ok {
+		return false
+	}
+	return true
+}
+
+func manualZoneCard(repoRel string) bool {
+	rel, ok := relUnderTasks(repoRel)
+	if !ok {
+		return false
+	}
+	_, zone, ok := manualPathZone(strings.Split(rel, "/"))
+	return ok && zone == "manual"
 }
 
 func destinationRel(rel, zone string) string {
 	parts := strings.Split(rel, "/")
-	parts[0] = zone
+	idx, _, ok := manualPathZone(parts)
+	if !ok {
+		return rel
+	}
+	parts[idx] = zone
 	return strings.Join(parts, "/")
 }
 

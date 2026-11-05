@@ -221,9 +221,8 @@ func refuseManualLinkEdits(root, oldTasksRel, newTasksRel string) error {
 	if err != nil {
 		return fmt.Errorf("manual link preview: %w", err)
 	}
-	prefix := tasksDirName() + "/manual/"
 	for _, hit := range hits {
-		if strings.HasPrefix(hit, prefix) && hit != oldRepoRel {
+		if hit != oldRepoRel && manualZoneCard(hit) {
 			return errors.New("refusing to rewrite a link inside another manual card")
 		}
 	}

@@ -32,7 +32,7 @@ func stageEntryBaseline(repoRoot, entryAbs string, profile manualzone.Profile, a
 	return stageRequestPartial(repoRoot, entryAbs, key, []byte(preMove))
 }
 
-func resumeManualEntry(repoRoot, rel string, profile manualzone.Profile, state manualzone.RuntimeState, authority string) (string, error) {
+func resumeManualEntry(repoRoot, rel, fromZone string, profile manualzone.Profile, state manualzone.RuntimeState, authority string) (string, error) {
 	destRel := destinationRel(rel, "manual")
 	destFull := filepath.Join(repoRoot, tasksDirName(), filepath.FromSlash(destRel))
 	sourceFull := filepath.Join(repoRoot, tasksDirName(), filepath.FromSlash(rel))
@@ -49,7 +49,6 @@ func resumeManualEntry(repoRoot, rel string, profile manualzone.Profile, state m
 	if err != nil {
 		return "", err
 	}
-	fromZone := strings.Split(rel, "/")[0]
 	if _, _, _, err := manualzone.PlanEntry(profile, fromZone, fields, state); err != nil {
 		return "", err
 	}
