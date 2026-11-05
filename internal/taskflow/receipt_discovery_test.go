@@ -27,12 +27,14 @@ func TestAdoptedDiscoverySkipsReceiptCards(t *testing.T) {
 	write("tasks/todo/001-live.md", card("TASK-1"))
 	write("tasks/receipts/TASK-1/note.md", card("TASK-2"))
 	write("tasks/todo/receipts/TASK-3/nested.md", card("TASK-3"))
+	write("tasks/todo/receipts/note.md", card("TASK-4"))
+	write("tasks/done/receipts/001-done.md", card("TASK-5"))
 
 	live, err := FindCards(root, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hasCard(live, "TASK-1") || !hasCard(live, "TASK-2") || !hasCard(live, "TASK-3") {
+	if !hasCard(live, "TASK-1") || !hasCard(live, "TASK-2") || !hasCard(live, "TASK-3") || !hasCard(live, "TASK-4") || !hasCard(live, "TASK-5") {
 		t.Fatalf("unadopted discovery dropped a receipt card: %s", receiptIDs(live))
 	}
 	profile := receiptpath.Profile{Base: "section-9", Amendment: "section-11"}
@@ -40,14 +42,21 @@ func TestAdoptedDiscoverySkipsReceiptCards(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !hasCard(adopted, "TASK-1") || hasCard(adopted, "TASK-2") || hasCard(adopted, "TASK-3") {
+	if !hasCard(adopted, "TASK-1") || hasCard(adopted, "TASK-2") || hasCard(adopted, "TASK-3") || hasCard(adopted, "TASK-4") || hasCard(adopted, "TASK-5") {
 		t.Fatalf("adopted discovery rebound receipt cards: %s", receiptIDs(adopted))
+	}
+	section10, err := FindCardsAdopted(root, false, receiptpath.Profile{Base: "section-10", Amendment: "section-11"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasCard(section10, "TASK-1") || hasCard(section10, "TASK-4") || hasCard(section10, "TASK-5") {
+		t.Fatalf("section-10 discovery rebound receipt cards: %s", receiptIDs(section10))
 	}
 	if _, err := FindCardsAdopted(root, false, receiptpath.Profile{}); err == nil {
 		t.Fatal("unselected profile walked the board")
 	}
 	loaded, err := LoadLiveCardsAdopted(root, profile)
-	if err != nil || !hasCard(loaded, "TASK-1") || hasCard(loaded, "TASK-2") {
+	if err != nil || !hasCard(loaded, "TASK-1") || hasCard(loaded, "TASK-2") || hasCard(loaded, "TASK-4") || hasCard(loaded, "TASK-5") {
 		t.Fatalf("live adopted cards: %s %v", receiptIDs(loaded), err)
 	}
 
@@ -55,7 +64,7 @@ func TestAdoptedDiscoverySkipsReceiptCards(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.CardsExamined != 3 || len(report.Failures) != 3 {
+	if report.CardsExamined != 5 || len(report.Failures) != 5 {
 		t.Fatalf("unadopted reexec: examined %d failures %d", report.CardsExamined, len(report.Failures))
 	}
 	adoptedReport, err := ReexecCheckedBindingsAdopted(context.Background(), filepath.Join(root, "tasks"), root, profile)

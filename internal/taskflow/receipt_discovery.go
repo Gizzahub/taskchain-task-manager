@@ -9,14 +9,17 @@ import (
 	"github.com/Gizzahub/taskchain-task-manager/internal/receiptpath"
 )
 
-// skipReceiptTree reports a board-relative path inside an in-board receipts
-// directory. The exclusion is the directory role, not a file-name exception.
+// skipReceiptTree reports a board-relative directory whose role is receipts.
+// Any path segment named receipts is that directory, including todo/receipts
+// and done/receipts. A file named receipts.md is not this directory.
 func skipReceiptTree(rel string) bool {
 	rel = filepath.ToSlash(rel)
-	if rel == "receipts" {
-		return true
+	for _, part := range strings.Split(rel, "/") {
+		if part == "receipts" {
+			return true
+		}
 	}
-	return strings.HasPrefix(rel, "receipts/") || strings.Contains(rel, "/receipts/")
+	return false
 }
 
 // LoadLiveCardsAdopted reads non-storage cards and skips in-board receipts.

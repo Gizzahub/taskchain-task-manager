@@ -44,6 +44,24 @@ func TestUnadoptedCleanupKeepsTheClosedOwnershipList(t *testing.T) {
 	}
 }
 
+func TestSection10CleanupLeavesDirectReceiptMarkdown(t *testing.T) {
+	const rel = "tasks/done/receipts/002-direct.md"
+	root := cleanupRepo(t, map[string]string{
+		rel: doneCard("TASK-2"),
+	})
+	unadopted := cleanupEntries(t, root, receiptpath.Profile{})
+	if !hasID(unadopted, "TASK-2") {
+		t.Fatal("unadopted cleanup dropped a receipt markdown card")
+	}
+	section10 := cleanupEntries(t, root, receiptpath.Profile{Base: "section-10", Amendment: "section-11"})
+	if hasID(section10, "TASK-2") {
+		t.Fatalf("section-10 listed a forbidden receipt: %+v", entryOf(section10, "TASK-2"))
+	}
+	if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAdoptedCleanupBlocksCancelledChildAndActiveManual(t *testing.T) {
 	root := cleanupRepo(t, map[string]string{
 		"tasks/plan/001-parent.md": "---\nid: PLAN-1\ntitle: Parent\nstatus: done\nchildren: [PLAN-2]\n---\n\nParent.\n",
