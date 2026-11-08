@@ -12,18 +12,28 @@ import (
 	"strings"
 )
 
-const maxOutput = 64 << 20
+const (
+	maxOutput      = 64 << 20
+	maxDiagnostics = 8192
+)
 
+// cappedBuffer keeps a named buffer so bytes.Buffer.ReadFrom is not promoted.
+// os/exec copies a subprocess pipe with io.Copy, and a promoted ReadFrom would
+// bypass Write.
 type cappedBuffer struct {
-	bytes.Buffer
+	data  bytes.Buffer
 	limit int
 }
+
+func (b *cappedBuffer) Len() int       { return b.data.Len() }
+func (b *cappedBuffer) Bytes() []byte  { return b.data.Bytes() }
+func (b *cappedBuffer) String() string { return b.data.String() }
 
 func (b *cappedBuffer) Write(p []byte) (int, error) {
 	if len(p) > b.limit-b.Len() {
 		return 0, errors.New("Git output limit exceeded")
 	}
-	return b.Buffer.Write(p)
+	return b.data.Write(p)
 }
 
 type scanner struct{ root, board string }
@@ -34,7 +44,7 @@ func (s scanner) run(ctx context.Context, input string, args ...string) ([]byte,
 	cmd.Dir = s.root
 	cmd.Stdin = strings.NewReader(input)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0")
-	out, diag := cappedBuffer{limit: maxOutput}, cappedBuffer{limit: 8192}
+	out, diag := cappedBuffer{limit: maxOutput}, cappedBuffer{limit: maxDiagnostics}
 	cmd.Stdout, cmd.Stderr = &out, &diag
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("git %s: %w: %s", args[0], err, strings.TrimSpace(diag.String()))
