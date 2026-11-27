@@ -1,5 +1,5 @@
 # Keep target selection and reclaim behavior in the existing explicit workflow.
 branch:
-  integrationBranch: master
+  integrationBranch: develop
   taskPattern:
     - dev/*/*/*
