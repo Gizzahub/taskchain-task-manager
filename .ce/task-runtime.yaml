@@ -1,0 +1,10 @@
+# Repository identity and integration for `ce task run-*`; without this file
+# they stop with BLOCKED.
+#
+# Worktree placement comes from the global defaults (ce-devenv
+# `task-runtime-defaults.yaml` repository-layouts), so this file carries no
+# worktree roots or host paths and is tracked.
+schema-version: 5
+repository-id: taskchain-task-manager
+integration-provider: gz-git
+integration-network-policy: allow
